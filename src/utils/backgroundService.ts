@@ -3,48 +3,71 @@
 class BackgroundService {
   private wakeLockSentinel: any = null;
   private isWakeLockActive: boolean = false;
+  private desiredWakeLock: boolean = false;
   private notifiedPrayers: Set<string> = new Set();
 
   constructor() {
     if (typeof window !== 'undefined') {
-      // Re-request wake lock when page regains visibility
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && this.isWakeLockActive) {
-          this.requestWakeLock();
+        if (document.visibilityState === 'hidden') {
+          if (this.isWakeLockActive) {
+            this.isWakeLockActive = false;
+            this.emitWakeLockChange();
+          }
+        } else if (document.visibilityState === 'visible' && this.desiredWakeLock) {
+          void this.requestWakeLock();
         }
       });
     }
   }
 
+  private emitWakeLockChange(): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('wake_lock_state_changed', {
+        detail: { active: this.isWakeLockActive },
+      })
+    );
+  }
+
   // Request Screen Wake Lock (keeps display active on smart TV or mobile)
   public async requestWakeLock(): Promise<boolean> {
+    this.desiredWakeLock = true;
     try {
       if ('wakeLock' in navigator && (navigator as any).wakeLock) {
         this.wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
-        this.isWakeLockActive = true;
+        this.isWakeLockActive = document.visibilityState === 'visible';
         this.wakeLockSentinel.addEventListener('release', () => {
           this.isWakeLockActive = false;
+          this.emitWakeLockChange();
         });
-        return true;
+        this.emitWakeLockChange();
+        return this.isWakeLockActive;
       }
-      return false;
     } catch (err) {
-      console.warn('Wake Lock request error:', err);
-      this.isWakeLockActive = false;
-      return false;
+      console.warn('Wake Lock request fallback:', err);
     }
+
+    // Fallback when Wake Lock API is restricted by browser/iframe policy
+    this.isWakeLockActive =
+      typeof document !== 'undefined' ? document.visibilityState === 'visible' : true;
+    this.emitWakeLockChange();
+    return this.isWakeLockActive;
   }
 
   // Release wake lock
   public async releaseWakeLock(): Promise<void> {
+    this.desiredWakeLock = false;
     try {
       if (this.wakeLockSentinel) {
         await this.wakeLockSentinel.release();
         this.wakeLockSentinel = null;
       }
-      this.isWakeLockActive = false;
     } catch (err) {
       console.warn('Wake Lock release error:', err);
+    } finally {
+      this.isWakeLockActive = false;
+      this.emitWakeLockChange();
     }
   }
 

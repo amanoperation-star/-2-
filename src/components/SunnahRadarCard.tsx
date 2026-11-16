@@ -6,6 +6,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronUp,
+  HelpCircle,
+  Lightbulb,
   RotateCw,
   Sparkles,
   Trophy,
@@ -28,7 +30,17 @@ import {
 import { toArabicDigits } from '../utils/khatmaData';
 import { adhanPlayer } from '../utils/audioAdhan';
 
-export const SunnahRadarCard: React.FC = () => {
+export interface SunnahRadarCardProps {
+  onOpenSujudSahw?: () => void;
+  wakeLockActive?: boolean;
+  onToggleWakeLock?: () => void;
+}
+
+export const SunnahRadarCard: React.FC<SunnahRadarCardProps> = ({
+  onOpenSujudSahw,
+  wakeLockActive = false,
+  onToggleWakeLock,
+}) => {
   const [radarState, setRadarState] = useState<SunnahRadarState>(() => loadSunnahRadarState());
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isHadithOpen, setIsHadithOpen] = useState<boolean>(false);
@@ -123,84 +135,144 @@ export const SunnahRadarCard: React.FC = () => {
 
   return (
     <>
-      {/* Prominent Compact Top Spotlight Box */}
+      {/* Unified Ultra-Compact Islamic Mihrab Box: 3 Side-by-Side Mini-Tiles */}
       <section
         dir="rtl"
-        aria-label="مربع سُنة الأسبوع المهجورة"
-        className="theme-keep-light relative rounded-2xl bg-gradient-to-l from-[#111C18] via-[#0F1E19] to-[#111C18] border border-[#D4AF37]/65 hover:border-[#D4AF37] shadow-[0_12px_32px_rgba(0,0,0,0.42),0_0_20px_rgba(212,175,55,0.12)] px-3.5 py-3 sm:px-4 sm:py-3.5 text-right transition-colors"
+        aria-label="أدوات المحراب السريعة: سُنة الأسبوع ودليل السهو وإبقاء الشاشة"
+        className="theme-keep-light relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#13221D] via-[#111C18] to-[#0D1613] border border-[#D4AF37]/60 shadow-[0_14px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(212,175,55,0.1)] pt-3.5 pb-2 px-2 sm:px-3 text-right"
       >
+        {/* Subtle Andalusian Geometric Texture */}
         <div
-          className="absolute inset-x-10 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#D4AF37]/85 to-transparent pointer-events-none"
+          className="absolute inset-0 opacity-[0.04] bg-[radial-gradient(#D4AF37_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none"
           aria-hidden="true"
         />
 
-        <div className="flex items-center justify-between gap-2.5 sm:gap-3">
-          {/* Main Interactive Trigger to Open Sunnah Modal */}
+        {/* Delicate Top Mihrab Arch Ornament & Graduated Gold Line */}
+        <div
+          className="absolute inset-x-6 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#D4AF37]/80 to-transparent pointer-events-none"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none flex flex-col items-center"
+          aria-hidden="true"
+        >
+          <svg
+            width="92"
+            height="12"
+            viewBox="0 0 92 12"
+            fill="none"
+            className="text-[#D4AF37]"
+          >
+            <path
+              d="M2 1C20 1 32 10 46 11C60 10 72 1 90 1"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeOpacity="0.85"
+            />
+            <polygon
+              points="46,2.5 48.2,5.5 46,8.5 43.8,5.5"
+              fill="currentColor"
+              fillOpacity="0.9"
+            />
+          </svg>
+        </div>
+
+        {/* 3 Compact Side-by-Side Tiles */}
+        <div className="relative z-10 grid grid-cols-3 divide-x divide-x-reverse divide-[#D4AF37]/20">
+          {/* Tile 1: سُنة الأسبوع */}
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
-            className="flex-1 min-w-0 min-h-[48px] flex items-center gap-3 text-right group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] rounded-xl"
-            aria-label={`فتح تفاصيل سُنة الأسبوع: ${activeSunnah.title}`}
+            className="group min-h-[78px] px-1.5 sm:px-3 py-2 flex flex-col items-center justify-center text-center gap-1 rounded-2xl hover:bg-[#172822]/75 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+            title={`${activeSunnah.title} — اضغط لفتح التفاصيل ومتابعة الأسبوع`}
           >
-            <div className="w-11 h-11 rounded-xl bg-[#08241C] border border-[#D4AF37]/55 flex items-center justify-center text-xl shrink-0 shadow-[0_0_16px_rgba(212,175,55,0.16)] group-hover:border-[#D4AF37] transition-colors">
+            <div className="w-9 h-9 rounded-xl bg-[#08241C] border border-[#D4AF37]/50 group-hover:border-[#D4AF37] flex items-center justify-center text-lg shrink-0 transition-colors">
               <span aria-hidden="true">{activeSunnah.icon}</span>
             </div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-bold">
-                <span className="inline-flex items-center gap-1 text-[#D4AF37] whitespace-nowrap">
-                  <Sparkles className="w-3 h-3 shrink-0" />
-                  <span>سُنة الأسبوع المهجورة</span>
-                </span>
-                <span className="text-[#D4AF37]/50" aria-hidden="true">·</span>
-                <span className="text-slate-300 font-mono tabular-nums whitespace-nowrap">
-                  {toArabicDigits(completedCount)}/٧ أيام
-                </span>
-                {isMasteredThisWeek && (
-                  <>
-                    <span className="text-[#D4AF37]/50" aria-hidden="true">·</span>
-                    <span className="text-[#F3CA63] whitespace-nowrap">وسام الإحياء</span>
-                  </>
-                )}
-              </div>
+            <div className="text-[11px] sm:text-sm font-bold font-amiri text-white group-hover:text-[#F3CA63] leading-tight whitespace-nowrap truncate max-w-full">
+              سُنة الأسبوع
+            </div>
 
-              <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                <h3 className="text-sm sm:text-base font-bold font-amiri text-white group-hover:text-[#F3CA63] transition-colors truncate">
-                  {activeSunnah.title}
-                </h3>
-                <ChevronLeft className="w-4 h-4 text-[#D4AF37]/80 shrink-0 group-hover:-translate-x-0.5 transition-transform" />
-              </div>
+            <div
+              className={`text-[10px] sm:text-[11px] font-bold leading-tight whitespace-nowrap ${
+                isTodayCompleted ? 'text-[#10B981]' : 'text-[#D4AF37]'
+              }`}
+            >
+              {isTodayCompleted
+                ? `تم اليوم ✓`
+                : `${toArabicDigits(completedCount)}/٧ أيام`}
+            </div>
+
+            <div className="w-10 h-0.5 rounded-full bg-[#08120F] overflow-hidden mt-0.5" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-gradient-to-l from-[#D4AF37] to-[#10B981] origin-right transition-transform duration-300"
+                style={{ transform: `scaleX(${progressFraction})` }}
+              />
             </div>
           </button>
 
-          {/* Quick 1-Tap Today Action Button */}
+          {/* Tile 2: شككتُ في صلاتي؟ */}
           <button
             type="button"
-            onClick={() => handleToggleDay(todayMeta.key)}
-            aria-pressed={isTodayCompleted}
-            className={`min-h-[44px] px-3 sm:px-3.5 py-2 rounded-xl border text-xs font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors active:scale-[0.98] ${
-              isTodayCompleted
-                ? 'bg-[#08241C] border-[#10B981]/80 text-[#10B981]'
-                : 'bg-[#D4AF37] hover:bg-[#e5c150] border-[#F3CA63] text-[#0A1310] shadow-[0_4px_14px_rgba(212,175,55,0.25)]'
-            }`}
+            onClick={() => onOpenSujudSahw?.()}
+            className="group min-h-[78px] px-1.5 sm:px-3 py-2 flex flex-col items-center justify-center text-center gap-1 rounded-2xl hover:bg-[#172822]/75 transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]"
+            title="فتح مُصحِّح السهو التفاعلي ودليل سجود السهو الفوري"
           >
-            {isTodayCompleted ? (
-              <>
-                <Check className="w-4 h-4 stroke-[3] shrink-0" />
-                <span>تم اليوم</span>
-              </>
-            ) : (
-              <span>أحييتُها اليوم</span>
-            )}
-          </button>
-        </div>
+            <div className="w-9 h-9 rounded-xl bg-[#08241C] border border-[#D4AF37]/50 group-hover:border-[#D4AF37] flex items-center justify-center text-[#D4AF37] shrink-0 transition-colors">
+              <HelpCircle className="w-4.5 h-4.5" />
+            </div>
 
-        {/* Subtle Hairline Weekly Progress Bar */}
-        <div className="mt-2.5 h-1 w-full rounded-full bg-[#08120F] overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-l from-[#D4AF37] to-[#10B981] origin-right transition-transform duration-300"
-            style={{ transform: `scaleX(${progressFraction})` }}
-          />
+            <div className="text-[11px] sm:text-sm font-bold font-amiri text-[#F3CA63] leading-tight whitespace-nowrap truncate max-w-full">
+              شككتُ في صلاتي؟
+            </div>
+
+            <div className="text-[10px] sm:text-[11px] text-slate-300 leading-tight whitespace-nowrap">
+              دليل السهو
+            </div>
+          </button>
+
+          {/* Tile 3: إبقاء الشاشة نشطة + اللمبة */}
+          <button
+            type="button"
+            onClick={() => onToggleWakeLock?.()}
+            aria-pressed={wakeLockActive}
+            className={`group min-h-[78px] px-1.5 sm:px-3 py-2 flex flex-col items-center justify-center text-center gap-1 rounded-2xl transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
+              wakeLockActive ? 'bg-amber-400/10' : 'hover:bg-[#172822]/75'
+            }`}
+            title="منع انطفاء الشاشة أثناء تشغيل التطبيق"
+          >
+            <div
+              className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-200 ${
+                wakeLockActive
+                  ? 'bg-amber-400/20 border-amber-300 text-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.55)]'
+                  : 'bg-[#09120F] border-slate-700 text-slate-500'
+              }`}
+              aria-hidden="true"
+            >
+              <Lightbulb
+                className={`w-4.5 h-4.5 transition-all duration-200 ${
+                  wakeLockActive ? 'text-amber-300 fill-amber-300/45' : 'text-slate-500'
+                }`}
+              />
+            </div>
+
+            <div
+              className={`text-[11px] sm:text-sm font-bold font-amiri leading-tight whitespace-nowrap truncate max-w-full ${
+                wakeLockActive ? 'text-amber-200' : 'text-white'
+              }`}
+            >
+              إبقاء الشاشة
+            </div>
+
+            <div
+              className={`text-[10px] sm:text-[11px] font-bold leading-tight whitespace-nowrap ${
+                wakeLockActive ? 'text-[#10B981]' : 'text-slate-400'
+              }`}
+            >
+              {wakeLockActive ? 'مضاءة' : 'مطفأة'}
+            </div>
+          </button>
         </div>
       </section>
 

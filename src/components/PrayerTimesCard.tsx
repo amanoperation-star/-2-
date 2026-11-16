@@ -16,13 +16,11 @@ import {
   ShieldCheck,
   Radio,
   Loader2,
-  Tv,
   Timer,
   Sparkles,
   BookOpen,
   Check,
   Vibrate,
-  HelpCircle,
   X,
   Plane,
 } from 'lucide-react';
@@ -31,8 +29,6 @@ import {
   adhanPlayer,
   AudioPlayerState,
   ADHAN_SOURCES,
-  getAdhanSource,
-  PRE_ADHAN_SHEIKH_VOICES,
   PreAdhanVoiceProfile,
   IqamaVoiceProfile,
 } from '../utils/audioAdhan';
@@ -608,6 +604,14 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       adhanPlayer.playAdhan(reciter, nextPrayerKey, isFajr && settings.fajrBoostVolume);
     }
   };
+
+  useEffect(() => {
+    const syncWakeLock = () => {
+      setWakeLockActive(backgroundService.getIsWakeLockActive());
+    };
+    window.addEventListener('wake_lock_state_changed', syncWakeLock);
+    return () => window.removeEventListener('wake_lock_state_changed', syncWakeLock);
+  }, []);
 
   const handleToggleWakeLock = async () => {
     if (wakeLockActive) {
@@ -1522,73 +1526,12 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         )}
       </div>
 
-      {/* Prominent Compact Forgotten Sunnah Weekly Spotlight Box (top near countdown) */}
-      <SunnahRadarCard />
-
-      {/* Sub-Banner: Pre-Adhan Preparation & Wake Lock Strip */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#041d17]/85 border border-[#e5b869]/30 px-5 py-3.5 rounded-2xl text-xs text-slate-200 backdrop-blur-md shadow-lg">
-        <div className="flex flex-wrap items-center gap-2 leading-relaxed">
-          <span>
-            التنبيه المسبق للاستعداد للوضوء:{' '}
-            <strong className="text-[#fbbf24]">
-              {settings.preAdhanReminderMinutes > 0 ? `قبل ${settings.preAdhanReminderMinutes} دقيقة` : 'معطل'}
-            </strong>
-          </span>
-          <span className="text-[#e5b869]/60" aria-hidden="true">•</span>
-          <span>
-            صوت التنبيه:{' '}
-            <strong className="text-amber-200">
-              {settings.preAdhanVoiceMode && settings.preAdhanVoiceMode !== 'rotate'
-                ? PRE_ADHAN_SHEIKH_VOICES.find((v) => v.id === settings.preAdhanVoiceMode)?.nameAr ||
-                  'تبديل تلقائي بين الشيوخ'
-                : 'تبديل تلقائي (٦ شيوخ)'}
-            </strong>
-          </span>
-          <span className="text-[#e5b869]/60" aria-hidden="true">•</span>
-          <span>
-            أذان الفجر المميز:{' '}
-            <strong className="text-emerald-300">
-              {getAdhanSource(settings.fajrAdhanReciter, 'fajr').nameAr}
-            </strong>
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsSujudSahwModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[#fbbf24]/55 bg-gradient-to-r from-[#fbbf24]/15 to-emerald-900/50 text-[#fbbf24] hover:border-[#fbbf24] hover:bg-[#07362c] transition-all whitespace-nowrap font-bold"
-            title="فتح مُصحِّح السهو التفاعلي ودليل سجود السهو الفوري"
-          >
-            <HelpCircle className="w-3.5 h-3.5 shrink-0" />
-            <span>شككتُ في صلاتي؟</span>
-          </button>
-
-          {onOpenIqamaTab && (
-            <button
-              type="button"
-              onClick={onOpenIqamaTab}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[#e5b869]/45 bg-[#05261f] text-[#fbbf24] hover:border-[#fbbf24] hover:bg-[#07362c] transition-colors whitespace-nowrap font-bold"
-              title="فتح تابة تعديل أوقات الإقامة وأصوات الشيوخ"
-            >
-              <Timer className="w-3.5 h-3.5" />
-              <span>أوقات وأصوات الإقامة</span>
-            </button>
-          )}
-          <button
-            onClick={handleToggleWakeLock}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border transition-colors whitespace-nowrap ${
-              wakeLockActive
-                ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300 font-bold'
-                : 'bg-[#05261f] border-[#e5b869]/35 text-[#e5b869] hover:border-[#fbbf24] hover:text-[#fbbf24]'
-            }`}
-            title="منع انطفاء الشاشة أثناء تشغيل التطبيق (مثالي للهواتف والشاشات الذكية)"
-          >
-            <Tv className="w-3.5 h-3.5" />
-            <span>{wakeLockActive ? 'الشاشة نشطة دائماً (Wake Lock مفعّل)' : 'إبقاء الشاشة نشطة (Wake Lock)'}</span>
-          </button>
-        </div>
-      </div>
+      {/* Unified Ultra-Compact Islamic Mihrab Box: Forgotten Sunnah + Sujud Sahw + Screen Lamp */}
+      <SunnahRadarCard
+        onOpenSujudSahw={() => setIsSujudSahwModalOpen(true)}
+        wakeLockActive={wakeLockActive}
+        onToggleWakeLock={handleToggleWakeLock}
+      />
 
       {/* Smart Office & Meeting Mode: Silent Alert Card & Post-Meeting Reminder */}
       {silentMeetingAlert && (
