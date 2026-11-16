@@ -11,6 +11,7 @@ import {
   Mic,
   Shield,
   Home,
+  Settings,
 } from 'lucide-react';
 import { DAILY_ADHIKAR } from '../utils/islamicData';
 import { DhikrItem, UserSettings } from '../types';
@@ -29,12 +30,14 @@ interface AdhkarSectionProps {
   settings?: UserSettings;
   onUpdateSettings?: (newSettings: Partial<UserSettings>) => void;
   onNavigateHome?: () => void;
+  onOpenAdhkarSettings?: () => void;
 }
 
 export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
   settings,
   onUpdateSettings,
   onNavigateHome,
+  onOpenAdhkarSettings,
 }) => {
   const [adhkarList] = useState<DhikrItem[]>(() =>
     DAILY_ADHIKAR.filter((item) => item.category !== 'after_prayer')
@@ -155,6 +158,15 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
     }
   }, [settings?.adhkarReciter]);
 
+  useEffect(() => {
+    if (
+      settings?.adhkarShortSheikh &&
+      SHORT_ADHKAR_SHEIKHS.some((s) => s.id === settings.adhkarShortSheikh)
+    ) {
+      setSelectedShortSheikh(settings.adhkarShortSheikh as ShortAdhkarSheikhId);
+    }
+  }, [settings?.adhkarShortSheikh]);
+
   const handleReciterChange = (reciterId: string) => {
     setSelectedReciter(reciterId);
     if (onUpdateSettings) {
@@ -166,6 +178,9 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
     setSelectedShortSheikh(sheikhId);
     if (typeof window !== 'undefined') {
       localStorage.setItem('adhkar_short_sheikh', sheikhId);
+    }
+    if (onUpdateSettings) {
+      onUpdateSettings({ adhkarShortSheikh: sheikhId });
     }
 
     // If short-clip audio is currently active on a card or sequential player,
@@ -336,26 +351,46 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
           aria-hidden="true"
         />
 
-        <div className="relative z-10 flex items-center justify-between gap-2">
+        <div className="relative z-10 flex items-center justify-between gap-2 flex-wrap">
           <div className="inline-flex items-center gap-2 text-xs font-bold text-[#10B981]">
             <BookOpen className="w-4 h-4 shrink-0" />
             <span className="truncate">حصن المسلم والذكر النبوي</span>
           </div>
 
-          {onNavigateHome && (
-            <button
-              type="button"
-              onClick={onNavigateHome}
-              style={{
-                background: 'linear-gradient(135deg, #F3D06B 0%, #D4AF37 100%)',
-              }}
-              className="min-h-[38px] px-3.5 py-1.5 rounded-xl text-[#060B09] font-extrabold text-xs shadow-sm hover:brightness-105 active:scale-95 transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer"
-              title="العودة السريعة إلى الصفحة الرئيسية (المواقيت)"
-            >
-              <Home className="w-3.5 h-3.5 shrink-0" />
-              <span>الرئيسية</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {onOpenAdhkarSettings && (
+              <button
+                type="button"
+                onClick={onOpenAdhkarSettings}
+                className="min-h-[38px] px-3 py-1.5 rounded-xl bg-[#040D0A]/85 border border-[#D4AF37]/40 hover:border-[#F3D06B] text-[#F3D06B] font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer"
+                title="ضبط مواعيد أذكار الصباح والمساء والقارئ المفضل"
+              >
+                <Settings className="w-3.5 h-3.5 shrink-0" />
+                <span>ضبط المواعيد</span>
+                {settings && (
+                  <span className="hidden sm:inline font-mono text-[10px] text-emerald-300 opacity-90">
+                    ({settings.morningAdhkarEnabled !== false ? settings.morningAdhkarTime : 'متوقف'} ·{' '}
+                    {settings.eveningAdhkarEnabled !== false ? settings.eveningAdhkarTime : 'متوقف'})
+                  </span>
+                )}
+              </button>
+            )}
+
+            {onNavigateHome && (
+              <button
+                type="button"
+                onClick={onNavigateHome}
+                style={{
+                  background: 'linear-gradient(135deg, #F3D06B 0%, #D4AF37 100%)',
+                }}
+                className="min-h-[38px] px-3.5 py-1.5 rounded-xl text-[#060B09] font-extrabold text-xs shadow-sm hover:brightness-105 active:scale-95 transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer"
+                title="العودة السريعة إلى الصفحة الرئيسية (المواقيت)"
+              >
+                <Home className="w-3.5 h-3.5 shrink-0" />
+                <span>الرئيسية</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">

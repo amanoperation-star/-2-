@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { PrayerTimesCard } from './components/PrayerTimesCard';
@@ -7,7 +7,7 @@ import { QiblaCompass } from './components/QiblaCompass';
 import { AdhkarSection } from './components/AdhkarSection';
 import { QuranSection } from './components/QuranSection';
 import { AiAssistant } from './components/AiAssistant';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsModal, SettingsTabId } from './components/SettingsModal';
 import { BackgroundPickerModal } from './components/BackgroundPickerModal';
 import { PeriodicReminderPopup } from './components/PeriodicReminderPopup';
 import { QuranWirdModal } from './components/QuranWirdModal';
@@ -42,6 +42,15 @@ import {
   markPostPrayerNotified,
   toggleCheckinField,
 } from './utils/postPrayerCheckinData';
+import { PostPrayerNotificationToast } from './components/PostPrayerNotificationToast';
+import { PostPrayerCheckinModal } from './components/PostPrayerCheckinModal';
+import {
+  SUNNAH_RAWATIB_LABELS,
+  SunnahRawatibState,
+  isPrayerSunnahCompleted,
+  loadSunnahRawatibState,
+  togglePrayerSunnahCompleted,
+} from './utils/sunnahRawatibData';
 import { CityLocation, UserSettings, PrayerTimeData, AppThemeId } from './types';
 import { CITIES, calculatePrayerTimes } from './utils/prayerCalculator';
 import { adhanPlayer, getDuaSource, SalawatVoiceProfile, PreAdhanVoiceProfile, IqamaVoiceProfile } from './utils/audioAdhan';
@@ -145,9 +154,26 @@ export default function App() {
       const valid = ['rotate', 'basnawi', 'hadrawi', 'majed_abbas', 'madinah_haram', 'faisal_labban', 'makkah_classic'];
       return (saved && valid.includes(saved) ? saved : 'rotate') as UserSettings['iqamaVoiceMode'];
     })(),
-    morningAdhkarTime: '06:00',
-    eveningAdhkarTime: '17:00',
-    adhkarReciter: 'alafasy_adhkar',
+    morningAdhkarTime:
+      (typeof window !== 'undefined' ? localStorage.getItem('morning_adhkar_time') : null) || '06:00',
+    eveningAdhkarTime:
+      (typeof window !== 'undefined' ? localStorage.getItem('evening_adhkar_time') : null) || '17:00',
+    morningAdhkarEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('morning_adhkar_enabled') !== null
+        ? localStorage.getItem('morning_adhkar_enabled') === 'true'
+        : true,
+    eveningAdhkarEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('evening_adhkar_enabled') !== null
+        ? localStorage.getItem('evening_adhkar_enabled') === 'true'
+        : true,
+    adhkarAutoPlayAudio:
+      typeof window !== 'undefined' && localStorage.getItem('adhkar_auto_play_audio') !== null
+        ? localStorage.getItem('adhkar_auto_play_audio') === 'true'
+        : true,
+    adhkarReciter:
+      (typeof window !== 'undefined' ? localStorage.getItem('adhkar_reciter') : null) || 'alafasy_adhkar',
+    adhkarShortSheikh:
+      (typeof window !== 'undefined' ? localStorage.getItem('adhkar_short_sheikh') : null) || 'rotate',
     iqamaStyle: (typeof window !== 'undefined' ? (localStorage.getItem('iqama_style_preference') as 'ring' | 'split' | 'pill') : 'ring') || 'ring',
     adhanModalLayout: (typeof window !== 'undefined' ? (localStorage.getItem('adhan_modal_layout') as any) : 'editorial-horizon') || 'editorial-horizon',
     adhanCountdownStyle: (typeof window !== 'undefined' ? (localStorage.getItem('adhan_countdown_islamic_style') as any) : 'islamic-mihrab') || 'islamic-mihrab',
@@ -276,6 +302,18 @@ export default function App() {
       const saved = Number(localStorage.getItem('post_prayer_checkin_minutes'));
       return (saved === 15 || saved === 20 || saved === 30 ? saved : 20) as 15 | 20 | 30;
     })(),
+    postPrayerIncludeWird:
+      typeof window !== 'undefined' && localStorage.getItem('post_prayer_include_wird') !== null
+        ? localStorage.getItem('post_prayer_include_wird') === 'true'
+        : true,
+    postPrayerIncludeAdhkar:
+      typeof window !== 'undefined' && localStorage.getItem('post_prayer_include_adhkar') !== null
+        ? localStorage.getItem('post_prayer_include_adhkar') === 'true'
+        : true,
+    postPrayerIncludeSunnah:
+      typeof window !== 'undefined' && localStorage.getItem('post_prayer_include_sunnah') !== null
+        ? localStorage.getItem('post_prayer_include_sunnah') === 'true'
+        : true,
   });
 
   const [autoThemeManualPause, setAutoThemeManualPause] = useState<boolean>(false);
@@ -284,8 +322,8 @@ export default function App() {
   } | null>(null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'iqama' | 'themes' | 'simulations' | 'fasting' | 'widgets'>('general');
-  const openSettingsOnTab = (tab: 'general' | 'iqama' | 'themes' | 'simulations' | 'fasting' | 'widgets' = 'general') => {
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTabId>('general');
+  const openSettingsOnTab = (tab: SettingsTabId = 'general') => {
     setSettingsInitialTab(tab);
     setIsSettingsOpen(true);
   };
@@ -362,6 +400,9 @@ export default function App() {
   const [checkinState, setCheckinState] = useState<DailyCheckinState>(() =>
     loadTodayCheckinState()
   );
+  const [sunnahState, setSunnahState] = useState<SunnahRawatibState>(() =>
+    loadSunnahRawatibState()
+  );
   const [forcedCheckinPrayer, setForcedCheckinPrayer] = useState<{
     prayerKey: CheckinPrayerKey;
     prayerNameAr: string;
@@ -377,37 +418,66 @@ export default function App() {
     period: 'morning' | 'evening';
     title: string;
   } | null>(null);
-  const lastAdhkarTriggerRef = React.useRef<string>('');
+  const lastMorningAdhkarTriggerRef = React.useRef<string>('');
+  const lastEveningAdhkarTriggerRef = React.useRef<string>('');
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const checkAdhkarSchedule = () => {
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const todayKey = now.toDateString();
 
-      if (settings.morningAdhkarTime && timeStr === settings.morningAdhkarTime && now.getSeconds() === 0) {
-        const trigKey = `${todayKey}-morning`;
-        if (lastAdhkarTriggerRef.current !== trigKey) {
-          lastAdhkarTriggerRef.current = trigKey;
-          adhanPlayer.playAdhkar(settings.adhkarReciter || 'alafasy_adhkar', 'أذكار الصباح المباركة', 'morning');
-          backgroundService.sendPrayerNotification('حان وقت أذكار الصباح', 'ابدأ يومك بذكر الله وحصن نفسك بالأذكار المأثورة');
+      if (
+        settings.morningAdhkarEnabled !== false &&
+        settings.morningAdhkarTime &&
+        timeStr === settings.morningAdhkarTime
+      ) {
+        const trigKey = `${todayKey}-morning-${settings.morningAdhkarTime}`;
+        if (lastMorningAdhkarTriggerRef.current !== trigKey) {
+          lastMorningAdhkarTriggerRef.current = trigKey;
+          if (settings.adhkarAutoPlayAudio !== false && !settings.meetingModeEnabled) {
+            adhanPlayer.playAdhkar(settings.adhkarReciter || 'alafasy_adhkar', 'أذكار الصباح المباركة', 'morning');
+          }
+          if (settings.notificationsEnabled) {
+            backgroundService.sendPrayerNotification('حان وقت أذكار الصباح', 'ابدأ يومك بذكر الله وحصن نفسك بالأذكار المأثورة');
+          }
           setScheduledAdhkarBanner({ period: 'morning', title: 'حان الآن وقت أذكار الصباح ☀️' });
         }
       }
 
-      if (settings.eveningAdhkarTime && timeStr === settings.eveningAdhkarTime && now.getSeconds() === 0) {
-        const trigKey = `${todayKey}-evening`;
-        if (lastAdhkarTriggerRef.current !== trigKey) {
-          lastAdhkarTriggerRef.current = trigKey;
-          adhanPlayer.playAdhkar(settings.adhkarReciter || 'alafasy_adhkar', 'أذكار المساء المباركة', 'evening');
-          backgroundService.sendPrayerNotification('حان وقت أذكار المساء', 'احفظ نفسك وليلتك بذكر الله والأذكار المأثورة');
+      if (
+        settings.eveningAdhkarEnabled !== false &&
+        settings.eveningAdhkarTime &&
+        timeStr === settings.eveningAdhkarTime
+      ) {
+        const trigKey = `${todayKey}-evening-${settings.eveningAdhkarTime}`;
+        if (lastEveningAdhkarTriggerRef.current !== trigKey) {
+          lastEveningAdhkarTriggerRef.current = trigKey;
+          if (settings.adhkarAutoPlayAudio !== false && !settings.meetingModeEnabled) {
+            adhanPlayer.playAdhkar(settings.adhkarReciter || 'alafasy_adhkar', 'أذكار المساء المباركة', 'evening');
+          }
+          if (settings.notificationsEnabled) {
+            backgroundService.sendPrayerNotification('حان وقت أذكار المساء', 'احفظ نفسك وليلتك بذكر الله والأذكار المأثورة');
+          }
           setScheduledAdhkarBanner({ period: 'evening', title: 'حان الآن وقت أذكار المساء 🌙' });
         }
       }
-    }, 1000);
+    };
+
+    checkAdhkarSchedule();
+    const timer = setInterval(checkAdhkarSchedule, 1000);
 
     return () => clearInterval(timer);
-  }, [settings.morningAdhkarTime, settings.eveningAdhkarTime, settings.adhkarReciter]);
+  }, [
+    settings.morningAdhkarEnabled,
+    settings.eveningAdhkarEnabled,
+    settings.morningAdhkarTime,
+    settings.eveningAdhkarTime,
+    settings.adhkarReciter,
+    settings.adhkarAutoPlayAudio,
+    settings.meetingModeEnabled,
+    settings.notificationsEnabled,
+  ]);
 
   useEffect(() => {
     saveKhatmaState(khatmaState);
@@ -419,15 +489,19 @@ export default function App() {
     setKhatmaState((prev) => ({ ...prev, plan }));
   };
 
-  const handleTogglePrayerWird = (prayerKey: KhatmaPrayerKey) => {
+  const handleTogglePrayerWird = (prayerKey: KhatmaPrayerKey, forceValue?: boolean) => {
     adhanPlayer.playChime();
+    const nextVal =
+      typeof forceValue === 'boolean' ? forceValue : !khatmaState.completedToday[prayerKey];
     setKhatmaState((prev) => ({
       ...prev,
       completedToday: {
         ...prev.completedToday,
-        [prayerKey]: !prev.completedToday[prayerKey],
+        [prayerKey]: nextVal,
       },
     }));
+    const updatedCheckin = toggleCheckinField(prayerKey, 'wird', nextVal);
+    setCheckinState(updatedCheckin);
   };
 
   const handleStartNewKhatma = () => {
@@ -654,16 +728,7 @@ export default function App() {
         setCheckinState(updated);
         adhanPlayer.playChime();
       } else {
-        setActiveTab('times');
         setForcedCheckinPrayer({ prayerKey, prayerNameAr });
-        window.setTimeout(() => {
-          const el = document.getElementById('post-prayer-checkin-anchor');
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          } else {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }
-        }, 80);
       }
     };
 
@@ -684,6 +749,10 @@ export default function App() {
       setCheckinState(loadTodayCheckinState());
     };
 
+    const onSunnahChanged = () => {
+      setSunnahState(loadSunnahRawatibState());
+    };
+
     const onSwMessage = (event: MessageEvent) => {
       const data = event.data;
       if (data && data.type === 'POST_PRAYER_ACTION') {
@@ -692,12 +761,14 @@ export default function App() {
     };
 
     window.addEventListener('post_prayer_checkin_changed', onCheckinChanged);
+    window.addEventListener('sunnah_rawatib_changed', onSunnahChanged);
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', onSwMessage);
     }
 
     return () => {
       window.removeEventListener('post_prayer_checkin_changed', onCheckinChanged);
+      window.removeEventListener('sunnah_rawatib_changed', onSunnahChanged);
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', onSwMessage);
       }
@@ -736,7 +807,31 @@ export default function App() {
   ) => {
     const updated = toggleCheckinField(prayerKey, field, forceValue);
     setCheckinState(updated);
+    if (field === 'wird') {
+      const nextWirdVal = updated.prayers[prayerKey].wird;
+      setKhatmaState((prev) =>
+        prev.completedToday[prayerKey] === nextWirdVal
+          ? prev
+          : {
+              ...prev,
+              completedToday: {
+                ...prev.completedToday,
+                [prayerKey]: nextWirdVal,
+              },
+            }
+      );
+    }
   };
+
+  const handleTogglePrayerSunnah = (prayerKey: KhatmaPrayerKey) => {
+    adhanPlayer.playChime();
+    const updated = togglePrayerSunnahCompleted(prayerKey);
+    setSunnahState(updated);
+  };
+
+  const handleClosePostPrayerToast = useCallback(() => {
+    setActivePostPrayerToast(null);
+  }, []);
 
   const handleTestPostPrayerCheckin = () => {
     const target = getLatestPassedPrayer(prayerTimes, new Date());
@@ -895,6 +990,27 @@ export default function App() {
       if (newSettings.duaAudioReciter) {
         localStorage.setItem('dua_audio_reciter', getDuaSource(newSettings.duaAudioReciter).id);
       }
+      if (newSettings.morningAdhkarTime) {
+        localStorage.setItem('morning_adhkar_time', newSettings.morningAdhkarTime);
+      }
+      if (newSettings.eveningAdhkarTime) {
+        localStorage.setItem('evening_adhkar_time', newSettings.eveningAdhkarTime);
+      }
+      if (typeof newSettings.morningAdhkarEnabled === 'boolean') {
+        localStorage.setItem('morning_adhkar_enabled', String(newSettings.morningAdhkarEnabled));
+      }
+      if (typeof newSettings.eveningAdhkarEnabled === 'boolean') {
+        localStorage.setItem('evening_adhkar_enabled', String(newSettings.eveningAdhkarEnabled));
+      }
+      if (typeof newSettings.adhkarAutoPlayAudio === 'boolean') {
+        localStorage.setItem('adhkar_auto_play_audio', String(newSettings.adhkarAutoPlayAudio));
+      }
+      if (newSettings.adhkarReciter) {
+        localStorage.setItem('adhkar_reciter', newSettings.adhkarReciter);
+      }
+      if (newSettings.adhkarShortSheikh) {
+        localStorage.setItem('adhkar_short_sheikh', newSettings.adhkarShortSheikh);
+      }
       if (newSettings.theme) {
         saveThemePreference(normalizeThemeId(newSettings.theme));
       }
@@ -989,6 +1105,15 @@ export default function App() {
         newSettings.postPrayerCheckinMinutes === 30
       ) {
         localStorage.setItem('post_prayer_checkin_minutes', String(newSettings.postPrayerCheckinMinutes));
+      }
+      if (typeof newSettings.postPrayerIncludeWird === 'boolean') {
+        localStorage.setItem('post_prayer_include_wird', String(newSettings.postPrayerIncludeWird));
+      }
+      if (typeof newSettings.postPrayerIncludeAdhkar === 'boolean') {
+        localStorage.setItem('post_prayer_include_adhkar', String(newSettings.postPrayerIncludeAdhkar));
+      }
+      if (typeof newSettings.postPrayerIncludeSunnah === 'boolean') {
+        localStorage.setItem('post_prayer_include_sunnah', String(newSettings.postPrayerIncludeSunnah));
       }
       return updated;
     });
@@ -1282,10 +1407,6 @@ export default function App() {
               onNavigateToAdhkar={() => setActiveTab('adhkar')}
               onOpenStandbyMode={() => setIsStandbyModeOpen(true)}
               onOpenTravelTab={() => setActiveTab('companion')}
-              checkinState={checkinState}
-              onToggleCheckinField={handleToggleCheckinField}
-              forcedCheckinPrayer={forcedCheckinPrayer}
-              onDismissForcedCheckin={() => setForcedCheckinPrayer(null)}
             />
           )}
 
@@ -1306,7 +1427,9 @@ export default function App() {
                     {scheduledAdhkarBanner.title}
                   </h4>
                   <p className="text-xs text-slate-300">
-                    تم تشغيل تلاوة الأذكار تلقائياً في الوقت المحدد في الإعدادات ({scheduledAdhkarBanner.period === 'morning' ? settings.morningAdhkarTime : settings.eveningAdhkarTime})
+                    {settings.adhkarAutoPlayAudio !== false
+                      ? `تم تشغيل تلاوة الأذكار تلقائياً في الوقت المحدد في الإعدادات (${scheduledAdhkarBanner.period === 'morning' ? settings.morningAdhkarTime : settings.eveningAdhkarTime})`
+                      : `حان الموعد المحدد في الإعدادات (${scheduledAdhkarBanner.period === 'morning' ? settings.morningAdhkarTime : settings.eveningAdhkarTime})`}
                   </p>
                 </div>
               </div>
@@ -1349,6 +1472,7 @@ export default function App() {
               settings={settings}
               onUpdateSettings={handleUpdateSettings}
               onNavigateHome={() => setActiveTab('times')}
+              onOpenAdhkarSettings={() => openSettingsOnTab('adhkar')}
             />
           )}
 
@@ -1488,74 +1612,78 @@ export default function App() {
 
         {/* In-App Floating Post-Prayer Check-in Notification Toast */}
         {activePostPrayerToast && (
-          <div
-            className="theme-keep-light fixed top-4 left-1/2 -translate-x-1/2 z-[95] max-w-md w-[calc(100vw-1.5rem)] rounded-3xl bg-[#111C18]/98 border-2 border-[#D4AF37]/75 shadow-[0_18px_50px_rgba(0,0,0,0.7),0_0_32px_rgba(212,175,55,0.28)] p-4 text-right backdrop-blur-xl"
-            dir="rtl"
-          >
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] animate-pulse shrink-0 shadow-[0_0_8px_#10B981]" />
-                <h4 className="text-sm sm:text-base font-bold font-amiri text-[#D4AF37] leading-snug">
-                  🕌 تقبّل الله صلاة {activePostPrayerToast.prayerNameAr} — هل أتممت وردك؟
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActivePostPrayerToast(null)}
-                className="text-slate-400 hover:text-[#D4AF37] text-xs px-2 py-1 rounded-lg border border-transparent hover:border-[#D4AF37]/30 transition-colors shrink-0"
-                aria-label="إغلاق"
-              >
-                ✕
-              </button>
-            </div>
+          <PostPrayerNotificationToast
+            prayerKey={activePostPrayerToast.prayerKey}
+            prayerNameAr={activePostPrayerToast.prayerNameAr}
+            dateKey={activePostPrayerToast.dateKey}
+            isTest={activePostPrayerToast.isTest}
+            includeWird={settings.postPrayerIncludeWird ?? true}
+            includeAdhkar={settings.postPrayerIncludeAdhkar ?? true}
+            includeSunnah={settings.postPrayerIncludeSunnah ?? true}
+            wirdCompleted={Boolean(
+              khatmaState.completedToday[activePostPrayerToast.prayerKey] ||
+                checkinState.prayers[activePostPrayerToast.prayerKey]?.wird
+            )}
+            wirdSummary={khatmaSchedule.wirdByPrayer[activePostPrayerToast.prayerKey]?.summary}
+            adhkarCompleted={Boolean(
+              checkinState.prayers[activePostPrayerToast.prayerKey]?.adhkar
+            )}
+            sunnahCompleted={isPrayerSunnahCompleted(
+              sunnahState,
+              activePostPrayerToast.prayerKey
+            )}
+            sunnahLabel={SUNNAH_RAWATIB_LABELS[activePostPrayerToast.prayerKey].title}
+            onToggleWird={() => handleTogglePrayerWird(activePostPrayerToast.prayerKey)}
+            onToggleAdhkar={() => {
+              adhanPlayer.playChime();
+              handleToggleCheckinField(activePostPrayerToast.prayerKey, 'adhkar');
+            }}
+            onToggleSunnah={() => handleTogglePrayerSunnah(activePostPrayerToast.prayerKey)}
+            onOpenDetails={() => {
+              const target = activePostPrayerToast;
+              setForcedCheckinPrayer({
+                prayerKey: target.prayerKey,
+                prayerNameAr: target.prayerNameAr,
+              });
+              setActivePostPrayerToast(null);
+            }}
+            onClose={handleClosePostPrayerToast}
+          />
+        )}
 
-            <p className="text-xs text-slate-300 mb-3 leading-relaxed">
-              {activePostPrayerToast.isTest
-                ? 'معاينة فورية لإشعار المتابعة التفاعلي — اختر أحد الإجراءين لتثبيت صلاتك وأذكارك:'
-                : 'بادر بتسجيل إتمام صلاتك وأذكارك اليومية في سجل الاستقامة:'}
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const updated = completePrayerFardAndAdhkar(
-                    activePostPrayerToast.prayerKey,
-                    activePostPrayerToast.dateKey
-                  );
-                  setCheckinState(updated);
-                  adhanPlayer.playChime();
-                  setActivePostPrayerToast(null);
-                }}
-                className="min-h-[42px] px-3 py-2 rounded-xl bg-gradient-to-r from-[#10B981] to-emerald-500 text-slate-950 font-black text-xs shadow hover:brightness-105 transition-all flex items-center justify-center gap-1.5"
-              >
-                <span>✅ أتممت الصلاة والأذكار</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('times');
-                  setForcedCheckinPrayer({
-                    prayerKey: activePostPrayerToast.prayerKey,
-                    prayerNameAr: activePostPrayerToast.prayerNameAr,
-                  });
-                  setActivePostPrayerToast(null);
-                  window.setTimeout(() => {
-                    const el = document.getElementById('post-prayer-checkin-anchor');
-                    if (el) {
-                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    } else {
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
-                  }, 80);
-                }}
-                className="min-h-[42px] px-3 py-2 rounded-xl bg-[#09120F] border border-[#D4AF37]/55 hover:border-[#D4AF37] text-[#D4AF37] font-bold text-xs transition-all flex items-center justify-center gap-1.5"
-              >
-                <span>📋 تسجيل التفاصيل / الوِرد</span>
-              </button>
-            </div>
-          </div>
+        {/* On-Demand Post-Prayer Details & Quick Tasbih Modal */}
+        {forcedCheckinPrayer && (
+          <PostPrayerCheckinModal
+            isOpen={true}
+            prayerKey={forcedCheckinPrayer.prayerKey}
+            prayerNameAr={forcedCheckinPrayer.prayerNameAr}
+            onClose={() => setForcedCheckinPrayer(null)}
+            checkinState={checkinState}
+            wirdCompleted={Boolean(
+              khatmaState.completedToday[forcedCheckinPrayer.prayerKey] ||
+                checkinState.prayers[forcedCheckinPrayer.prayerKey]?.wird
+            )}
+            wirdSummary={khatmaSchedule.wirdByPrayer[forcedCheckinPrayer.prayerKey]?.summary}
+            sunnahCompleted={isPrayerSunnahCompleted(
+              sunnahState,
+              forcedCheckinPrayer.prayerKey
+            )}
+            sunnahLabel={SUNNAH_RAWATIB_LABELS[forcedCheckinPrayer.prayerKey].title}
+            onToggleFard={() => {
+              adhanPlayer.playChime();
+              handleToggleCheckinField(forcedCheckinPrayer.prayerKey, 'fard');
+            }}
+            onToggleAdhkar={(forceTrue) => {
+              if (!forceTrue) adhanPlayer.playChime();
+              handleToggleCheckinField(
+                forcedCheckinPrayer.prayerKey,
+                'adhkar',
+                forceTrue ? true : undefined
+              );
+            }}
+            onToggleWird={() => handleTogglePrayerWird(forcedCheckinPrayer.prayerKey)}
+            onToggleSunnah={() => handleTogglePrayerSunnah(forcedCheckinPrayer.prayerKey)}
+          />
         )}
 
         {/* Periodic Salawat Audio Floating Mihrab Toast */}

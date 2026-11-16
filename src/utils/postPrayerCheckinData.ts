@@ -322,3 +322,84 @@ export function getDuePostPrayerNotification(
   }
   return null;
 }
+
+export interface PostPrayerCompletionVerse {
+  id: string;
+  ayahText: string;
+  surahName: string;
+  ayahNumber: number;
+  virtueTopic: 'prayer' | 'dhikr' | 'quran';
+}
+
+export const POST_PRAYER_COMPLETION_VERSES: PostPrayerCompletionVerse[] = [
+  {
+    id: 'baqarah-152',
+    ayahText: 'فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ',
+    surahName: 'البقرة',
+    ayahNumber: 152,
+    virtueTopic: 'dhikr',
+  },
+  {
+    id: 'ankabut-45',
+    ayahText:
+      'اتْلُ مَا أُوحِيَ إِلَيْكَ مِنَ الْكِتَابِ وَأَقِمِ الصَّلَاةَ ۖ إِنَّ الصَّلَاةَ تَنْهَىٰ عَنِ الْفَحْشَاءِ وَالْمُنكَرِ ۗ وَلَذِكْرُ اللَّهِ أَكْبَرُ',
+    surahName: 'العنكبوت',
+    ayahNumber: 45,
+    virtueTopic: 'prayer',
+  },
+  {
+    id: 'raad-28',
+    ayahText:
+      'الَّذِينَ آمَنُوا وَتَطْمَئِنُّ قُلُوبُهُم بِذِكْرِ اللَّهِ ۗ أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ',
+    surahName: 'الرعد',
+    ayahNumber: 28,
+    virtueTopic: 'dhikr',
+  },
+  {
+    id: 'nisa-103',
+    ayahText:
+      'فَإِذَا قَضَيْتُمُ الصَّلَاةَ فَاذْكُرُوا اللَّهَ قِيَامًا وَقُعُودًا وَعَلَىٰ جُنُوبِكُمْ ۚ إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا',
+    surahName: 'النساء',
+    ayahNumber: 103,
+    virtueTopic: 'prayer',
+  },
+  {
+    id: 'fatir-29',
+    ayahText:
+      'إِنَّ الَّذِينَ يَتْلُونَ كِتَابَ اللَّهِ وَأَقَامُوا الصَّلَاةَ وَأَنفَقُوا مِمَّا رَزَقْنَاهُمْ سِرًّا وَعَلَانِيَةً يَرْجُونَ تِجَارَةً لَّن تَبُورَ',
+    surahName: 'فاطر',
+    ayahNumber: 29,
+    virtueTopic: 'quran',
+  },
+  {
+    id: 'baqarah-238',
+    ayahText: 'حَافِظُوا عَلَى الصَّلَوَاتِ وَالصَّلَاةِ الْوُسْطَىٰ وَقُومُوا لِلَّهِ قَانِتِينَ',
+    surahName: 'البقرة',
+    ayahNumber: 238,
+    virtueTopic: 'prayer',
+  },
+  {
+    id: 'ahzab-41',
+    ayahText: 'يَا أَيُّهَا الَّذِينَ آمَنُوا اذْكُرُوا اللَّهَ ذِكْرًا كَثِيرًا',
+    surahName: 'الأحزاب',
+    ayahNumber: 41,
+    virtueTopic: 'dhikr',
+  },
+  {
+    id: 'isra-78',
+    ayahText:
+      'أَقِمِ الصَّلَاةَ لِدُلُوكِ الشَّمْسِ إِلَىٰ غَسَقِ اللَّيْلِ وَقُرْآنَ الْفَجْرِ ۖ إِنَّ قُرْآنَ الْفَجْرِ كَانَ مَشْهُودًا',
+    surahName: 'الإسراء',
+    ayahNumber: 78,
+    virtueTopic: 'quran',
+  },
+];
+
+export function pickRandomPostPrayerVerse(excludeId?: string): PostPrayerCompletionVerse {
+  const pool = excludeId
+    ? POST_PRAYER_COMPLETION_VERSES.filter((v) => v.id !== excludeId)
+    : POST_PRAYER_COMPLETION_VERSES;
+  const source = pool.length > 0 ? pool : POST_PRAYER_COMPLETION_VERSES;
+  const index = Math.floor(Math.random() * source.length);
+  return source[index];
+}

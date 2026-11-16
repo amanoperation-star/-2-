@@ -89,7 +89,11 @@ export interface UserSettings {
   autoDayNightBackground: boolean; // التبديل التلقائي لمساجد النهار والليل حسب وقت الصلاة
   morningAdhkarTime: string; // e.g. "06:00"
   eveningAdhkarTime: string; // e.g. "17:00"
+  morningAdhkarEnabled?: boolean; // تفعيل تنبيه أذكار الصباح
+  eveningAdhkarEnabled?: boolean; // تفعيل تنبيه أذكار المساء
+  adhkarAutoPlayAudio?: boolean; // تشغيل الصوت تلقائياً عند حلول وقت الأذكار
   adhkarReciter?: string; // الشيخ القارئ المفضل لأذكار الصباح والمساء
+  adhkarShortSheikh?: string; // الشيخ القارئ المفضل لمقاطع الأذكار القصيرة
   iqamaStyle?: 'ring' | 'split' | 'pill'; // مظهر عدّاد الإقامة
   adhanModalLayout?: 'editorial-horizon' | 'architectural-sanctuary' | 'ambient-aura'; // تصميم شاشة الأذان الكاملة
   adhanCountdownStyle?: 'islamic-mihrab' | 'rub-el-hizb' | 'mashrabiya-arabesque' | 'celestial-astrolabe'; // الطراز الإسلامي لعدّاد الأذان
@@ -135,6 +139,9 @@ export interface UserSettings {
   // المتابعة الذكية بعد كل صلاة
   postPrayerCheckinEnabled?: boolean;
   postPrayerCheckinMinutes?: 15 | 20 | 30;
+  postPrayerIncludeWird?: boolean;
+  postPrayerIncludeAdhkar?: boolean;
+  postPrayerIncludeSunnah?: boolean;
 }
 
 export type AppThemeId = 'emerald' | 'indigo' | 'obsidian' | 'parchment';

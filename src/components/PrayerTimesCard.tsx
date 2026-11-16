@@ -64,16 +64,7 @@ import {
   saveSunnahRawatibState,
 } from '../utils/sunnahRawatibData';
 import { evaluateFastingCalculator, loadFastingIntent, saveFastingIntent } from '../utils/fastingCalculator';
-import { PostPrayerCheckinCard } from './PostPrayerCheckinCard';
 import { SunnahRadarCard } from './SunnahRadarCard';
-import {
-  CheckinPrayerKey,
-  DailyCheckinState,
-  PrayerCheckinItem,
-  getActivePostPrayerWindow,
-  loadTodayCheckinState,
-  toggleCheckinField,
-} from '../utils/postPrayerCheckinData';
 
 interface PrayerTimesCardProps {
   prayerTimes: PrayerTimeData;
@@ -90,14 +81,6 @@ interface PrayerTimesCardProps {
   onNavigateToAdhkar?: () => void;
   onOpenStandbyMode?: () => void;
   onOpenTravelTab?: () => void;
-  checkinState?: DailyCheckinState;
-  onToggleCheckinField?: (
-    prayerKey: CheckinPrayerKey,
-    field: keyof PrayerCheckinItem,
-    forceValue?: boolean
-  ) => void;
-  forcedCheckinPrayer?: { prayerKey: CheckinPrayerKey; prayerNameAr: string } | null;
-  onDismissForcedCheckin?: () => void;
 }
 
 interface PrayerInfo {
@@ -183,26 +166,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   onNavigateToAdhkar,
   onOpenStandbyMode,
   onOpenTravelTab,
-  checkinState: controlledCheckinState,
-  onToggleCheckinField,
-  forcedCheckinPrayer = null,
-  onDismissForcedCheckin,
 }) => {
-  const [internalCheckinState, setInternalCheckinState] = useState<DailyCheckinState>(() =>
-    loadTodayCheckinState()
-  );
-  const activeCheckinState = controlledCheckinState ?? internalCheckinState;
-  const handleCheckinFieldToggle = (
-    prayerKey: CheckinPrayerKey,
-    field: keyof PrayerCheckinItem,
-    forceValue?: boolean
-  ) => {
-    if (onToggleCheckinField) {
-      onToggleCheckinField(prayerKey, field, forceValue);
-    } else {
-      setInternalCheckinState(toggleCheckinField(prayerKey, field, forceValue));
-    }
-  };
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [nextPrayerKey, setNextPrayerKey] = useState<PrayerName>('fajr');
   const [timeRemaining, setTimeRemaining] = useState<string>('00:00:00');
@@ -318,29 +282,41 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   const [sunnahState, setSunnahState] = useState<SunnahRawatibState>(() => loadSunnahRawatibState());
 
   useEffect(() => {
-    saveSunnahRawatibState(sunnahState);
-  }, [sunnahState]);
+    const onSunnahChanged = () => {
+      setSunnahState(loadSunnahRawatibState());
+    };
+    window.addEventListener('sunnah_rawatib_changed', onSunnahChanged);
+    return () => window.removeEventListener('sunnah_rawatib_changed', onSunnahChanged);
+  }, []);
 
   const rawatibRakatsCompleted = countCompletedRawatibRakats(sunnahState);
 
   const handleTogglePrayerSunnah = (prayerKey: KhatmaPrayerKey) => {
     adhanPlayer.playChime();
     setSunnahState((prev) => {
-      if (prayerKey === 'dhuhr') {
-        const bothDone = prev.dhuhrBefore && prev.dhuhrAfter;
-        return { ...prev, dhuhrBefore: !bothDone, dhuhrAfter: !bothDone };
-      }
-      return { ...prev, [prayerKey]: !prev[prayerKey] };
+      const updated =
+        prayerKey === 'dhuhr'
+          ? {
+              ...prev,
+              dhuhrBefore: !(prev.dhuhrBefore && prev.dhuhrAfter),
+              dhuhrAfter: !(prev.dhuhrBefore && prev.dhuhrAfter),
+            }
+          : { ...prev, [prayerKey]: !prev[prayerKey] };
+      saveSunnahRawatibState(updated);
+      return updated;
     });
   };
 
   const handleToggleDhuhrSubSunnah = (part: 'before' | 'after') => {
     adhanPlayer.playChime();
-    setSunnahState((prev) =>
-      part === 'before'
-        ? { ...prev, dhuhrBefore: !prev.dhuhrBefore }
-        : { ...prev, dhuhrAfter: !prev.dhuhrAfter }
-    );
+    setSunnahState((prev) => {
+      const updated =
+        part === 'before'
+          ? { ...prev, dhuhrBefore: !prev.dhuhrBefore }
+          : { ...prev, dhuhrAfter: !prev.dhuhrAfter };
+      saveSunnahRawatibState(updated);
+      return updated;
+    });
   };
 
   useEffect(() => {
@@ -1546,16 +1522,8 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         )}
       </div>
 
-      {/* Smart Post-Prayer Check-in Card (directly below the Hero Mihrab Card when active or opened from notification) */}
-      <div id="post-prayer-checkin-anchor">
-        <PostPrayerCheckinCard
-          activeWindow={getActivePostPrayerWindow(prayerTimes, currentTime)}
-          forcedPrayer={forcedCheckinPrayer}
-          onDismissForced={onDismissForcedCheckin}
-          checkinState={activeCheckinState}
-          onToggleField={handleCheckinFieldToggle}
-        />
-      </div>
+      {/* Prominent Compact Forgotten Sunnah Weekly Spotlight Box (top near countdown) */}
+      <SunnahRadarCard />
 
       {/* Sub-Banner: Pre-Adhan Preparation & Wake Lock Strip */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#041d17]/85 border border-[#e5b869]/30 px-5 py-3.5 rounded-2xl text-xs text-slate-200 backdrop-blur-md shadow-lg">
@@ -2124,9 +2092,6 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
           );
         })}
       </div>
-
-      {/* Forgotten Sunnah Weekly Spotlight & 7-Day Vertical Checklist */}
-      <SunnahRadarCard />
 
     </div>
   );

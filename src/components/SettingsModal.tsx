@@ -72,8 +72,9 @@ import {
   loadWidgetConfig,
   saveWidgetConfig,
 } from '../utils/widgetStudioData';
+import { SHORT_ADHKAR_SHEIKHS, ShortAdhkarSheikhId } from '../utils/shortAdhkarAudio';
 
-export type SettingsTabId = 'general' | 'iqama' | 'themes' | 'simulations' | 'fasting' | 'widgets';
+export type SettingsTabId = 'general' | 'iqama' | 'adhkar' | 'themes' | 'simulations' | 'fasting' | 'widgets';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -170,7 +171,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
   const [morningTime, setMorningTime] = useState<string>(settings.morningAdhkarTime || '06:00');
   const [eveningTime, setEveningTime] = useState<string>(settings.eveningAdhkarTime || '17:00');
+  const [morningAdhkarEnabled, setMorningAdhkarEnabled] = useState<boolean>(settings.morningAdhkarEnabled ?? true);
+  const [eveningAdhkarEnabled, setEveningAdhkarEnabled] = useState<boolean>(settings.eveningAdhkarEnabled ?? true);
+  const [adhkarAutoPlayAudio, setAdhkarAutoPlayAudio] = useState<boolean>(settings.adhkarAutoPlayAudio ?? true);
   const [selectedAdhkarReciter, setSelectedAdhkarReciter] = useState<string>(settings.adhkarReciter || 'alafasy_adhkar');
+  const [selectedShortAdhkarSheikh, setSelectedShortAdhkarSheikh] = useState<ShortAdhkarSheikhId>(
+    (settings.adhkarShortSheikh as ShortAdhkarSheikhId) || 'rotate'
+  );
+  const [previewingAdhkarPeriod, setPreviewingAdhkarPeriod] = useState<'morning' | 'evening' | 'general' | null>(null);
   const [selectedIqamaStyle, setSelectedIqamaStyle] = useState<'ring' | 'split' | 'pill'>(settings.iqamaStyle || 'ring');
   const [selectedAdhanLayout, setSelectedAdhanLayout] = useState<'editorial-horizon' | 'architectural-sanctuary' | 'ambient-aura'>(settings.adhanModalLayout || 'editorial-horizon');
   const [selectedAdhanCountdownStyle, setSelectedAdhanCountdownStyle] = useState<'islamic-mihrab' | 'rub-el-hizb' | 'mashrabiya-arabesque' | 'celestial-astrolabe'>(settings.adhanCountdownStyle || 'islamic-mihrab');
@@ -253,6 +261,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [postPrayerCheckinMinutes, setPostPrayerCheckinMinutes] = useState<15 | 20 | 30>(
     settings.postPrayerCheckinMinutes ?? 20
   );
+  const [postPrayerIncludeWird, setPostPrayerIncludeWird] = useState<boolean>(
+    settings.postPrayerIncludeWird ?? true
+  );
+  const [postPrayerIncludeAdhkar, setPostPrayerIncludeAdhkar] = useState<boolean>(
+    settings.postPrayerIncludeAdhkar ?? true
+  );
+  const [postPrayerIncludeSunnah, setPostPrayerIncludeSunnah] = useState<boolean>(
+    settings.postPrayerIncludeSunnah ?? true
+  );
+  const [postPrayerItemGuardNotice, setPostPrayerItemGuardNotice] = useState<string | null>(null);
   const [fastingIntentDraft, setFastingIntentDraft] = useState<boolean>(() => loadFastingIntent());
 
   useEffect(() => {
@@ -272,6 +290,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
         if ((st !== 'playing' && st !== 'loading') || type !== 'adhan') {
           setPreviewingAdhanKind(null);
+        }
+        if ((st !== 'playing' && st !== 'loading') || type !== 'adhkar') {
+          setPreviewingAdhkarPeriod(null);
         }
       },
       onError: (msg) => {
@@ -314,7 +335,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setIqamaTimes(s.iqamaMinutes || { fajr: 25, dhuhr: 20, asr: 20, maghrib: 10, isha: 20 });
       setMorningTime(s.morningAdhkarTime || '06:00');
       setEveningTime(s.eveningAdhkarTime || '17:00');
+      setMorningAdhkarEnabled(s.morningAdhkarEnabled ?? true);
+      setEveningAdhkarEnabled(s.eveningAdhkarEnabled ?? true);
+      setAdhkarAutoPlayAudio(s.adhkarAutoPlayAudio ?? true);
       setSelectedAdhkarReciter(s.adhkarReciter || 'alafasy_adhkar');
+      const savedShortSheikh =
+        s.adhkarShortSheikh ||
+        (typeof window !== 'undefined' ? localStorage.getItem('adhkar_short_sheikh') : null) ||
+        'rotate';
+      setSelectedShortAdhkarSheikh(
+        (SHORT_ADHKAR_SHEIKHS.some((item) => item.id === savedShortSheikh)
+          ? savedShortSheikh
+          : 'rotate') as ShortAdhkarSheikhId
+      );
       setSelectedIqamaStyle(s.iqamaStyle || 'ring');
       setSelectedAdhanLayout(s.adhanModalLayout || 'editorial-horizon');
       setSelectedAdhanCountdownStyle(s.adhanCountdownStyle || 'islamic-mihrab');
@@ -365,6 +398,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setAmbientStandbyAutoLandscape(s.ambientStandbyAutoLandscape ?? false);
       setPostPrayerCheckinEnabled(s.postPrayerCheckinEnabled ?? true);
       setPostPrayerCheckinMinutes(s.postPrayerCheckinMinutes ?? 20);
+      setPostPrayerIncludeWird(s.postPrayerIncludeWird ?? true);
+      setPostPrayerIncludeAdhkar(s.postPrayerIncludeAdhkar ?? true);
+      setPostPrayerIncludeSunnah(s.postPrayerIncludeSunnah ?? true);
+      setPostPrayerItemGuardNotice(null);
       setFastingIntentDraft(loadFastingIntent());
     }
   }, [isOpen, initialTab]);
@@ -409,12 +446,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleToggleAdhkarPreview = () => {
-    if (playerState === 'playing' && activeAudioType === 'adhkar') {
+  const handleToggleAdhkarPreview = (
+    period: 'morning' | 'evening' | 'general' = 'general',
+    reciterId: string = selectedAdhkarReciter
+  ) => {
+    if (
+      (playerState === 'playing' || playerState === 'loading') &&
+      activeAudioType === 'adhkar' &&
+      previewingAdhkarPeriod === period
+    ) {
       adhanPlayer.stop();
+      setPreviewingAdhkarPeriod(null);
     } else {
-      adhanPlayer.playAdhkar(selectedAdhkarReciter, 'أذكار الصباح والمساء المكتوبة');
+      setPreviewingAdhkarPeriod(period);
+      const label =
+        period === 'morning'
+          ? 'أذكار الصباح المباركة'
+          : period === 'evening'
+            ? 'أذكار المساء المباركة'
+            : 'أذكار الصباح والمساء المكتوبة';
+      adhanPlayer.playAdhkar(reciterId, label, period);
     }
+  };
+
+  const shiftTime24 = (baseTimeStr: string | undefined, offsetMinutes: number, fallback: string): string => {
+    if (!baseTimeStr || !baseTimeStr.includes(':')) return fallback;
+    const [hRaw, mRaw] = baseTimeStr.split(':').map(Number);
+    if (Number.isNaN(hRaw) || Number.isNaN(mRaw)) return fallback;
+    const total = (((hRaw * 60 + mRaw + offsetMinutes) % (24 * 60)) + 24 * 60) % (24 * 60);
+    const nh = Math.floor(total / 60);
+    const nm = total % 60;
+    return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
   };
 
   const handleToggleSample = (reciterKey: string, isFajr: boolean = false) => {
@@ -541,7 +603,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       iqamaVoiceMode,
       morningAdhkarTime: morningTime,
       eveningAdhkarTime: eveningTime,
+      morningAdhkarEnabled,
+      eveningAdhkarEnabled,
+      adhkarAutoPlayAudio,
       adhkarReciter: selectedAdhkarReciter,
+      adhkarShortSheikh: selectedShortAdhkarSheikh,
       iqamaStyle: selectedIqamaStyle,
       adhanModalLayout: selectedAdhanLayout,
       adhanCountdownStyle: selectedAdhanCountdownStyle,
@@ -570,6 +636,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       ambientStandbyAutoLandscape,
       postPrayerCheckinEnabled,
       postPrayerCheckinMinutes,
+      postPrayerIncludeWird,
+      postPrayerIncludeAdhkar,
+      postPrayerIncludeSunnah,
     });
     saveFastingPreferences({
       whiteDaysEnabled: fastingWhiteDaysEnabled,
@@ -800,6 +869,657 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     </div>
   );
 
+  const handleTogglePostPrayerChecklistItem = (item: 'wird' | 'adhkar' | 'sunnah') => {
+    const activeCount = [
+      postPrayerIncludeWird,
+      postPrayerIncludeAdhkar,
+      postPrayerIncludeSunnah,
+    ].filter(Boolean).length;
+
+    const currentVal =
+      item === 'wird'
+        ? postPrayerIncludeWird
+        : item === 'adhkar'
+          ? postPrayerIncludeAdhkar
+          : postPrayerIncludeSunnah;
+
+    if (currentVal && activeCount <= 1) {
+      setPostPrayerItemGuardNotice('يجب الإبقاء على بند واحد على الأقل مفعّلاً داخل الإشعار.');
+      return;
+    }
+
+    setPostPrayerItemGuardNotice(null);
+    const nextVal = !currentVal;
+
+    if (item === 'wird') {
+      setPostPrayerIncludeWird(nextVal);
+      onUpdateSettings({ postPrayerIncludeWird: nextVal });
+    } else if (item === 'adhkar') {
+      setPostPrayerIncludeAdhkar(nextVal);
+      onUpdateSettings({ postPrayerIncludeAdhkar: nextVal });
+    } else {
+      setPostPrayerIncludeSunnah(nextVal);
+      onUpdateSettings({ postPrayerIncludeSunnah: nextVal });
+    }
+  };
+
+  const renderPostPrayerCheckinSettingsCard = () => (
+    <div
+      className="theme-keep-light p-5 rounded-3xl bg-[#111C18] border-2 border-[#D4AF37]/50 space-y-4 sm:col-span-2 shadow-lg text-right"
+      dir="rtl"
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h5 className="font-bold text-base text-[#D4AF37] font-amiri flex items-center gap-1.5">
+            <span>🕌 إشعارات المتابعة الذكية بعد كل صلاة</span>
+          </h5>
+          <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+            إشعار تفاعلي يظهر بعد الأذان لتعلّم على الوِرد وأذكار بعد الصلاة والسُّنة، وعند إتمامها تظهر آية قرآنية ثم يختفي تلقائياً
+          </p>
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={postPrayerCheckinEnabled}
+          onClick={() => {
+            const next = !postPrayerCheckinEnabled;
+            setPostPrayerCheckinEnabled(next);
+            onUpdateSettings({ postPrayerCheckinEnabled: next });
+          }}
+          className={`relative w-12 h-7 rounded-full transition-colors shrink-0 border ${
+            postPrayerCheckinEnabled
+              ? 'bg-[#10B981] border-emerald-400'
+              : 'bg-slate-800 border-slate-600'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+              postPrayerCheckinEnabled ? 'left-1' : 'right-1'
+            }`}
+          />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-200 px-1">
+        <span>✅ تفعيل إشعار المتابعة بعد كل صلاة</span>
+        <span className={postPrayerCheckinEnabled ? 'text-[#10B981]' : 'text-slate-400'}>
+          {postPrayerCheckinEnabled ? 'مفعّل' : 'متوقف'}
+        </span>
+      </div>
+
+      {/* Checklist items selection */}
+      <div className="space-y-2.5 pt-1">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs font-bold text-[#D4AF37]">
+            البنود الظاهرة للتعليم عليها داخل الإشعار:
+          </span>
+          <span className="text-[11px] text-slate-300">
+            اختر ما تريد متابعته بعد كل صلاة
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {[
+            {
+              key: 'wird' as const,
+              title: 'الوِرد القرآني',
+              desc: 'مرتبط بسجل الختمة اليومية',
+              checked: postPrayerIncludeWird,
+            },
+            {
+              key: 'adhkar' as const,
+              title: 'أذكار بعد الصلاة',
+              desc: 'الاستغفار والتسبيح المأثور',
+              checked: postPrayerIncludeAdhkar,
+            },
+            {
+              key: 'sunnah' as const,
+              title: 'السُّنة الراتبة',
+              desc: 'السنن القبلية والبعدية للصلاة',
+              checked: postPrayerIncludeSunnah,
+            },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="switch"
+              aria-checked={item.checked}
+              onClick={() => handleTogglePostPrayerChecklistItem(item.key)}
+              className={`min-h-[56px] p-3 rounded-2xl border text-right transition-colors flex items-center justify-between gap-2.5 ${
+                item.checked
+                  ? 'bg-[#08241C] border-[#10B981]/75 text-white'
+                  : 'bg-[#09120F] border-[#D4AF37]/25 text-slate-300 hover:border-[#D4AF37]/55'
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>{item.title}</span>
+                </div>
+                <div className="text-[11px] text-slate-300 mt-0.5 leading-snug">{item.desc}</div>
+              </div>
+
+              <span
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold shrink-0 border ${
+                  item.checked
+                    ? 'bg-[#10B981]/20 border-[#10B981]/60 text-[#10B981]'
+                    : 'bg-slate-800/70 border-slate-600 text-slate-400'
+                }`}
+              >
+                {item.checked ? 'مفعّل ✓' : 'مخفي'}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {postPrayerItemGuardNotice && (
+          <p className="text-xs text-amber-300 font-bold px-1">{postPrayerItemGuardNotice}</p>
+        )}
+      </div>
+
+      {/* Delay selector */}
+      <div className="space-y-2">
+        <div className="text-xs font-bold text-[#D4AF37]">
+          توقيت ظهور الإشعار بعد الأذان:
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { mins: 15 as const, label: 'بعد ١٥ دقيقة' },
+            { mins: 20 as const, label: 'بعد ٢٠ دقيقة' },
+            { mins: 30 as const, label: 'بعد ٣٠ دقيقة' },
+          ]).map((opt) => {
+            const selected = postPrayerCheckinMinutes === opt.mins;
+            return (
+              <button
+                key={opt.mins}
+                type="button"
+                onClick={() => {
+                  setPostPrayerCheckinMinutes(opt.mins);
+                  onUpdateSettings({ postPrayerCheckinMinutes: opt.mins });
+                }}
+                className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+                  selected
+                    ? 'bg-[#08241C] border-[#10B981] text-[#10B981] shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                    : 'bg-[#09120F] border-[#D4AF37]/25 text-slate-300 hover:border-[#D4AF37]/60'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          onTestPostPrayerCheckin?.();
+        }}
+        className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#e5b869] to-[#10B981] text-slate-950 font-black text-xs sm:text-sm shadow hover:brightness-105 transition-all flex items-center justify-center gap-2"
+      >
+        <span>🔔 تجربة إشعار المتابعة الآن</span>
+      </button>
+    </div>
+  );
+
+  const renderAdhkarSettingsSection = () => {
+    const morningPresets = [
+      {
+        id: 'after_fajr',
+        label: 'بعد الفجر بـ ١٥ د',
+        time: shiftTime24(prayerTimes?.fajr, 15, '05:30'),
+      },
+      {
+        id: 'at_sunrise',
+        label: 'عند الشروق',
+        time: shiftTime24(prayerTimes?.sunrise, 0, '06:15'),
+      },
+      {
+        id: 'after_sunrise',
+        label: 'بعد الشروق بـ ١٥ د',
+        time: shiftTime24(prayerTimes?.sunrise, 15, '06:30'),
+      },
+      {
+        id: 'default_morning',
+        label: '٠٦:٠٠ ص (افتراضي)',
+        time: '06:00',
+      },
+    ];
+
+    const eveningPresets = [
+      {
+        id: 'after_asr',
+        label: 'بعد العصر بـ ٣٠ د',
+        time: shiftTime24(prayerTimes?.asr, 30, '15:45'),
+      },
+      {
+        id: 'before_maghrib',
+        label: 'قبل المغرب بـ ٣٠ د',
+        time: shiftTime24(prayerTimes?.maghrib, -30, '17:00'),
+      },
+      {
+        id: 'at_maghrib',
+        label: 'عند المغرب',
+        time: shiftTime24(prayerTimes?.maghrib, 0, '17:30'),
+      },
+      {
+        id: 'default_evening',
+        label: '٠٥:٠٠ م (افتراضي)',
+        time: '17:00',
+      },
+    ];
+
+    const currentReciterObj = ADHKAR_SOURCES[selectedAdhkarReciter] || ADHKAR_SOURCES.alafasy_adhkar;
+    const isMorningPlaying =
+      (playerState === 'playing' || playerState === 'loading') &&
+      activeAudioType === 'adhkar' &&
+      previewingAdhkarPeriod === 'morning';
+    const isEveningPlaying =
+      (playerState === 'playing' || playerState === 'loading') &&
+      activeAudioType === 'adhkar' &&
+      previewingAdhkarPeriod === 'evening';
+
+    return (
+      <div className="space-y-6 w-full max-w-full overflow-x-hidden text-right" dir="rtl">
+        {/* Header Card */}
+        <div className="p-5 md:p-6 rounded-3xl bg-gradient-to-br from-[#062d24] via-[#041d18] to-[#02100d] border-2 border-[#e5b869]/50 shadow-xl space-y-5">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#d97706] flex items-center justify-center text-slate-950 shadow-lg shrink-0">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-xl font-bold font-amiri text-[#fbbf24]">
+                  ❖ مواعيد وإعدادات أذكار الصباح والمساء ❖
+                </h4>
+                <p className="text-xs text-slate-300">
+                  اضبط توقيت التذكير اليومي لأذكار الصباح والمساء واختر القارئ المفضل وسلوك التشغيل التلقائي
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMorningAdhkarEnabled(true);
+                setEveningAdhkarEnabled(true);
+                setMorningTime('06:00');
+                setEveningTime('17:00');
+                setAdhkarAutoPlayAudio(true);
+                setSelectedAdhkarReciter('alafasy_adhkar');
+                setSelectedShortAdhkarSheikh('rotate');
+                onUpdateSettings({
+                  morningAdhkarEnabled: true,
+                  eveningAdhkarEnabled: true,
+                  morningAdhkarTime: '06:00',
+                  eveningAdhkarTime: '17:00',
+                  adhkarAutoPlayAudio: true,
+                  adhkarReciter: 'alafasy_adhkar',
+                  adhkarShortSheikh: 'rotate',
+                });
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/35 text-[#fbbf24] hover:bg-[#07382e] text-xs font-bold flex items-center gap-1.5 transition-all"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>استعادة الافتراضي</span>
+            </button>
+          </div>
+
+          {/* Morning & Evening Schedule Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Morning Adhkar Card */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/35 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-[#fbbf24] shrink-0">
+                    <Sunrise className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-base font-bold text-[#fbbf24] font-amiri">أذكار الصباح</h5>
+                    <span className="text-[11px] text-slate-400">
+                      {morningAdhkarEnabled ? `مفعّلة · ${formatTime12Ar(morningTime)}` : 'متوقفة مؤقتاً'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={morningAdhkarEnabled}
+                  onClick={() => {
+                    const next = !morningAdhkarEnabled;
+                    setMorningAdhkarEnabled(next);
+                    onUpdateSettings({ morningAdhkarEnabled: next });
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors shrink-0 border ${
+                    morningAdhkarEnabled
+                      ? 'bg-[#10B981] border-emerald-400'
+                      : 'bg-slate-800 border-slate-600'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      morningAdhkarEnabled ? 'left-1' : 'right-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className={`space-y-3 transition-opacity ${morningAdhkarEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                    <span>وقت التنبيه والتشغيل الصباحي:</span>
+                    <span className="font-mono text-[#fbbf24]">{formatTime12Ar(morningTime)}</span>
+                  </span>
+                  <input
+                    type="time"
+                    dir="ltr"
+                    value={morningTime}
+                    onChange={(e) => {
+                      const val = e.target.value || '06:00';
+                      setMorningTime(val);
+                      onUpdateSettings({ morningAdhkarTime: val });
+                    }}
+                    className="w-full min-h-[44px] bg-[#02100d] border border-[#e5b869]/40 rounded-xl px-4 py-2 text-sm font-mono font-bold text-white focus:outline-none focus:border-[#fbbf24]"
+                  />
+                </label>
+
+                {/* Smart Sunnah Presets */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-bold text-[#e5b869]">اختصارات سريعة حسب مواقيت اليوم:</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {morningPresets.map((preset) => {
+                      const active = morningTime === preset.time;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            setMorningTime(preset.time);
+                            onUpdateSettings({ morningAdhkarTime: preset.time });
+                          }}
+                          className={`px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all text-right flex items-center justify-between gap-1 ${
+                            active
+                              ? 'bg-[#073f34] border-[#fbbf24] text-[#fbbf24]'
+                              : 'bg-[#02100d] border-[#e5b869]/20 text-slate-300 hover:border-[#e5b869]/50'
+                          }`}
+                        >
+                          <span className="truncate">{preset.label}</span>
+                          <span className="font-mono text-[10px] opacity-80 shrink-0">{preset.time}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggleAdhkarPreview('morning', selectedAdhkarReciter)}
+                  className={`w-full min-h-[40px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    isMorningPlaying
+                      ? 'bg-rose-600 border-rose-500 text-white'
+                      : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
+                  }`}
+                >
+                  {isMorningPlaying ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>إيقاف تلاوة أذكار الصباح</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>استماع وتجربة أذكار الصباح</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Evening Adhkar Card */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/35 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-sky-400/40 flex items-center justify-center text-sky-300 shrink-0">
+                    <Moon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-base font-bold text-[#fbbf24] font-amiri">أذكار المساء</h5>
+                    <span className="text-[11px] text-slate-400">
+                      {eveningAdhkarEnabled ? `مفعّلة · ${formatTime12Ar(eveningTime)}` : 'متوقفة مؤقتاً'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={eveningAdhkarEnabled}
+                  onClick={() => {
+                    const next = !eveningAdhkarEnabled;
+                    setEveningAdhkarEnabled(next);
+                    onUpdateSettings({ eveningAdhkarEnabled: next });
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors shrink-0 border ${
+                    eveningAdhkarEnabled
+                      ? 'bg-[#10B981] border-emerald-400'
+                      : 'bg-slate-800 border-slate-600'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      eveningAdhkarEnabled ? 'left-1' : 'right-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className={`space-y-3 transition-opacity ${eveningAdhkarEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                    <span>وقت التنبيه والتشغيل المسائي:</span>
+                    <span className="font-mono text-[#fbbf24]">{formatTime12Ar(eveningTime)}</span>
+                  </span>
+                  <input
+                    type="time"
+                    dir="ltr"
+                    value={eveningTime}
+                    onChange={(e) => {
+                      const val = e.target.value || '17:00';
+                      setEveningTime(val);
+                      onUpdateSettings({ eveningAdhkarTime: val });
+                    }}
+                    className="w-full min-h-[44px] bg-[#02100d] border border-[#e5b869]/40 rounded-xl px-4 py-2 text-sm font-mono font-bold text-white focus:outline-none focus:border-[#fbbf24]"
+                  />
+                </label>
+
+                {/* Smart Sunnah Presets */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-bold text-[#e5b869]">اختصارات سريعة حسب مواقيت اليوم:</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {eveningPresets.map((preset) => {
+                      const active = eveningTime === preset.time;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            setEveningTime(preset.time);
+                            onUpdateSettings({ eveningAdhkarTime: preset.time });
+                          }}
+                          className={`px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all text-right flex items-center justify-between gap-1 ${
+                            active
+                              ? 'bg-[#073f34] border-[#fbbf24] text-[#fbbf24]'
+                              : 'bg-[#02100d] border-[#e5b869]/20 text-slate-300 hover:border-[#e5b869]/50'
+                          }`}
+                        >
+                          <span className="truncate">{preset.label}</span>
+                          <span className="font-mono text-[10px] opacity-80 shrink-0">{preset.time}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggleAdhkarPreview('evening', selectedAdhkarReciter)}
+                  className={`w-full min-h-[40px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    isEveningPlaying
+                      ? 'bg-rose-600 border-rose-500 text-white'
+                      : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
+                  }`}
+                >
+                  {isEveningPlaying ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>إيقاف تلاوة أذكار المساء</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>استماع وتجربة أذكار المساء</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Auto-play audio behavior toggle */}
+          <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/30">
+            <div className="space-y-0.5 text-right">
+              <div className="text-xs sm:text-sm font-bold text-white">
+                تشغيل التلاوة الصوتية تلقائياً عند حلول وقت الأذكار
+              </div>
+              <div className="text-[11px] text-slate-400">
+                عند الإيقاف، يظهر إشعار وبطاقة تنبيه فقط في الموعد المحدد دون تشغيل الصوت تلقائياً
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={adhkarAutoPlayAudio}
+              onClick={() => {
+                const next = !adhkarAutoPlayAudio;
+                setAdhkarAutoPlayAudio(next);
+                onUpdateSettings({ adhkarAutoPlayAudio: next });
+              }}
+              className={`relative w-12 h-7 rounded-full transition-colors shrink-0 border ${
+                adhkarAutoPlayAudio
+                  ? 'bg-[#10B981] border-emerald-400'
+                  : 'bg-slate-800 border-slate-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  adhkarAutoPlayAudio ? 'left-1' : 'right-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Full Wird Reciter Selection */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/35 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h5 className="text-sm sm:text-base font-bold text-[#fbbf24] font-amiri">
+                  القارئ المفضل لوِرد أذكار الصباح والمساء
+                </h5>
+                <p className="text-[11px] text-slate-400">
+                  القارئ المختار حالياً: <strong className="text-emerald-300">{currentReciterObj.nameAr}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggleAdhkarPreview('general', selectedAdhkarReciter)}
+                className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  (playerState === 'playing' || playerState === 'loading') &&
+                  activeAudioType === 'adhkar' &&
+                  previewingAdhkarPeriod === 'general'
+                    ? 'bg-rose-600 border-rose-500 text-white'
+                    : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
+                }`}
+              >
+                {(playerState === 'playing' || playerState === 'loading') &&
+                activeAudioType === 'adhkar' &&
+                previewingAdhkarPeriod === 'general' ? (
+                  <>
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <span>إيقاف المعاينة</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>معاينة القارئ المختار</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {Object.values(ADHKAR_SOURCES).map((reciter) => {
+                const isSelected = selectedAdhkarReciter === reciter.id;
+                return (
+                  <button
+                    key={reciter.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAdhkarReciter(reciter.id);
+                      onUpdateSettings({ adhkarReciter: reciter.id });
+                    }}
+                    className={`p-3 rounded-xl border text-right transition-all flex items-center justify-between gap-2.5 ${
+                      isSelected
+                        ? 'bg-gradient-to-br from-[#073f34] to-[#03221c] border-[#fbbf24] ring-1 ring-[#e5b869]/40'
+                        : 'bg-[#02100d] border-[#e5b869]/20 hover:border-[#e5b869]/55'
+                    }`}
+                  >
+                    <span className="text-xs font-bold text-slate-100 leading-snug">{reciter.nameAr}</span>
+                    <span
+                      className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                        isSelected ? 'border-[#fbbf24] bg-[#fbbf24]/25' : 'border-slate-600'
+                      }`}
+                    >
+                      {isSelected && <span className="w-2 h-2 rounded-full bg-[#fbbf24]" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Short Clips Sheikh Selection */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/30 space-y-2.5">
+            <label className="block space-y-1.5">
+              <span className="text-xs sm:text-sm font-bold text-[#fbbf24] font-amiri block">
+                الشيخ الافتراضي لمقاطع الأذكار القصيرة (في تبويب الأذكار):
+              </span>
+              <select
+                value={selectedShortAdhkarSheikh}
+                onChange={(e) => {
+                  const val = e.target.value as ShortAdhkarSheikhId;
+                  setSelectedShortAdhkarSheikh(val);
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('adhkar_short_sheikh', val);
+                  }
+                  onUpdateSettings({ adhkarShortSheikh: val });
+                }}
+                className="w-full bg-[#02100d] border border-[#e5b869]/35 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-[#fbbf24] text-right"
+              >
+                {SHORT_ADHKAR_SHEIKHS.map((sh) => (
+                  <option key={sh.id} value={sh.id}>
+                    {sh.nameAr} — {sh.subtitleAr}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md"
@@ -916,6 +1636,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
             <button
               ref={(el) => {
+                tabButtonRefs.current.adhkar = el;
+              }}
+              type="button"
+              onClick={(e) => handleSelectSettingsTab('adhkar', e.currentTarget)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                activeSettingsTab === 'adhkar'
+                  ? 'bg-gradient-to-r from-[#fbbf24] via-[#e5b869] to-emerald-400 text-slate-950 shadow'
+                  : 'bg-[#041d17]/70 border border-[#e5b869]/20 text-slate-300 hover:text-[#fbbf24]'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>أذكار الصباح والمساء</span>
+            </button>
+            <button
+              ref={(el) => {
                 tabButtonRefs.current.themes = el;
               }}
               type="button"
@@ -979,7 +1714,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Scrollable Modal Body */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-3 md:px-6 md:py-5 space-y-6 relative z-10 w-full max-w-full">
 
-          {activeSettingsTab === 'iqama' ? (
+          {activeSettingsTab === 'adhkar' ? (
+            renderAdhkarSettingsSection()
+          ) : activeSettingsTab === 'iqama' ? (
             <div className="space-y-6 w-full max-w-full overflow-x-hidden">
               {/* 1. Per-Prayer Iqama Duration Table */}
               <div className="p-5 md:p-6 rounded-3xl bg-gradient-to-br from-[#062d24] via-[#041d18] to-[#02100d] border-2 border-[#e5b869]/50 shadow-xl space-y-5 text-right">
@@ -1921,93 +2658,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   {/* Post-Prayer Check-in & Interactive Notification Settings */}
-                  <div
-                    className="theme-keep-light p-5 rounded-3xl bg-[#111C18] border-2 border-[#D4AF37]/50 space-y-4 sm:col-span-2 shadow-lg text-right"
-                    dir="rtl"
-                  >
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div>
-                        <h5 className="font-bold text-base text-[#D4AF37] font-amiri flex items-center gap-1.5">
-                          <span>🕌 إشعارات المتابعة الذكية بعد كل صلاة</span>
-                        </h5>
-                        <p className="text-xs text-slate-300 mt-0.5">
-                          إشعار تفاعلي بعد الأذان لتسجيل الفريضة وأذكار ما بعد الصلاة والوِرد اليومي بلمسة واحدة
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={postPrayerCheckinEnabled}
-                        onClick={() => {
-                          const next = !postPrayerCheckinEnabled;
-                          setPostPrayerCheckinEnabled(next);
-                          onUpdateSettings({ postPrayerCheckinEnabled: next });
-                        }}
-                        className={`relative w-12 h-7 rounded-full transition-colors shrink-0 border ${
-                          postPrayerCheckinEnabled
-                            ? 'bg-[#10B981] border-emerald-400'
-                            : 'bg-slate-800 border-slate-600'
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                            postPrayerCheckinEnabled ? 'left-1' : 'right-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-200 px-1">
-                      <span>✅ تفعيل إشعار المتابعة بعد كل صلاة</span>
-                      <span className={postPrayerCheckinEnabled ? 'text-[#10B981]' : 'text-slate-400'}>
-                        {postPrayerCheckinEnabled ? 'مفعّل' : 'متوقف'}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs font-bold text-[#D4AF37]">
-                        توقيت ظهور الإشعار بعد الأذان:
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {([
-                          { mins: 15 as const, label: 'بعد ١٥ دقيقة' },
-                          { mins: 20 as const, label: 'بعد ٢٠ دقيقة' },
-                          { mins: 30 as const, label: 'بعد ٣٠ دقيقة' },
-                        ]).map((opt) => {
-                          const selected = postPrayerCheckinMinutes === opt.mins;
-                          return (
-                            <button
-                              key={opt.mins}
-                              type="button"
-                              onClick={() => {
-                                setPostPrayerCheckinMinutes(opt.mins);
-                                onUpdateSettings({ postPrayerCheckinMinutes: opt.mins });
-                              }}
-                              className={`min-h-[42px] px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
-                                selected
-                                  ? 'bg-[#08241C] border-[#10B981] text-[#10B981] shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                                  : 'bg-[#09120F] border-[#D4AF37]/25 text-slate-300 hover:border-[#D4AF37]/60'
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onTestPostPrayerCheckin?.();
-                      }}
-                      className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#e5b869] to-[#10B981] text-slate-950 font-black text-xs sm:text-sm shadow hover:brightness-105 transition-all flex items-center justify-center gap-2"
-                    >
-                      <span>🔔 تجربة إشعار المتابعة الآن</span>
-                    </button>
-                  </div>
+                  {renderPostPrayerCheckinSettingsCard()}
 
                   {/* 0. Full-Screen Cinematic Adhan Simulation */}
                   <div className="p-5 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/30 space-y-3 flex flex-col justify-between sm:col-span-2">
@@ -2191,30 +2842,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <BookOpen className="w-4 h-4 text-emerald-400" />
                       </h5>
                       <p className="text-xs text-slate-300 leading-relaxed mt-1">
-                        الاستماع لتلاوة أذكار الصباح والمساء بصوت نقي وعذب (الشيخ مشاري راشد العفاسي).
+                        الاستماع لتلاوة أذكار الصباح والمساء بصوت القارئ المختار (
+                        {ADHKAR_SOURCES[selectedAdhkarReciter]?.nameAr || 'الشيخ مشاري راشد العفاسي'}).
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleToggleAdhkarPreview}
-                      className={`w-full px-4 py-2.5 rounded-xl border font-bold text-xs shadow transition-all flex items-center justify-center gap-2 ${
-                        playerState === 'playing' && activeAudioType === 'adhkar'
-                          ? 'bg-rose-600 border-rose-500 text-white'
-                          : 'bg-[#05261f] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07362c]'
-                      }`}
-                    >
-                      {playerState === 'playing' && activeAudioType === 'adhkar' ? (
-                        <>
-                          <Square className="w-3.5 h-3.5 fill-current" />
-                          <span>إيقاف تلاوة الأذكار</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>اختبار صوت الأذكار</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAdhkarPreview('morning', selectedAdhkarReciter)}
+                        className={`px-3 py-2.5 rounded-xl border font-bold text-xs shadow transition-all flex items-center justify-center gap-1.5 ${
+                          (playerState === 'playing' || playerState === 'loading') &&
+                          activeAudioType === 'adhkar' &&
+                          previewingAdhkarPeriod === 'morning'
+                            ? 'bg-rose-600 border-rose-500 text-white'
+                            : 'bg-[#05261f] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07362c]'
+                        }`}
+                      >
+                        {(playerState === 'playing' || playerState === 'loading') &&
+                        activeAudioType === 'adhkar' &&
+                        previewingAdhkarPeriod === 'morning' ? (
+                          <>
+                            <Square className="w-3.5 h-3.5 fill-current" />
+                            <span>إيقاف الصباح</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>أذكار الصباح</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAdhkarPreview('evening', selectedAdhkarReciter)}
+                        className={`px-3 py-2.5 rounded-xl border font-bold text-xs shadow transition-all flex items-center justify-center gap-1.5 ${
+                          (playerState === 'playing' || playerState === 'loading') &&
+                          activeAudioType === 'adhkar' &&
+                          previewingAdhkarPeriod === 'evening'
+                            ? 'bg-rose-600 border-rose-500 text-white'
+                            : 'bg-[#05261f] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07362c]'
+                        }`}
+                      >
+                        {(playerState === 'playing' || playerState === 'loading') &&
+                        activeAudioType === 'adhkar' &&
+                        previewingAdhkarPeriod === 'evening' ? (
+                          <>
+                            <Square className="w-3.5 h-3.5 fill-current" />
+                            <span>إيقاف المساء</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>أذكار المساء</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* 6. Dua After Adhan Test */}
@@ -2504,6 +3187,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </button>
           </div>
+
+          {/* 🕌 إعدادات إشعار المتابعة الذكية بعد كل صلاة */}
+          {renderPostPrayerCheckinSettingsCard()}
 
           {/* 📱 إعدادات الودجات والشاشة الرئيسية */}
           {renderWidgetSettingsSection()}

@@ -86,6 +86,21 @@ export const isPrayerSunnahCompleted = (
   return state.isha;
 };
 
+export const togglePrayerSunnahCompleted = (
+  prayerKey: KhatmaPrayerKey,
+  forceValue?: boolean
+): SunnahRawatibState => {
+  const current = loadSunnahRawatibState();
+  const currentlyCompleted = isPrayerSunnahCompleted(current, prayerKey);
+  const nextVal = typeof forceValue === 'boolean' ? forceValue : !currentlyCompleted;
+  const updated: SunnahRawatibState =
+    prayerKey === 'dhuhr'
+      ? { ...current, dhuhrBefore: nextVal, dhuhrAfter: nextVal }
+      : { ...current, [prayerKey]: nextVal };
+  saveSunnahRawatibState(updated);
+  return updated;
+};
+
 export const SUNNAH_RAWATIB_LABELS: Record<
   KhatmaPrayerKey,
   { title: string; rakatsLabel: string; isRawatib: boolean }
