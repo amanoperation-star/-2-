@@ -1,0 +1,8 @@
+{
+  "name": "مواقيت الصلاة والأذان - Al-Mawaqeet",
+  "description": "تطبيق مواقيت الصلاة والأذان الشامل مع تحديد القبلة، الأذكار، القرآن الكريم، ومواقيت الصلاة الدقيقة لكل مدن العالم بأصوات الأذان العذبة",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

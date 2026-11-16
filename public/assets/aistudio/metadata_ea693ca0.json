@@ -1,0 +1,8 @@
+{
+  "name": "Remix مواقيت الصلاة والأذان | ",
+  "description": "تطبيق مواقيت الصلاة والأذان بأصوات أشهر الشيوخ للموبايل والكمبيوتر والشاشات الذكية (Smart TV)",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
