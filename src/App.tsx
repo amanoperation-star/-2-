@@ -44,6 +44,8 @@ import { OfflineIndicator } from './components/PWAInstallButton';
 import { precacheEssentialAudioOnce } from './utils/offlineAudioManager';
 import { loadFastingPreferences, saveFastingPreferences } from './utils/fastingCalculator';
 import { backgroundService } from './utils/backgroundService';
+import { useTvRemoteNavigation } from './hooks/useTvRemoteNavigation';
+import { isLikelyAndroidTvDevice, subscribeNativeBackButton } from './utils/nativeAndroidBridge';
 import {
   CheckinPrayerKey,
   DailyCheckinState,
@@ -329,6 +331,20 @@ export default function App() {
       typeof window !== 'undefined' && localStorage.getItem('post_prayer_include_sunnah') !== null
         ? localStorage.getItem('post_prayer_include_sunnah') === 'true'
         : true,
+    tvRemoteFocusEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('tv_remote_focus_enabled') !== null
+        ? localStorage.getItem('tv_remote_focus_enabled') === 'true'
+        : true,
+    keepScreenAwakeAlways:
+      typeof window !== 'undefined' && localStorage.getItem('keep_screen_awake_always') !== null
+        ? localStorage.getItem('keep_screen_awake_always') === 'true'
+        : false,
+    autoEnterTvDisplay:
+      typeof window !== 'undefined' && localStorage.getItem('auto_enter_tv_display') !== null
+        ? localStorage.getItem('auto_enter_tv_display') === 'true'
+        : false,
+    remoteApiBaseUrl:
+      typeof window !== 'undefined' ? localStorage.getItem('remote_api_base_url') || '' : '',
   });
 
   const [autoThemeManualPause, setAutoThemeManualPause] = useState<boolean>(false);
@@ -644,6 +660,83 @@ export default function App() {
   useEffect(() => {
     precacheEssentialAudioOnce(settings);
   }, []);
+
+  // Keep Screen Awake Always (for Android TV / Mosque Display / Bedside Clock)
+  useEffect(() => {
+    if (settings.keepScreenAwakeAlways || isLikelyAndroidTvDevice()) {
+      void backgroundService.requestWakeLock();
+    } else if (!isStandbyModeOpen) {
+      void backgroundService.releaseWakeLock();
+    }
+  }, [settings.keepScreenAwakeAlways, isStandbyModeOpen]);
+
+  // Auto-open Unified Mosque / TV Display on startup when configured for dedicated screens
+  useEffect(() => {
+    if (settings.autoEnterTvDisplay && !isStandbyModeOpen) {
+      setDisplayInitialMode('mosque');
+      setIsStandbyModeOpen(true);
+    }
+  }, []);
+
+  const handleTvOrAndroidBack = useCallback((): boolean => {
+    if (isSettingsOpen) {
+      setIsSettingsOpen(false);
+      return true;
+    }
+    if (isBackgroundPickerOpen) {
+      setIsBackgroundPickerOpen(false);
+      return true;
+    }
+    if (isWidgetStudioOpen) {
+      setIsWidgetStudioOpen(false);
+      return true;
+    }
+    if (isSteadfastnessOpen) {
+      setIsSteadfastnessOpen(false);
+      return true;
+    }
+    if (isIstikharaHajahOpen) {
+      setIsIstikharaHajahOpen(false);
+      return true;
+    }
+    if (selectedWirdModal) {
+      setSelectedWirdModal(null);
+      return true;
+    }
+    if (forcedCheckinPrayer) {
+      setForcedCheckinPrayer(null);
+      return true;
+    }
+    if (isPeriodicPopupOpen) {
+      setIsPeriodicPopupOpen(false);
+      return true;
+    }
+    if (isStandbyModeOpen) {
+      standbyDismissedInLandscapeRef.current = true;
+      setIsStandbyModeOpen(false);
+      return true;
+    }
+    return false;
+  }, [
+    isSettingsOpen,
+    isBackgroundPickerOpen,
+    isWidgetStudioOpen,
+    isSteadfastnessOpen,
+    isIstikharaHajahOpen,
+    selectedWirdModal,
+    forcedCheckinPrayer,
+    isPeriodicPopupOpen,
+    isStandbyModeOpen,
+  ]);
+
+  useTvRemoteNavigation({
+    enabled: settings.tvRemoteFocusEnabled !== false,
+    onBack: handleTvOrAndroidBack,
+  });
+
+  useEffect(() => {
+    return subscribeNativeBackButton(handleTvOrAndroidBack);
+  }, [handleTvOrAndroidBack]);
 
   // Auto-enter Ambient StandBy Mode on mobile landscape rotation if enabled
   useEffect(() => {
@@ -1202,6 +1295,23 @@ export default function App() {
       }
       if (typeof newSettings.postPrayerIncludeSunnah === 'boolean') {
         localStorage.setItem('post_prayer_include_sunnah', String(newSettings.postPrayerIncludeSunnah));
+      }
+      if (typeof newSettings.tvRemoteFocusEnabled === 'boolean') {
+        localStorage.setItem('tv_remote_focus_enabled', String(newSettings.tvRemoteFocusEnabled));
+      }
+      if (typeof newSettings.keepScreenAwakeAlways === 'boolean') {
+        localStorage.setItem('keep_screen_awake_always', String(newSettings.keepScreenAwakeAlways));
+      }
+      if (typeof newSettings.autoEnterTvDisplay === 'boolean') {
+        localStorage.setItem('auto_enter_tv_display', String(newSettings.autoEnterTvDisplay));
+      }
+      if (typeof newSettings.remoteApiBaseUrl === 'string') {
+        const cleanApi = newSettings.remoteApiBaseUrl.trim().replace(/\/+$/, '');
+        if (cleanApi) {
+          localStorage.setItem('remote_api_base_url', cleanApi);
+        } else {
+          localStorage.removeItem('remote_api_base_url');
+        }
       }
       return updated;
     });

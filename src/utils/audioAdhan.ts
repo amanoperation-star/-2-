@@ -10,6 +10,8 @@ export interface AdhanAudioSource {
   id: string;
   nameAr: string;
   nameEn: string;
+  khushuTagAr?: string;
+  approxSizeMb?: number;
   isFajrSpecial?: boolean;
   urls: string[]; // List of URLs to try in order (local, cdn, fallback mirrors)
 }
@@ -19,6 +21,8 @@ export const ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'makkah',
     nameAr: 'أذان مكة المكرمة (الشيخ علي ملا - الحرم المكي)',
     nameEn: 'Makkah Al-Mukarramah - Sheikh Ali Mullah',
+    khushuTagAr: 'المقام الحجازي العريق · هيبة الحرم المكي',
+    approxSizeMb: 0.7,
     urls: [
       '/audio/adhan-makkah.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/54944191e2e2.mp3',
@@ -28,24 +32,132 @@ export const ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'madinah',
     nameAr: 'أذان المدينة المنورة (المسجد النبوي الشريف)',
     nameEn: 'Madinah Al-Munawwarah - Prophet Mosque',
+    khushuTagAr: 'سكينة المسجد النبوي · نبرة مدنية هادئة',
+    approxSizeMb: 0.4,
     urls: [
       '/audio/adhan-madinah.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/b30ca9a3e115.mp3',
     ],
   },
-  egypt: {
-    id: 'egypt',
-    nameAr: 'أذان مصر (الشيخ محمد رفعت - أذان الإذاعة المصرية)',
-    nameEn: 'Egypt - Sheikh Mohamed Rifat',
+  islam_sobhi: {
+    id: 'islam_sobhi',
+    nameAr: 'أذان الشيخ إسلام صبحي (نبرة خاشعة مؤثرة)',
+    nameEn: 'Sheikh Islam Sobhi (Reverent)',
+    khushuTagAr: 'نبرة عذبة خاشعة تلامس القلوب',
+    approxSizeMb: 3.4,
     urls: [
-      '/audio/adhan-egypt.mp3',
-      'https://media.assabile.com/assabile/adhan_3435370/d8a3a72860e8.mp3',
+      '/audio/adhan-islam-sobhi.mp3',
+      'https://raw.githubusercontent.com/mohsalvi/adhan-audio/main/general/islam-sobhi-01.mp3',
+      'https://archive.org/download/A.S.I.S/Adhan_Sheikh-Islam-Sobhi.mp3',
+    ],
+  },
+  mansour_salmi: {
+    id: 'mansour_salmi',
+    nameAr: 'أذان الشيخ منصور السالمي (صوت شجي خاشع)',
+    nameEn: 'Sheikh Mansour Al-Salmi (Emotional)',
+    khushuTagAr: 'أداء شجيّ رقيق يبعث الرقّة والخشوع',
+    approxSizeMb: 1.6,
+    urls: [
+      '/audio/adhan-mansour-salmi.mp3',
+    ],
+  },
+  ahmad_nufais: {
+    id: 'ahmad_nufais',
+    nameAr: 'أذان الشيخ أحمد النفيس (خشوع وهدوء آسر)',
+    nameEn: 'Sheikh Ahmad Al-Nufais',
+    khushuTagAr: 'تؤدة وخشوع عميق ونقاء صوتي هادئ',
+    approxSizeMb: 3.3,
+    urls: [
+      '/audio/adhan-ahmad-nufais.mp3',
+      'https://raw.githubusercontent.com/mohsalvi/adhan-audio/main/general/ahmad-al-nafees-01.mp3',
+      'https://raw.githubusercontent.com/DBChoco/Muezzin/master/ressources/audio/Adhan%20-%20Ahmed%20Al-Nufais.mp3',
+    ],
+  },
+  toubar: {
+    id: 'toubar',
+    nameAr: 'أذان الشيخ نصر الدين طوبار (مقام روحاني خاشع)',
+    nameEn: 'Sheikh Nasreddine Toubar',
+    khushuTagAr: 'أداء روحاني مهيب يوقظ القلب للذكر',
+    approxSizeMb: 4.0,
+    urls: [
+      '/audio/adhan-toubar.mp3',
+      'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Nasreddine_Toubar_(%D9%86%D8%B5%D8%B1_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%B7%D9%88%D8%A8%D8%A7%D8%B1).mp3',
+    ],
+  },
+  husary: {
+    id: 'husary',
+    nameAr: 'أذان الشيخ محمود خليل الحصري (خشوع ورصانة مصرية)',
+    nameEn: 'Sheikh Mahmoud Khalil Al-Husary',
+    khushuTagAr: 'رصانة وتجويد متقن على طريقة كبار القرّاء',
+    approxSizeMb: 0.3,
+    urls: [
+      '/audio/adhan-husary.mp3',
+      'https://media.assabile.com/assabile/adhan_3435370/cdb24a4bd658.mp3',
+      'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mahmoud_Khalil_Al_Hussary_-_Cairo_(%D9%85%D8%AD%D9%85%D9%88%D8%AF_%D8%AE%D9%84%D9%8A%D9%84_%D8%A7%D9%84%D8%AD%D8%B5%D8%B1%D9%8A_-_%D8%A7%D9%84%D9%82%D8%A7%D9%87%D8%B1%D8%A9).mp3',
+    ],
+  },
+  zahrani: {
+    id: 'zahrani',
+    nameAr: 'أذان الشيخ منصور الزهراني (صوت شجي خاشع)',
+    nameEn: 'Sheikh Mansour Al-Zahrani',
+    khushuTagAr: 'نبرة حزينة هادئة ومؤثرة في النفوس',
+    approxSizeMb: 0.7,
+    urls: [
+      '/audio/adhan-zahrani.mp3',
+      'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Mansur_Al_Zahrane_-_HQ_(%D9%85%D9%86%D8%B5%D9%88%D8%B1_%D8%A7%D9%84%D8%B2%D9%87%D8%B1%D8%A7%D9%86%D9%8A).mp3',
+      'https://raw.githubusercontent.com/mohsalvi/adhan-audio/main/general/mansour-al-zahrani-01.mp3',
+    ],
+  },
+  kazabri: {
+    id: 'kazabri',
+    nameAr: 'أذان الشيخ عمر القزابري (نبرة مغربية خاشعة)',
+    nameEn: 'Sheikh Omar Al-Kazabri',
+    khushuTagAr: 'خشوع مغربي أصيل بصوت جهوري نديّ',
+    approxSizeMb: 1.8,
+    urls: [
+      '/audio/adhan-kazabri.mp3',
+      'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Omar_Al_Kazabri_(%D8%B9%D9%85%D8%B1_%D8%A7%D9%84%D9%82%D8%B2%D8%A7%D8%A8%D8%B1%D9%8A).mp3',
+    ],
+  },
+  utaybi: {
+    id: 'utaybi',
+    nameAr: 'أذان الشيخ سلمان العتيبي (صوت هادئ مطمئن)',
+    nameEn: 'Sheikh Salman Al-Utaybi',
+    khushuTagAr: 'نبرة هادئة شجية تبعث الطمأنينة',
+    approxSizeMb: 3.6,
+    urls: [
+      '/audio/adhan-utaybi.mp3',
+      'https://raw.githubusercontent.com/mohsalvi/adhan-audio/main/general/salman-al-utaybi-01.mp3',
+    ],
+  },
+  yamani: {
+    id: 'yamani',
+    nameAr: 'أذان الشيخ وديع اليمني (نبرة رقيقة خاشعة)',
+    nameEn: 'Sheikh Wadi Al-Yamani',
+    khushuTagAr: 'صوت دافئ خاشع بأداء سلس هادئ',
+    approxSizeMb: 3.1,
+    urls: [
+      '/audio/adhan-yamani.mp3',
+      'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Wadi_Al_Yamani_(%D9%88%D8%AF%D9%8A%D8%B9_%D8%A7%D9%84%D9%8A%D9%85%D9%86%D9%8A).mp3',
+    ],
+  },
+  naqshabandi: {
+    id: 'naqshabandi',
+    nameAr: 'أذان الشيخ سيد النقشبندي (مقام خشوع روحاني)',
+    nameEn: 'Sheikh Sayed Al-Naqshabandi',
+    khushuTagAr: 'خشوع كلاسيكي مهيب من روائع التراث',
+    approxSizeMb: 2.1,
+    urls: [
+      '/audio/adhan-naqshabandi.mp3',
+      'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Sheikh_Al_Naqshbandi_(%D8%A7%D9%84%D8%B4%D9%8A%D8%AE_%D8%A7%D9%84%D9%86%D9%82%D8%B4%D8%A8%D9%86%D8%AF%D9%89).mp3',
     ],
   },
   abdulbasit: {
     id: 'abdulbasit',
     nameAr: 'أذان الشيخ عبد الباسط عبد الصمد (مقام الصبا الخاشع)',
     nameEn: 'Sheikh Abdulbasit Abdulsamad',
+    khushuTagAr: 'مقام الصبا الحزين الخاشع',
+    approxSizeMb: 4.3,
     urls: [
       '/audio/adhan-abdulbasit.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/566852c1d145.mp3',
@@ -55,6 +167,8 @@ export const ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'mishary',
     nameAr: 'أذان الشيخ مشاري راشد العفاسي',
     nameEn: 'Sheikh Mishary Rashid Alafasy',
+    khushuTagAr: 'نقاء صوتي وخشوع متزن',
+    approxSizeMb: 1.0,
     urls: [
       '/audio/adhan-mishary.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/b45e93f1efb3.mp3',
@@ -64,6 +178,8 @@ export const ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'dosari',
     nameAr: 'أذان الشيخ ياسر الدوسري',
     nameEn: 'Sheikh Yasser Al-Dosari',
+    khushuTagAr: 'أداء مؤثر بقوة وخشوع الحرم',
+    approxSizeMb: 1.4,
     urls: [
       '/audio/adhan-dosari.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/f5370aa1a7e2.mp3',
@@ -73,6 +189,8 @@ export const ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'nasir',
     nameAr: 'أذان الشيخ ناصر القطامي',
     nameEn: 'Sheikh Nasser Al-Qatami',
+    khushuTagAr: 'نبرة شجية مألوفة للخشوع',
+    approxSizeMb: 2.1,
     urls: [
       '/audio/adhan-nasir.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/6f509ec934a4.mp3',
@@ -82,9 +200,22 @@ export const ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'minshawi',
     nameAr: 'أذان الشيخ محمد صديق المنشاوي',
     nameEn: 'Sheikh Mohamed Siddiq El-Minshawi',
+    khushuTagAr: 'الصوت الباكي الخاشع الخالد',
+    approxSizeMb: 3.8,
     urls: [
       '/audio/adhan-minshawi.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/a2b25725149e.mp3',
+    ],
+  },
+  egypt: {
+    id: 'egypt',
+    nameAr: 'أذان مصر (الشيخ محمد رفعت - أذان الإذاعة المصرية)',
+    nameEn: 'Egypt - Sheikh Mohamed Rifat',
+    khushuTagAr: 'الأذان التراثي الخاشع الخالد',
+    approxSizeMb: 0.4,
+    urls: [
+      '/audio/adhan-egypt.mp3',
+      'https://media.assabile.com/assabile/adhan_3435370/d8a3a72860e8.mp3',
     ],
   },
 };
@@ -95,6 +226,8 @@ export const FAJR_ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'fajr_makkah',
     nameAr: 'أذان فجر الحرم المكي كامل (الصلاة خير من النوم)',
     nameEn: 'Fajr Adhan Makkah Al-Haram (Full)',
+    khushuTagAr: 'الحرم المكي · الصلاة خير من النوم',
+    approxSizeMb: 4.1,
     isFajrSpecial: true,
     urls: [
       '/audio/adhan-fajr-makkah.mp3',
@@ -106,16 +239,44 @@ export const FAJR_ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'fajr_madinah',
     nameAr: 'أذان فجر المسجد النبوي بالمدينة المنورة كامل (الصلاة خير من النوم)',
     nameEn: 'Fajr Adhan Madinah Prophet Mosque (Full)',
+    khushuTagAr: 'المسجد النبوي · الصلاة خير من النوم',
+    approxSizeMb: 0.6,
     isFajrSpecial: true,
     urls: [
       '/audio/adhan-fajr-madinah.mp3',
       'https://media.assabile.com/assabile/adhan_3435370/efc564e3b1d2.mp3',
     ],
   },
+  fajr_toubar: {
+    id: 'fajr_toubar',
+    nameAr: 'أذان الفجر الخاشع بصوت الشيخ نصر الدين طوبار (الصلاة خير من النوم)',
+    nameEn: 'Fajr Adhan Sheikh Nasreddine Toubar (Full)',
+    khushuTagAr: 'نداء سحري روحاني خاشع · ٤ دقائق',
+    approxSizeMb: 4.4,
+    isFajrSpecial: true,
+    urls: [
+      '/audio/adhan-fajr-toubar.mp3',
+      'https://raw.githubusercontent.com/Kiwifu/adhan-mp3/main/Fajr_Adhan_by_Nasreddine_Toubar_(%D8%A7%D8%B0%D8%A7%D9%86_%D8%A7%D9%84%D9%81%D8%AC%D8%B1_%D8%A8%D8%B5%D9%88%D8%AA_%D9%86%D8%B5%D8%B1_%D8%A7%D9%84%D8%AF%D9%8A%D9%86_%D8%B7%D9%88%D8%A8%D8%A7%D8%B1).mp3',
+    ],
+  },
+  fajr_zahrani: {
+    id: 'fajr_zahrani',
+    nameAr: 'أذان الفجر الشجي بصوت الشيخ منصور الزهراني (الصلاة خير من النوم)',
+    nameEn: 'Fajr Adhan Sheikh Mansour Al-Zahrani (Full)',
+    khushuTagAr: 'نبرة فجر شجية مؤثرة توقظ القلوب',
+    approxSizeMb: 1.0,
+    isFajrSpecial: true,
+    urls: [
+      '/audio/adhan-fajr-zahrani.mp3',
+      'https://raw.githubusercontent.com/mohsalvi/adhan-audio/main/fajr/mansour-al-zahrani-fajr-01.mp3',
+    ],
+  },
   fajr_abdulbasit: {
     id: 'fajr_abdulbasit',
     nameAr: 'أذان الفجر كامل بصوت الشيخ عبد الباسط عبد الصمد',
     nameEn: 'Fajr Adhan Sheikh Abdulbasit Abdulsamad (Full)',
+    khushuTagAr: 'مقام الصبا الفجري الخاشع',
+    approxSizeMb: 1.4,
     isFajrSpecial: true,
     urls: [
       '/audio/adhan-fajr-abdulbasit.mp3',
@@ -126,6 +287,8 @@ export const FAJR_ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'fajr_dosari',
     nameAr: 'أذان بصوت الشيخ ياسر الدوسري (التسجيل المعتمد)',
     nameEn: 'Adhan Sheikh Yasser Al-Dosari',
+    khushuTagAr: 'نبرة خاشعة مهيبة للفجر',
+    approxSizeMb: 1.4,
     isFajrSpecial: true,
     urls: [
       '/audio/adhan-fajr-dosari.mp3',
@@ -137,6 +300,8 @@ export const FAJR_ADHAN_SOURCES: Record<string, AdhanAudioSource> = {
     id: 'fajr_mishary',
     nameAr: 'أذان الفجر كامل بصوت الشيخ مشاري راشد العفاسي',
     nameEn: 'Fajr Adhan Sheikh Mishary Alafasy (Full)',
+    khushuTagAr: 'أذان الفجر بالكويت · نبرة هادئة',
+    approxSizeMb: 2.3,
     isFajrSpecial: true,
     urls: [
       '/audio/adhan-fajr-mishary.mp3',
@@ -565,6 +730,7 @@ class AdhanPlayerManager {
   private shortDhikrRotationIndex: number = 0;
   private fallbackDhikrText: string | null = null;
   private audioPlayNonce: number = 0;
+  private skipNextAutoCache: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -811,7 +977,8 @@ class AdhanPlayerManager {
   public async playAdhan(
     reciterId: string = 'makkah',
     prayerKey: string = 'dhuhr',
-    boostVolume: boolean = false
+    boostVolume: boolean = false,
+    options?: { skipAutoCache?: boolean }
   ): Promise<void> {
     const source = getAdhanSource(reciterId, prayerKey);
     this.audioPlayNonce++;
@@ -821,6 +988,7 @@ class AdhanPlayerManager {
     this.currentReciterUrls = [...source.urls];
     this.currentUrlIndex = 0;
     this.lastError = null;
+    this.skipNextAutoCache = Boolean(options?.skipAutoCache);
 
     if (!this.audio) {
       this.initAudioElement();
@@ -841,6 +1009,7 @@ class AdhanPlayerManager {
     this.currentReciterUrls = [...source.urls];
     this.currentUrlIndex = 0;
     this.lastError = null;
+    this.skipNextAutoCache = false;
 
     if (!this.audio) {
       this.initAudioElement();
@@ -1419,7 +1588,9 @@ class AdhanPlayerManager {
     this.setState('loading', this.activeType);
 
     try {
-      const targetUrl = await resolvePlayableAudioUrl(rawUrl);
+      const targetUrl = await resolvePlayableAudioUrl(rawUrl, {
+        skipAutoCache: this.skipNextAutoCache,
+      });
       if (!this.audio || nonce !== this.audioPlayNonce) return;
       this.audio.pause();
       this.audio.src = targetUrl;

@@ -4,8 +4,21 @@ import {
   ALL_RUQYAH_DUA_LOCAL_FILES,
   RUQYAH_CONTINUOUS_TRACK_IDS,
 } from './ruqyahData';
+import { isNativeCapacitorApp } from './nativeAndroidBridge';
 
 export const OFFLINE_AUDIO_CACHE_NAME = 'almawaqeet-offline-audio-v1';
+
+export const BUNDLED_APK_CORE_AUDIO: string[] = [
+  '/audio/adhan-makkah.mp3',
+  '/audio/adhan-madinah.mp3',
+  '/audio/adhan-fajr-makkah.mp3',
+  '/audio/adhan-fajr-madinah.mp3',
+  '/audio/dua-shaarawy.mp3',
+  '/audio/dua-after-adhan.mp3',
+  '/audio/iqama-classic.mp3',
+  '/audio/prayer-alert-mishary.mp3',
+  '/audio/salawat-mishary.mp3',
+];
 
 export const CORE_LOCAL_AUDIO_FILES: string[] = [
   // Adhans
@@ -17,6 +30,16 @@ export const CORE_LOCAL_AUDIO_FILES: string[] = [
   '/audio/adhan-dosari.mp3',
   '/audio/adhan-nasir.mp3',
   '/audio/adhan-minshawi.mp3',
+  '/audio/adhan-islam-sobhi.mp3',
+  '/audio/adhan-mansour-salmi.mp3',
+  '/audio/adhan-ahmad-nufais.mp3',
+  '/audio/adhan-toubar.mp3',
+  '/audio/adhan-husary.mp3',
+  '/audio/adhan-zahrani.mp3',
+  '/audio/adhan-kazabri.mp3',
+  '/audio/adhan-utaybi.mp3',
+  '/audio/adhan-yamani.mp3',
+  '/audio/adhan-naqshabandi.mp3',
   // Fajr Adhans
   '/audio/adhan-fajr-makkah.mp3',
   '/audio/adhan-fajr.mp3',
@@ -24,6 +47,8 @@ export const CORE_LOCAL_AUDIO_FILES: string[] = [
   '/audio/adhan-fajr-abdulbasit.mp3',
   '/audio/adhan-fajr-dosari.mp3',
   '/audio/adhan-fajr-mishary.mp3',
+  '/audio/adhan-fajr-toubar.mp3',
+  '/audio/adhan-fajr-zahrani.mp3',
   // Duas After Adhan
   '/audio/dua-shaarawy.mp3',
   '/audio/dua-alafasy.mp3',
@@ -98,7 +123,39 @@ export function getAllLocalAppAudioUrls(): string[] {
   );
 }
 
+const RECITER_LOCAL_AUDIO_MAP: Record<string, string> = {
+  makkah: '/audio/adhan-makkah.mp3',
+  madinah: '/audio/adhan-madinah.mp3',
+  egypt: '/audio/adhan-egypt.mp3',
+  abdulbasit: '/audio/adhan-abdulbasit.mp3',
+  mishary: '/audio/adhan-mishary.mp3',
+  dosari: '/audio/adhan-dosari.mp3',
+  nasir: '/audio/adhan-nasir.mp3',
+  minshawi: '/audio/adhan-minshawi.mp3',
+  islam_sobhi: '/audio/adhan-islam-sobhi.mp3',
+  mansour_salmi: '/audio/adhan-mansour-salmi.mp3',
+  ahmad_nufais: '/audio/adhan-ahmad-nufais.mp3',
+  toubar: '/audio/adhan-toubar.mp3',
+  husary: '/audio/adhan-husary.mp3',
+  zahrani: '/audio/adhan-zahrani.mp3',
+  kazabri: '/audio/adhan-kazabri.mp3',
+  utaybi: '/audio/adhan-utaybi.mp3',
+  yamani: '/audio/adhan-yamani.mp3',
+  naqshabandi: '/audio/adhan-naqshabandi.mp3',
+  fajr_makkah: '/audio/adhan-fajr-makkah.mp3',
+  fajr_madinah: '/audio/adhan-fajr-madinah.mp3',
+  fajr_abdulbasit: '/audio/adhan-fajr-abdulbasit.mp3',
+  fajr_dosari: '/audio/adhan-fajr-dosari.mp3',
+  fajr_mishary: '/audio/adhan-fajr-mishary.mp3',
+  fajr_toubar: '/audio/adhan-fajr-toubar.mp3',
+  fajr_zahrani: '/audio/adhan-fajr-zahrani.mp3',
+};
+
 export function getEssentialStartupAudioUrls(settings?: Partial<UserSettings>): string[] {
+  if (isNativeCapacitorApp()) {
+    return [...BUNDLED_APK_CORE_AUDIO];
+  }
+
   const urls: string[] = [
     ...ALL_RUQYAH_DUA_LOCAL_FILES,
     // Primary Alafasy continuous Ruqyah Quran tracks
@@ -115,11 +172,16 @@ export function getEssentialStartupAudioUrls(settings?: Partial<UserSettings>): 
   ];
 
   if (settings?.adhanReciter) {
-    urls.push(`/audio/adhan-${settings.adhanReciter}.mp3`);
+    urls.push(
+      RECITER_LOCAL_AUDIO_MAP[settings.adhanReciter] ||
+        `/audio/adhan-${settings.adhanReciter.replace(/_/g, '-')}.mp3`
+    );
   }
   if (settings?.fajrAdhanReciter) {
-    const clean = settings.fajrAdhanReciter.replace(/^fajr_/, '');
-    urls.push(`/audio/adhan-fajr-${clean}.mp3`);
+    const clean = settings.fajrAdhanReciter.replace(/^fajr_/, '').replace(/_/g, '-');
+    urls.push(
+      RECITER_LOCAL_AUDIO_MAP[settings.fajrAdhanReciter] || `/audio/adhan-fajr-${clean}.mp3`
+    );
   }
   if (settings?.duaAudioReciter) {
     if (settings.duaAudioReciter === 'alafasy_dua') urls.push('/audio/dua-alafasy.mp3');
@@ -151,7 +213,8 @@ export async function cacheAudioUrl(url: string): Promise<boolean> {
     const existing = await cache.match(url);
     if (existing) return true;
     const response = await fetch(url, { mode: url.startsWith('http') ? 'cors' : 'same-origin' });
-    if (response.ok) {
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (response.ok && !contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
       await cache.put(url, response.clone());
       return true;
     }
@@ -196,17 +259,108 @@ export async function resolveCachedBlobUrl(url: string): Promise<string | null> 
   }
 }
 
-export async function resolvePlayableAudioUrl(url: string): Promise<string> {
+export async function resolvePlayableAudioUrl(
+  url: string,
+  options?: { skipAutoCache?: boolean }
+): Promise<string> {
   if (typeof window === 'undefined') return url;
   const cachedBlob = await resolveCachedBlobUrl(url);
   if (cachedBlob) {
     return cachedBlob;
   }
-  if (navigator.onLine) {
+
+  // In trimmed APK builds, non-core /audio/* paths are absent locally so fall through to remote mirrors immediately
+  if (isNativeCapacitorApp() && url.startsWith('/audio/')) {
+    try {
+      const headRes = await fetch(url, { method: 'HEAD', mode: 'same-origin' });
+      const contentType = (headRes.headers.get('content-type') || '').toLowerCase();
+      if (!headRes.ok || contentType.includes('text/html')) {
+        throw new Error(`Bundled APK audio trimmed: ${url}`);
+      }
+    } catch (err) {
+      throw err instanceof Error ? err : new Error(`Missing local APK audio: ${url}`);
+    }
+  }
+
+  if (navigator.onLine && !options?.skipAutoCache) {
     // Warm cache asynchronously in background without delaying playback
     void cacheAudioUrl(url);
   }
   return url;
+}
+
+export async function isAudioUrlsCached(urls: string[]): Promise<boolean> {
+  if (typeof window === 'undefined' || !('caches' in window) || urls.length === 0) return false;
+  try {
+    const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+    for (const url of urls) {
+      const match = (await cache.match(url)) || (await caches.match(url));
+      if (match) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export async function getAudioSourcesCacheMap(
+  sources: Array<{ id: string; urls: string[] }>
+): Promise<Record<string, boolean>> {
+  const result: Record<string, boolean> = {};
+  if (typeof window === 'undefined' || !('caches' in window)) {
+    for (const s of sources) result[s.id] = false;
+    return result;
+  }
+  try {
+    const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+    const keys = await cache.keys();
+    const keySet = new Set(keys.map((k) => new URL(k.url).pathname));
+    const fullSet = new Set(keys.map((k) => k.url));
+    for (const s of sources) {
+      let cached = false;
+      for (const u of s.urls) {
+        if (keySet.has(u) || fullSet.has(u)) {
+          cached = true;
+          break;
+        }
+      }
+      result[s.id] = cached;
+    }
+    return result;
+  } catch {
+    for (const s of sources) result[s.id] = false;
+    return result;
+  }
+}
+
+export async function downloadAudioUrlsForOffline(urls: string[]): Promise<boolean> {
+  if (typeof window === 'undefined' || !('caches' in window)) return false;
+  for (const url of urls) {
+    const ok = await cacheAudioUrl(url);
+    if (ok) {
+      window.dispatchEvent(new CustomEvent('offline_audio_cache_updated'));
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function removeAudioUrlsFromOffline(urls: string[]): Promise<void> {
+  if (typeof window === 'undefined' || !('caches' in window)) return;
+  try {
+    const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+    for (const url of urls) {
+      await cache.delete(url);
+      const blob = blobUrlMemoryCache.get(url);
+      if (blob) {
+        URL.revokeObjectURL(blob);
+        blobUrlMemoryCache.delete(url);
+      }
+    }
+    window.dispatchEvent(new CustomEvent('offline_audio_cache_updated'));
+  } catch {
+    // ignore cache deletion errors
+  }
 }
 
 export async function getOfflineCacheStats(): Promise<{ cachedCount: number; totalCount: number }> {

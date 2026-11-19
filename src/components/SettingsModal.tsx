@@ -29,6 +29,15 @@ import {
   Clock,
   Sun,
   Smartphone,
+  Download,
+  Trash2,
+  WifiOff,
+  HardDrive,
+  ChevronDown,
+  ChevronUp,
+  Tv,
+  Copy,
+  Terminal,
 } from 'lucide-react';
 import {
   CityLocation,
@@ -42,6 +51,7 @@ import {
 import { CITIES, CALCULATION_METHODS_LIST } from '../utils/prayerCalculator';
 import {
   adhanPlayer,
+  AdhanAudioSource,
   ADHAN_SOURCES,
   FAJR_ADHAN_SOURCES,
   DUA_SOURCES,
@@ -55,6 +65,15 @@ import {
   IqamaVoiceProfile,
   AudioPlayerState,
 } from '../utils/audioAdhan';
+import {
+  getAudioSourcesCacheMap,
+  downloadAudioUrlsForOffline,
+  removeAudioUrlsFromOffline,
+} from '../utils/offlineAudioManager';
+import {
+  isNativeAndroidApp,
+  isLikelyAndroidTvDevice,
+} from '../utils/nativeAndroidBridge';
 import { LIVE_BACKGROUNDS } from '../utils/backgroundsData';
 import { APP_THEMES, evaluateAutoThemePeriod, normalizeThemeId } from '../utils/themesData';
 import {
@@ -74,7 +93,7 @@ import {
 } from '../utils/widgetStudioData';
 import { SHORT_ADHKAR_SHEIKHS, ShortAdhkarSheikhId } from '../utils/shortAdhkarAudio';
 
-export type SettingsTabId = 'general' | 'iqama' | 'adhkar' | 'themes' | 'simulations' | 'fasting' | 'widgets';
+export type SettingsTabId = 'general' | 'iqama' | 'adhkar' | 'themes' | 'simulations' | 'fasting' | 'widgets' | 'android';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -163,6 +182,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return 'fajr_makkah';
   });
   const [previewingAdhanKind, setPreviewingAdhanKind] = useState<'regular' | 'fajr' | null>(null);
+  const [previewingAdhanReciterId, setPreviewingAdhanReciterId] = useState<string | null>(null);
+  const [adhanCacheMap, setAdhanCacheMap] = useState<Record<string, boolean>>({});
+  const [downloadingAdhanId, setDownloadingAdhanId] = useState<string | null>(null);
+  const [offlineActionMessage, setOfflineActionMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+  const [showOfflineAdhanManager, setShowOfflineAdhanManager] = useState<boolean>(false);
+  const [offlineManagerFilter, setOfflineManagerFilter] = useState<'regular' | 'fajr'>('regular');
   const [fajrBoost, setFajrBoost] = useState<boolean>(settings.fajrBoostVolume ?? true);
   const [preReminder, setPreReminder] = useState<number>(settings.preAdhanReminderMinutes ?? 10);
   const [preSound, setPreSound] = useState<boolean>(settings.preAdhanSoundEnabled ?? true);
@@ -273,6 +301,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [postPrayerItemGuardNotice, setPostPrayerItemGuardNotice] = useState<string | null>(null);
   const [fastingIntentDraft, setFastingIntentDraft] = useState<boolean>(() => loadFastingIntent());
 
+  // Android Mobile & Android TV (APK) Settings
+  const [tvRemoteFocusEnabled, setTvRemoteFocusEnabled] = useState<boolean>(
+    settings.tvRemoteFocusEnabled ?? true
+  );
+  const [keepScreenAwakeAlways, setKeepScreenAwakeAlways] = useState<boolean>(
+    settings.keepScreenAwakeAlways ?? false
+  );
+  const [autoEnterTvDisplay, setAutoEnterTvDisplay] = useState<boolean>(
+    settings.autoEnterTvDisplay ?? false
+  );
+  const [remoteApiBaseUrl, setRemoteApiBaseUrl] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return settings.remoteApiBaseUrl || localStorage.getItem('remote_api_base_url') || '';
+  });
+  const [copiedApkCmd, setCopiedApkCmd] = useState<boolean>(false);
+
   useEffect(() => {
     setIsAudioUnlocked(adhanPlayer.getIsUnlocked());
     const unsub = adhanPlayer.subscribe({
@@ -290,6 +334,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
         if ((st !== 'playing' && st !== 'loading') || type !== 'adhan') {
           setPreviewingAdhanKind(null);
+          setPreviewingAdhanReciterId(null);
         }
         if ((st !== 'playing' && st !== 'loading') || type !== 'adhkar') {
           setPreviewingAdhkarPeriod(null);
@@ -302,6 +347,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     });
     return () => unsub();
   }, []);
+
+  const refreshAdhanCacheMap = React.useCallback(async () => {
+    const allSources = [
+      ...Object.values(ADHAN_SOURCES),
+      ...Object.values(FAJR_ADHAN_SOURCES),
+    ].map((src) => ({ id: src.id, urls: src.urls }));
+    const nextMap = await getAudioSourcesCacheMap(allSources);
+    setAdhanCacheMap(nextMap);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setOfflineActionMessage(null);
+    void refreshAdhanCacheMap();
+    const handleCacheUpdate = () => {
+      void refreshAdhanCacheMap();
+    };
+    window.addEventListener('offline_audio_cache_updated', handleCacheUpdate);
+    return () => {
+      window.removeEventListener('offline_audio_cache_updated', handleCacheUpdate);
+    };
+  }, [isOpen, refreshAdhanCacheMap]);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -403,6 +470,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setPostPrayerIncludeSunnah(s.postPrayerIncludeSunnah ?? true);
       setPostPrayerItemGuardNotice(null);
       setFastingIntentDraft(loadFastingIntent());
+      setTvRemoteFocusEnabled(s.tvRemoteFocusEnabled ?? true);
+      setKeepScreenAwakeAlways(s.keepScreenAwakeAlways ?? false);
+      setAutoEnterTvDisplay(s.autoEnterTvDisplay ?? false);
+      setRemoteApiBaseUrl(
+        s.remoteApiBaseUrl ||
+          (typeof window !== 'undefined' ? localStorage.getItem('remote_api_base_url') || '' : '')
+      );
+      setCopiedApkCmd(false);
     }
   }, [isOpen, initialTab]);
 
@@ -484,14 +559,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (
       (playerState === 'playing' || playerState === 'loading') &&
       activeAudioType === 'adhan' &&
-      previewingAdhanKind === kind
+      previewingAdhanKind === kind &&
+      previewingAdhanReciterId === reciterKey
     ) {
       adhanPlayer.stop();
       setPreviewingAdhanKind(null);
+      setPreviewingAdhanReciterId(null);
     } else {
       setPreviewingAdhanKind(kind);
-      adhanPlayer.playAdhan(reciterKey, isFajr ? 'fajr' : 'dhuhr', isFajr && fajrBoost);
+      setPreviewingAdhanReciterId(reciterKey);
+      adhanPlayer.playAdhan(reciterKey, isFajr ? 'fajr' : 'dhuhr', isFajr && fajrBoost, {
+        skipAutoCache: true,
+      });
     }
+  };
+
+  const handleDownloadAdhanOffline = async (source: AdhanAudioSource) => {
+    setOfflineActionMessage(null);
+    if (typeof navigator !== 'undefined' && !navigator.onLine && !adhanCacheMap[source.id]) {
+      setOfflineActionMessage({
+        type: 'error',
+        text: `لا يوجد اتصال بالإنترنت حالياً لحفظ (${source.nameAr}). تأكد من الاتصال ثم أعد المحاولة.`,
+      });
+      return;
+    }
+
+    setDownloadingAdhanId(source.id);
+    try {
+      const ok = await downloadAudioUrlsForOffline(source.urls);
+      await refreshAdhanCacheMap();
+      if (ok) {
+        setOfflineActionMessage({
+          type: 'success',
+          text: `تم حفظ (${source.nameAr}) في ذاكرة الجهاز للعمل بدون إنترنت.`,
+        });
+      } else {
+        setOfflineActionMessage({
+          type: 'error',
+          text: `تعذّر تنزيل الملف الصوتي لـ (${source.nameAr}) حالياً. حاول مرة أخرى عند توفر اتصال مستقر.`,
+        });
+      }
+    } finally {
+      setDownloadingAdhanId(null);
+    }
+  };
+
+  const handleRemoveAdhanOffline = async (source: AdhanAudioSource) => {
+    setOfflineActionMessage(null);
+    await removeAudioUrlsFromOffline(source.urls);
+    await refreshAdhanCacheMap();
+    setOfflineActionMessage({
+      type: 'success',
+      text: `تمت إزالة (${source.nameAr}) من التخزين المحلي لتوفير المساحة.`,
+    });
   };
 
   const handleTestPreAdhanChime = (voiceIdOrMode: string = preAdhanVoiceMode) => {
@@ -639,7 +759,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       postPrayerIncludeWird,
       postPrayerIncludeAdhkar,
       postPrayerIncludeSunnah,
+      tvRemoteFocusEnabled,
+      keepScreenAwakeAlways,
+      autoEnterTvDisplay,
+      remoteApiBaseUrl: remoteApiBaseUrl.trim(),
     });
+    if (typeof window !== 'undefined') {
+      const cleanApi = remoteApiBaseUrl.trim().replace(/\/+$/, '');
+      if (cleanApi) {
+        localStorage.setItem('remote_api_base_url', cleanApi);
+      } else {
+        localStorage.removeItem('remote_api_base_url');
+      }
+    }
     saveFastingPreferences({
       whiteDaysEnabled: fastingWhiteDaysEnabled,
       monThuEnabled: fastingMonThuEnabled,
@@ -648,6 +780,184 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     });
     adhanPlayer.setAutoDua(autoDua, selectedDuaReciter);
     onClose();
+  };
+
+  const handleCopyApkSyncCommand = async () => {
+    try {
+      await navigator.clipboard.writeText('npm run apk:sync');
+      setCopiedApkCmd(true);
+      setTimeout(() => setCopiedApkCmd(false), 2200);
+    } catch {
+      // ignore clipboard restrictions
+    }
+  };
+
+  const renderAndroidApkSettingsSection = () => {
+    const isNativeAndroid = isNativeAndroidApp();
+    const isTvDevice = isLikelyAndroidTvDevice();
+    return (
+      <div className="space-y-5 text-right" dir="rtl">
+        {/* Readiness & Runtime Card */}
+        <div className="p-5 rounded-3xl bg-gradient-to-br from-[#062d24] via-[#041d18] to-[#02100d] border-2 border-[#e5b869]/45 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[#e5b869]/20">
+            <div className="text-xs text-slate-300 tabular-nums">
+              <span>{isNativeAndroid ? 'يعمل كتطبيق أندرويد (APK)' : 'يعمل عبر المتصفح / PWA'}</span>
+              <span> · </span>
+              <span>{isTvDevice ? 'تم اكتشاف شاشة تلفاز' : 'وضع الهاتف / الحاسوب'}</span>
+              <span> · </span>
+              <span className="text-[#fbbf24] font-semibold">الحزمة الصوتية الأساسية ~7.1 م.ب</span>
+            </div>
+            <div className="flex items-center gap-2 text-[#fbbf24]">
+              <h4 className="text-lg font-bold font-amiri">تجهيز الأندرويد والشاشات الذكية (APK)</h4>
+              <Tv className="w-5 h-5" />
+            </div>
+          </div>
+
+          <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+            التطبيق مُهيّأ بحزمة موحّدة (Capacitor Android + Leanback TV) للعمل على هواتف الأندرويد وشاشات التلفاز الذكية (Android TV / Google TV) مع تقليم تلقائي للصوتيات للإبقاء على حجم ملف الـ APK خفيفاً وتنزيل باقي الشيوخ اختيارياً من الإعدادات.
+          </p>
+
+          {/* Interactive Controls for Mobile & TV */}
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-[#041814] border border-[#e5b869]/25">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={tvRemoteFocusEnabled}
+                onClick={() => setTvRemoteFocusEnabled((prev) => !prev)}
+                className={`min-h-[44px] min-w-[56px] px-3 rounded-xl text-xs font-bold border transition-colors whitespace-nowrap shrink-0 ${
+                  tvRemoteFocusEnabled
+                    ? 'bg-emerald-950 border-emerald-400 text-emerald-300'
+                    : 'bg-slate-900 border-slate-700 text-slate-400'
+                }`}
+              >
+                {tvRemoteFocusEnabled ? 'مفعّل' : 'معطّل'}
+              </button>
+              <div className="space-y-0.5 text-right flex-1">
+                <div className="text-xs sm:text-sm font-bold text-white">
+                  التحكم بريموت التلفاز (D-Pad والتركيز الذهبي)
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  التنقل بالأسهم ومفتاح OK والعودة مع إطار ذهبي واضح لشاشات Android TV والمساجد
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-[#041814] border border-[#e5b869]/25">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={keepScreenAwakeAlways}
+                onClick={() => setKeepScreenAwakeAlways((prev) => !prev)}
+                className={`min-h-[44px] min-w-[56px] px-3 rounded-xl text-xs font-bold border transition-colors whitespace-nowrap shrink-0 ${
+                  keepScreenAwakeAlways
+                    ? 'bg-emerald-950 border-emerald-400 text-emerald-300'
+                    : 'bg-slate-900 border-slate-700 text-slate-400'
+                }`}
+              >
+                {keepScreenAwakeAlways ? 'مفعّل' : 'معطّل'}
+              </button>
+              <div className="space-y-0.5 text-right flex-1">
+                <div className="text-xs sm:text-sm font-bold text-white">
+                  منع إطفاء الشاشة دائماً (Keep-Awake / WakeLock)
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  يُبقي شاشة الموبايل أو التلفاز مضاءة باستمرار لمتابعة المواقيت والعدّ التنازلي
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-[#041814] border border-[#e5b869]/25">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoEnterTvDisplay}
+                onClick={() => setAutoEnterTvDisplay((prev) => !prev)}
+                className={`min-h-[44px] min-w-[56px] px-3 rounded-xl text-xs font-bold border transition-colors whitespace-nowrap shrink-0 ${
+                  autoEnterTvDisplay
+                    ? 'bg-emerald-950 border-emerald-400 text-emerald-300'
+                    : 'bg-slate-900 border-slate-700 text-slate-400'
+                }`}
+              >
+                {autoEnterTvDisplay ? 'مفعّل' : 'معطّل'}
+              </button>
+              <div className="space-y-0.5 text-right flex-1">
+                <div className="text-xs sm:text-sm font-bold text-white">
+                  بدء وضع شاشة المسجد والمنضدة تلقائياً عند التشغيل
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  مخصص لشاشات المساجد والمنازل المعلّقة لفتح ساعة المواقيت الكبرى فور تشغيل التطبيق
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Optional Cloud Server URL for AI Chat in Standalone APK */}
+          <div className="space-y-2 pt-2 border-t border-[#e5b869]/15">
+            <label className="block text-xs font-bold text-[#e5b869]">
+              رابط خادم المساعد الذكي (اختياري لنسخة الـ APK المستقلة):
+            </label>
+            <input
+              type="url"
+              dir="ltr"
+              value={remoteApiBaseUrl}
+              onChange={(e) => setRemoteApiBaseUrl(e.target.value)}
+              placeholder="https://your-app-domain.run.app"
+              className="w-full bg-[#021410] border border-[#e5b869]/30 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-[#fbbf24]"
+            />
+            <p className="text-[11px] text-slate-400">
+              جميع المواقيت والقرآن والأذكار والأذان تعمل بدون إنترنت داخل الـ APK؛ يُستخدم هذا الرابط فقط إذا أردت تشغيل تبويب المساعد الشرعي الذكي من داخل التطبيق المستقل.
+            </p>
+          </div>
+        </div>
+
+        {/* Two Easy Ways to Generate & Install the APK */}
+        <div className="p-5 rounded-3xl bg-[#03201a]/85 border border-[#e5b869]/35 space-y-4 shadow-lg">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleCopyApkSyncCommand()}
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>{copiedApkCmd ? 'تم نسخ الأمر ✓' : 'نسخ أمر المزامنة'}</span>
+            </button>
+            <div className="flex items-center gap-2 text-[#fbbf24]">
+              <h4 className="text-base sm:text-lg font-bold font-amiri">
+                خطوات استخراج ملف APK وتثبيته على الهاتف والشاشة
+              </h4>
+              <Terminal className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <div className="p-4 rounded-2xl bg-[#041814] border border-emerald-500/30 space-y-2">
+              <div className="text-xs font-bold text-emerald-300">
+                1. الطريقة الأسهل (تلقائياً عبر GitHub Actions بدون Android Studio)
+              </div>
+              <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside leading-relaxed">
+                <li>قم بتنزيل المشروع أو رفعه إلى مستودع GitHub خاص بك.</li>
+                <li>من تبويب <strong>Actions</strong> في GitHub شغّل مسار بناء الأندرويد المرفق تلقائياً.</li>
+                <li>بعد ~3 دقائق قم بتنزيل ملف <strong>app-debug.apk</strong> الجاهز من قسم Artifacts وثبّته مباشرة.</li>
+              </ol>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#041814] border border-[#e5b869]/30 space-y-2">
+              <div className="text-xs font-bold text-[#fbbf24]">
+                2. البناء المحلي على حاسوبك عبر Android Studio
+              </div>
+              <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside leading-relaxed">
+                <li>
+                  نفّذ الأمر <code dir="ltr" className="text-[#fbbf24] font-mono">npm run apk:sync</code> لتجهيز الحزمة الخفيفة ومزامنة مشروع الأندرويد.
+                </li>
+                <li>افتح مجلد <strong>android</strong> داخل Android Studio ثم اختر <strong>Build &gt; Build APK(s)</strong>.</li>
+                <li>للتلفاز: انقل الـ APK عبر USB أو تطبيق Send Files to TV، وسيظهر في قائمة تطبيقات Android TV تلقائياً.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderWidgetSettingsSection = () => (
@@ -1707,6 +2017,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Smartphone className="w-3.5 h-3.5" />
               <span>الودجات</span>
+            </button>
+            <button
+              ref={(el) => {
+                tabButtonRefs.current.android = el;
+              }}
+              type="button"
+              onClick={(e) => handleSelectSettingsTab('android', e.currentTarget)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                activeSettingsTab === 'android'
+                  ? 'bg-gradient-to-r from-[#fbbf24] via-[#e5b869] to-emerald-400 text-slate-950 shadow'
+                  : 'bg-[#041d17]/70 border border-[#e5b869]/20 text-slate-300 hover:text-[#fbbf24]'
+              }`}
+            >
+              <Tv className="w-3.5 h-3.5" />
+              <span>الأندرويد والشاشات (APK)</span>
             </button>
           </div>
         </div>
@@ -3065,6 +3390,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-6 w-full max-w-full overflow-x-hidden">
               {renderWidgetSettingsSection()}
             </div>
+          ) : activeSettingsTab === 'android' ? (
+            <div className="space-y-6 w-full max-w-full overflow-x-hidden">
+              {renderAndroidApkSettingsSection()}
+            </div>
           ) : (
             <div className="space-y-6 w-full max-w-full overflow-x-hidden">
 
@@ -3276,30 +3605,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             {/* Muezzin Dropdown (Regular Prayers Only) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => handleToggleSample(selectedAdhanReciter, false)}
-                  className="text-xs px-3 py-1.5 rounded-xl bg-emerald-950 border border-emerald-500/45 text-emerald-300 hover:bg-emerald-900 flex items-center gap-1.5 font-bold"
+                  className="min-h-[44px] text-xs px-3.5 py-2 rounded-xl bg-emerald-950 border border-emerald-500/45 text-emerald-300 hover:bg-emerald-900 flex items-center gap-1.5 font-bold whitespace-nowrap shrink-0"
                 >
                   <span>
                     {(playerState === 'playing' || playerState === 'loading') &&
                     activeAudioType === 'adhan' &&
-                    previewingAdhanKind === 'regular'
+                    previewingAdhanKind === 'regular' &&
+                    previewingAdhanReciterId === selectedAdhanReciter
                       ? 'إيقاف المعاينة'
                       : 'معاينة صوت المؤذن'}
                   </span>
                   {(playerState === 'playing' || playerState === 'loading') &&
                   activeAudioType === 'adhan' &&
-                  previewingAdhanKind === 'regular' ? (
+                  previewingAdhanKind === 'regular' &&
+                  previewingAdhanReciterId === selectedAdhanReciter ? (
                     <Square className="w-3 h-3 fill-current" />
                   ) : (
                     <Play className="w-3 h-3 fill-current text-[#fbbf24]" />
                   )}
                 </button>
                 <label className="text-xs font-bold text-[#e5b869] flex items-center gap-1.5">
-                  <span>صوت المؤذن للصلوات الخمس (أصوات شيوخ حقيقية):</span>
+                  <span>صوت المؤذن للصلوات الخمس (أصوات شيوخ خاشعة):</span>
                   <Volume2 className="w-4 h-4" />
                 </label>
               </div>
@@ -3314,26 +3645,83 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </option>
                 ))}
               </select>
+
+              {(() => {
+                const currentSource = ADHAN_SOURCES[selectedAdhanReciter];
+                if (!currentSource) return null;
+                const isCached = Boolean(adhanCacheMap[currentSource.id]);
+                const isDownloading = downloadingAdhanId === currentSource.id;
+                const sizeText = (currentSource.approxSizeMb ?? 1.5).toFixed(1);
+                return (
+                  <div className="flex items-center justify-between gap-3 flex-wrap px-3.5 py-2.5 rounded-xl bg-[#041814]/90 border border-[#e5b869]/20">
+                    <div className="flex items-center gap-2">
+                      {isCached ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveAdhanOffline(currentSource)}
+                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-rose-950/60 border border-rose-500/35 text-rose-200 hover:bg-rose-900/70 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>إزالة من الذاكرة</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isDownloading}
+                          onClick={() => void handleDownloadAdhanOffline(currentSource)}
+                          className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#07382e] border border-emerald-500/45 text-emerald-200 hover:bg-[#094a3d] disabled:opacity-60 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          {isDownloading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>جاري الحفظ...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5" />
+                              <span>حفظ بدون نت</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-right space-y-0.5 flex-1 min-w-[200px]">
+                      {currentSource.khushuTagAr && (
+                        <p className="text-xs text-slate-200 font-medium">{currentSource.khushuTagAr}</p>
+                      )}
+                      <p className="text-[11px] text-slate-400 tabular-nums">
+                        <span className="text-[#fbbf24]/90">~{sizeText} م.ب</span>
+                        <span> · </span>
+                        <span className={isCached ? 'text-emerald-300 font-semibold' : 'text-slate-400'}>
+                          {isCached ? 'محفوظ بدون نت ✓' : 'يحتاج حفظاً للعمل بدون إنترنت'}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Distinct Full-Length Fajr Adhan Dropdown */}
-            <div className="space-y-2 pt-2 border-t border-[#e5b869]/15">
-              <div className="flex items-center justify-between">
+            <div className="space-y-2.5 pt-2 border-t border-[#e5b869]/15">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => handleToggleSample(selectedFajrReciter, true)}
-                  className="text-xs px-3 py-1.5 rounded-xl bg-emerald-950 border border-sky-500/45 text-sky-300 hover:bg-emerald-900 flex items-center gap-1.5 font-bold"
+                  className="min-h-[44px] text-xs px-3.5 py-2 rounded-xl bg-emerald-950 border border-sky-500/45 text-sky-300 hover:bg-emerald-900 flex items-center gap-1.5 font-bold whitespace-nowrap shrink-0"
                 >
                   <span>
                     {(playerState === 'playing' || playerState === 'loading') &&
                     activeAudioType === 'adhan' &&
-                    previewingAdhanKind === 'fajr'
+                    previewingAdhanKind === 'fajr' &&
+                    previewingAdhanReciterId === selectedFajrReciter
                       ? 'إيقاف الفجر'
                       : 'معاينة الفجر الكامل'}
                   </span>
                   {(playerState === 'playing' || playerState === 'loading') &&
                   activeAudioType === 'adhan' &&
-                  previewingAdhanKind === 'fajr' ? (
+                  previewingAdhanKind === 'fajr' &&
+                  previewingAdhanReciterId === selectedFajrReciter ? (
                     <Square className="w-3 h-3 fill-current" />
                   ) : (
                     <Play className="w-3 h-3 fill-current" />
@@ -3355,6 +3743,279 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </option>
                 ))}
               </select>
+
+              {(() => {
+                const currentFajrSource = FAJR_ADHAN_SOURCES[selectedFajrReciter];
+                if (!currentFajrSource) return null;
+                const isCached = Boolean(adhanCacheMap[currentFajrSource.id]);
+                const isDownloading = downloadingAdhanId === currentFajrSource.id;
+                const sizeText = (currentFajrSource.approxSizeMb ?? 1.5).toFixed(1);
+                return (
+                  <div className="flex items-center justify-between gap-3 flex-wrap px-3.5 py-2.5 rounded-xl bg-[#041814]/90 border border-sky-500/20">
+                    <div className="flex items-center gap-2">
+                      {isCached ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveAdhanOffline(currentFajrSource)}
+                          className="min-h-[44px] px-3 py-1.5 rounded-xl bg-rose-950/60 border border-rose-500/35 text-rose-200 hover:bg-rose-900/70 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>إزالة من الذاكرة</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isDownloading}
+                          onClick={() => void handleDownloadAdhanOffline(currentFajrSource)}
+                          className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-[#07382e] border border-sky-500/45 text-sky-200 hover:bg-[#094a3d] disabled:opacity-60 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+                        >
+                          {isDownloading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>جاري الحفظ...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5" />
+                              <span>حفظ بدون نت</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-right space-y-0.5 flex-1 min-w-[200px]">
+                      {currentFajrSource.khushuTagAr && (
+                        <p className="text-xs text-slate-200 font-medium">{currentFajrSource.khushuTagAr}</p>
+                      )}
+                      <p className="text-[11px] text-slate-400 tabular-nums">
+                        <span className="text-sky-300/90">~{sizeText} م.ب</span>
+                        <span> · </span>
+                        <span className={isCached ? 'text-emerald-300 font-semibold' : 'text-slate-400'}>
+                          {isCached ? 'محفوظ بدون نت ✓' : 'يحتاج حفظاً للعمل بدون إنترنت'}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Offline Feedback Banner */}
+            {offlineActionMessage && (
+              <div
+                className={`px-3.5 py-2.5 rounded-xl border text-xs font-medium text-right flex items-center justify-between gap-2 ${
+                  offlineActionMessage.type === 'success'
+                    ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-200'
+                    : 'bg-rose-950/70 border-rose-500/40 text-rose-200'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOfflineActionMessage(null)}
+                  className="text-slate-300 hover:text-white px-2 py-1 text-xs shrink-0"
+                  aria-label="إغلاق التنبيه"
+                >
+                  ✕
+                </button>
+                <span className="flex-1">{offlineActionMessage.text}</span>
+              </div>
+            )}
+
+            {/* Expandable Offline Sheikh Voices Manager */}
+            <div className="pt-2 border-t border-[#e5b869]/15 space-y-3">
+              {(() => {
+                const allAdhanList = [
+                  ...Object.values(ADHAN_SOURCES),
+                  ...Object.values(FAJR_ADHAN_SOURCES),
+                ];
+                const cachedCount = allAdhanList.filter((item) => adhanCacheMap[item.id]).length;
+                const activeList =
+                  offlineManagerFilter === 'regular'
+                    ? Object.values(ADHAN_SOURCES)
+                    : Object.values(FAJR_ADHAN_SOURCES);
+
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowOfflineAdhanManager((prev) => !prev)}
+                      className="min-h-[44px] w-full px-4 py-2.5 rounded-xl bg-[#041814] border border-[#e5b869]/30 hover:border-[#fbbf24]/60 flex items-center justify-between gap-3 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 text-[#fbbf24] shrink-0">
+                        {showOfflineAdhanManager ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                        <span className="text-xs text-slate-300 tabular-nums whitespace-nowrap">
+                          {cachedCount} من {allAdhanList.length} محفوظة
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-right">
+                        <span className="text-xs sm:text-sm font-bold text-[#e5b869]">
+                          إدارة وتنزيل أصوات الشيوخ بدون نت
+                        </span>
+                        <HardDrive className="w-4 h-4 text-[#fbbf24] shrink-0" />
+                      </div>
+                    </button>
+
+                    {showOfflineAdhanManager && (
+                      <div className="p-3.5 rounded-2xl bg-[#021410]/90 border border-[#e5b869]/25 space-y-3">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setOfflineManagerFilter('regular')}
+                              className={`min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-bold border whitespace-nowrap shrink-0 transition-colors ${
+                                offlineManagerFilter === 'regular'
+                                  ? 'bg-[#073f34] border-[#fbbf24] text-[#fbbf24]'
+                                  : 'bg-[#041814] border-[#e5b869]/20 text-slate-300 hover:border-[#e5b869]/50'
+                              }`}
+                            >
+                              أذان الصلوات الخمس ({Object.keys(ADHAN_SOURCES).length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setOfflineManagerFilter('fajr')}
+                              className={`min-h-[44px] px-3.5 py-1.5 rounded-xl text-xs font-bold border whitespace-nowrap shrink-0 transition-colors ${
+                                offlineManagerFilter === 'fajr'
+                                  ? 'bg-[#073f34] border-sky-400 text-sky-300'
+                                  : 'bg-[#041814] border-[#e5b869]/20 text-slate-300 hover:border-sky-400/50'
+                              }`}
+                            >
+                              أذان الفجر ({Object.keys(FAJR_ADHAN_SOURCES).length})
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                            <span>اختر وحمّل ما تحتاجه فقط لتوفير مساحة جهازك</span>
+                            <WifiOff className="w-3.5 h-3.5 text-[#e5b869]" />
+                          </p>
+                        </div>
+
+                        <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                          {activeList.map((src) => {
+                            const isFajrTab = offlineManagerFilter === 'fajr';
+                            const isSelected = isFajrTab
+                              ? selectedFajrReciter === src.id
+                              : selectedAdhanReciter === src.id;
+                            const isCached = Boolean(adhanCacheMap[src.id]);
+                            const isDownloading = downloadingAdhanId === src.id;
+                            const isPreviewing =
+                              (playerState === 'playing' || playerState === 'loading') &&
+                              activeAudioType === 'adhan' &&
+                              previewingAdhanKind === offlineManagerFilter &&
+                              previewingAdhanReciterId === src.id;
+                            const sizeText = (src.approxSizeMb ?? 1.5).toFixed(1);
+
+                            return (
+                              <div
+                                key={src.id}
+                                className={`p-3 rounded-xl border transition-colors flex flex-col sm:flex-row-reverse sm:items-center justify-between gap-3 ${
+                                  isSelected
+                                    ? 'bg-[#062d24]/90 border-[#fbbf24]/70'
+                                    : 'bg-[#041814]/85 border-[#e5b869]/20'
+                                }`}
+                              >
+                                <div className="text-right space-y-1 flex-1 min-w-0">
+                                  <div className="flex items-center justify-end gap-2 flex-wrap">
+                                    {isSelected && (
+                                      <span className="text-[11px] font-bold text-[#fbbf24] whitespace-nowrap">
+                                        ✓ المختار حالياً
+                                      </span>
+                                    )}
+                                    <h5 className="text-xs sm:text-sm font-bold text-slate-100">
+                                      {src.nameAr}
+                                    </h5>
+                                  </div>
+                                  <p className="text-[11px] text-slate-400 tabular-nums leading-relaxed">
+                                    {src.khushuTagAr ? (
+                                      <>
+                                        <span className="text-slate-300">{src.khushuTagAr}</span>
+                                        <span> · </span>
+                                      </>
+                                    ) : null}
+                                    <span className="text-[#fbbf24]/85">~{sizeText} م.ب</span>
+                                    <span> · </span>
+                                    <span className={isCached ? 'text-emerald-300 font-semibold' : ''}>
+                                      {isCached ? 'محفوظ بدون نت ✓' : 'غير محفوظ محلياً'}
+                                    </span>
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap justify-start shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      isFajrTab
+                                        ? setSelectedFajrReciter(src.id)
+                                        : setSelectedAdhanReciter(src.id)
+                                    }
+                                    className={`min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-bold border whitespace-nowrap shrink-0 transition-colors ${
+                                      isSelected
+                                        ? 'bg-[#fbbf24] text-[#021410] border-[#fbbf24]'
+                                        : 'bg-[#03201a] text-slate-200 border-[#e5b869]/30 hover:border-[#fbbf24]/60'
+                                    }`}
+                                  >
+                                    {isSelected ? 'مختار ✓' : 'اختيار'}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleSample(src.id, isFajrTab)}
+                                    className="min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-950/90 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-900 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                                  >
+                                    {isPreviewing ? (
+                                      <>
+                                        <Square className="w-3 h-3 fill-current" />
+                                        <span>إيقاف</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="w-3 h-3 fill-current text-[#fbbf24]" />
+                                        <span>معاينة</span>
+                                      </>
+                                    )}
+                                  </button>
+
+                                  {isCached ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleRemoveAdhanOffline(src)}
+                                      className="min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-950/60 border border-rose-500/35 text-rose-200 hover:bg-rose-900/70 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span>إزالة</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={isDownloading}
+                                      onClick={() => void handleDownloadAdhanOffline(src)}
+                                      className="min-h-[44px] px-3 py-1.5 rounded-xl text-xs font-bold bg-[#07382e] border border-emerald-500/45 text-emerald-200 hover:bg-[#094a3d] disabled:opacity-60 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                                    >
+                                      {isDownloading ? (
+                                        <>
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                          <span>جاري الحفظ...</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Download className="w-3.5 h-3.5" />
+                                          <span>حفظ بدون نت</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Pre-Adhan Preparation Slider */}

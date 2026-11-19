@@ -142,6 +142,11 @@ export interface UserSettings {
   postPrayerIncludeWird?: boolean;
   postPrayerIncludeAdhkar?: boolean;
   postPrayerIncludeSunnah?: boolean;
+  // إعدادات الأندرويد والشاشات الذكية (Mobile & Android TV APK)
+  tvRemoteFocusEnabled?: boolean;
+  keepScreenAwakeAlways?: boolean;
+  autoEnterTvDisplay?: boolean;
+  remoteApiBaseUrl?: string;
 }
 
 export type AppThemeId = 'emerald' | 'indigo' | 'obsidian' | 'parchment';

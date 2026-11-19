@@ -1,4 +1,5 @@
 // Service for Screen Wake Lock API and Browser Web Notifications
+import { setNativeKeepAwake } from './nativeAndroidBridge';
 
 class BackgroundService {
   private wakeLockSentinel: any = null;
@@ -33,6 +34,7 @@ class BackgroundService {
   // Request Screen Wake Lock (keeps display active on smart TV or mobile)
   public async requestWakeLock(): Promise<boolean> {
     this.desiredWakeLock = true;
+    const nativeApplied = await setNativeKeepAwake(true);
     try {
       if ('wakeLock' in navigator && (navigator as any).wakeLock) {
         this.wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
@@ -48,9 +50,10 @@ class BackgroundService {
       console.warn('Wake Lock request fallback:', err);
     }
 
-    // Fallback when Wake Lock API is restricted by browser/iframe policy
+    // Fallback when Wake Lock API is restricted by browser/iframe policy or handled natively
     this.isWakeLockActive =
-      typeof document !== 'undefined' ? document.visibilityState === 'visible' : true;
+      nativeApplied ||
+      (typeof document !== 'undefined' ? document.visibilityState === 'visible' : true);
     this.emitWakeLockChange();
     return this.isWakeLockActive;
   }
@@ -58,6 +61,7 @@ class BackgroundService {
   // Release wake lock
   public async releaseWakeLock(): Promise<void> {
     this.desiredWakeLock = false;
+    await setNativeKeepAwake(false);
     try {
       if (this.wakeLockSentinel) {
         await this.wakeLockSentinel.release();

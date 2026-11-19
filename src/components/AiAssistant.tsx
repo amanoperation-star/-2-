@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Sparkles, Send, Bot, User, Loader2 } from 'lucide-react';
 
+import { isNativeCapacitorApp } from '../utils/nativeAndroidBridge';
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -26,7 +28,25 @@ export const AiAssistant: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      const savedBaseUrl =
+        (typeof window !== 'undefined' ? localStorage.getItem('remote_api_base_url') : null) ||
+        import.meta.env.VITE_API_BASE_URL ||
+        '';
+      const cleanBase = savedBaseUrl.trim().replace(/\/+$/, '');
+      if (isNativeCapacitorApp() && !cleanBase) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content:
+              'تعمل نسخة الأندرويد (APK) محلياً بدون خادم. لتفعيل المساعد الذكي داخل التطبيق، أضف رابط الخادم السحابي في الإعدادات ← الأندرويد والشاشات (APK)، بينما تعمل المواقيت والأذان والقرآن والأذكار محلياً دون اتصال.',
+          },
+        ]);
+        setIsLoading(false);
+        return;
+      }
+      const chatUrl = cleanBase ? `${cleanBase}/api/chat` : '/api/chat';
+      const res = await fetch(chatUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: userMessage }),
@@ -35,7 +55,7 @@ export const AiAssistant: React.FC = () => {
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply || data.error || 'عذراً، حدث خطأ ما.' }]);
     } catch (err) {
       console.error(err);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'عذراً، تعذر الاتصال بالمساعد الذكي. يرجى المحاولة مرة أخرى.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'عذراً، تعذر الاتصال بالمساعد الذكي. يرجى المحاولة مرة أخرى أو التحقق من رابط الخادم في الإعدادات.' }]);
     } finally {
       setIsLoading(false);
     }
