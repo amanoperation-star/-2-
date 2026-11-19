@@ -393,3 +393,23 @@
   display: none;
 }
 
+/* Royal Emerald & Gold Tokens for Khazain Al-Noor (۞ خزائن النور) */
+.royal-gold-foil {
+  background: linear-gradient(135deg, #F3D078 0%, #D4AF37 50%, #997B1E 100%);
+  color: #04130E;
+}
+
+.emerald-badge {
+  background-color: #0A3628;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: #34D399;
+}
+
+.khazain-geo-pattern {
+  background-color: #071E17;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.16) 0%, rgba(7, 30, 23, 0) 52%),
+    url("data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23D4AF37' stroke-opacity='0.08' stroke-width='1'%3E%3Crect x='14' y='14' width='36' height='36'/%3E%3Crect x='14' y='14' width='36' height='36' transform='rotate(45 32 32)'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+

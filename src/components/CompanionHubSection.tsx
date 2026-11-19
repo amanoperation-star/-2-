@@ -20,8 +20,14 @@ import {
   WifiOff,
   CheckCircle2,
   Mic,
+  ListChecks,
+  BookMarked,
 } from 'lucide-react';
 import { CityLocation, PrayerTimeData, UserSettings } from '../types';
+import { QadaPlannerPanel } from './QadaPlannerPanel';
+import { HifzCompanionPanel } from './HifzCompanionPanel';
+import { computeQadaAnalytics, loadQadaState } from '../utils/qadaData';
+import { computeHifzStats, loadHifzState } from '../utils/hifzData';
 import {
   HijriCalendarDay,
   buildHijriMonthCalendar,
@@ -45,14 +51,17 @@ import {
 import { adhanPlayer } from '../utils/audioAdhan';
 import { toArabicDigits } from '../utils/khatmaData';
 
+export type HubSectionTab = 'calendar' | 'travel' | 'ruqyah' | 'qada' | 'hifz';
+
 interface CompanionHubSectionProps {
   currentLocation: CityLocation;
   prayerTimes: PrayerTimeData;
   settings: UserSettings;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => void;
+  initialSubTab?: HubSectionTab;
+  onSubTabChange?: (tab: HubSectionTab) => void;
+  onTestCompanionReminder?: (kind: 'qada' | 'hifz') => void;
 }
-
-type HubSectionTab = 'calendar' | 'travel' | 'ruqyah';
 
 const WEEKDAY_HEADERS_SAT_FIRST = [
   'السبت',
@@ -78,8 +87,42 @@ export const CompanionHubSection: React.FC<CompanionHubSectionProps> = ({
   prayerTimes,
   settings,
   onUpdateSettings,
+  initialSubTab,
+  onSubTabChange,
+  onTestCompanionReminder,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<HubSectionTab>('calendar');
+  const [activeSubTab, setActiveSubTab] = useState<HubSectionTab>(initialSubTab || 'calendar');
+  const [qadaRemainingBadge, setQadaRemainingBadge] = useState<number>(() => {
+    const a = computeQadaAnalytics(loadQadaState());
+    return a.totalRemainingWithWitr;
+  });
+  const [hifzDueBadge, setHifzDueBadge] = useState<number>(() => {
+    return computeHifzStats(loadHifzState()).dueCount;
+  });
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  useEffect(() => {
+    const syncBadges = () => {
+      setQadaRemainingBadge(computeQadaAnalytics(loadQadaState()).totalRemainingWithWitr);
+      setHifzDueBadge(computeHifzStats(loadHifzState()).dueCount);
+    };
+    window.addEventListener('qada_state_changed', syncBadges);
+    window.addEventListener('hifz_state_changed', syncBadges);
+    return () => {
+      window.removeEventListener('qada_state_changed', syncBadges);
+      window.removeEventListener('hifz_state_changed', syncBadges);
+    };
+  }, []);
+
+  const handleSelectSubTab = (tab: HubSectionTab) => {
+    setActiveSubTab(tab);
+    onSubTabChange?.(tab);
+  };
 
   // --- 1. Hijri Calendar State ---
   const [monthOffset, setMonthOffset] = useState<number>(0);
@@ -427,10 +470,10 @@ export const CompanionHubSection: React.FC<CompanionHubSectionProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-2xl sm:text-3xl font-bold font-amiri text-[#F3CA63]">
-              ❖ زاد المسلم: التقويم والسفر والرقية ❖
+              ❖ زاد المسلم الشامل ❖
             </h2>
             <p className="text-xs sm:text-sm text-slate-300">
-              التقويم الهجري الشهري والمناسبات · رخصة المسافر والجمع والقصر · الرقية الشرعية الصوتية والمقروءة
+              التقويم الهجري · رخصة المسافر · الرقية الشرعية · قضاء الفوائت · الحفظ والتسميع التفاعلي
             </p>
           </div>
 
@@ -440,45 +483,77 @@ export const CompanionHubSection: React.FC<CompanionHubSectionProps> = ({
           </div>
         </div>
 
-        {/* 3-Segment Interactive View Switcher */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#02110E] p-1.5 rounded-2xl border border-[#D4AF37]/30">
+        {/* 5-Segment Interactive View Switcher */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 bg-[#02110E] p-1.5 rounded-2xl border border-[#D4AF37]/30">
           <button
             type="button"
-            onClick={() => setActiveSubTab('calendar')}
-            className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all whitespace-nowrap ${
+            onClick={() => handleSelectSubTab('calendar')}
+            className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
               activeSubTab === 'calendar'
                 ? 'bg-gradient-to-r from-[#D4AF37] to-[#B8962E] text-slate-950 shadow'
                 : 'text-slate-300 hover:text-[#F3CA63] hover:bg-[#08241C]'
             }`}
           >
             <Calendar className="w-4 h-4 shrink-0" />
-            <span>التقويم الشهري والمناسبات</span>
+            <span>التقويم والمناسبات</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveSubTab('travel')}
-            className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all whitespace-nowrap ${
+            onClick={() => handleSelectSubTab('travel')}
+            className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
               activeSubTab === 'travel'
                 ? 'bg-gradient-to-r from-[#D4AF37] to-[#B8962E] text-slate-950 shadow'
                 : 'text-slate-300 hover:text-[#F3CA63] hover:bg-[#08241C]'
             }`}
           >
             <Plane className="w-4 h-4 shrink-0" />
-            <span>رخصة المسافر والجمع والقصر</span>
+            <span>رخصة المسافر</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveSubTab('ruqyah')}
-            className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all whitespace-nowrap ${
+            onClick={() => handleSelectSubTab('ruqyah')}
+            className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
               activeSubTab === 'ruqyah'
                 ? 'bg-gradient-to-r from-[#D4AF37] to-[#B8962E] text-slate-950 shadow'
                 : 'text-slate-300 hover:text-[#F3CA63] hover:bg-[#08241C]'
             }`}
           >
             <ShieldPlus className="w-4 h-4 shrink-0" />
-            <span>الرقية الشرعية الصوتية</span>
+            <span>الرقية الشرعية</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectSubTab('qada')}
+            className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
+              activeSubTab === 'qada'
+                ? 'bg-gradient-to-r from-[#D4AF37] to-[#B8962E] text-slate-950 shadow'
+                : 'text-slate-300 hover:text-[#F3CA63] hover:bg-[#08241C]'
+            }`}
+          >
+            <ListChecks className="w-4 h-4 shrink-0" />
+            <span>
+              قضاء الفوائت
+              {qadaRemainingBadge > 0 ? ` (${toArabicDigits(qadaRemainingBadge)})` : ''}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectSubTab('hifz')}
+            className={`min-h-[44px] col-span-2 sm:col-span-1 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
+              activeSubTab === 'hifz'
+                ? 'bg-gradient-to-r from-[#D4AF37] to-[#B8962E] text-slate-950 shadow'
+                : 'text-slate-300 hover:text-[#F3CA63] hover:bg-[#08241C]'
+            }`}
+          >
+            <BookMarked className="w-4 h-4 shrink-0" />
+            <span>
+              الحفظ والتسميع
+              {hifzDueBadge > 0 ? ` (${toArabicDigits(hifzDueBadge)})` : ''}
+            </span>
           </button>
         </div>
       </div>
@@ -1178,6 +1253,28 @@ export const CompanionHubSection: React.FC<CompanionHubSectionProps> = ({
             })}
           </div>
         </div>
+      )}
+
+      {/* ============================================================
+          SECTION 4: QADA PRAYERS & FASTING PLANNER
+         ============================================================ */}
+      {activeSubTab === 'qada' && (
+        <QadaPlannerPanel
+          onTestReminder={
+            onTestCompanionReminder ? () => onTestCompanionReminder('qada') : undefined
+          }
+        />
+      )}
+
+      {/* ============================================================
+          SECTION 5: HIFZ & INTERACTIVE TASMI' COMPANION
+         ============================================================ */}
+      {activeSubTab === 'hifz' && (
+        <HifzCompanionPanel
+          onTestReminder={
+            onTestCompanionReminder ? () => onTestCompanionReminder('hifz') : undefined
+          }
+        />
       )}
     </div>
   );

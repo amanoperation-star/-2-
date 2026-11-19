@@ -7,6 +7,7 @@ import { QiblaCompass } from './components/QiblaCompass';
 import { AdhkarSection } from './components/AdhkarSection';
 import { QuranSection } from './components/QuranSection';
 import { AiAssistant } from './components/AiAssistant';
+import { CommuteWirdSection } from './components/CommuteWirdSection';
 import { SettingsModal, SettingsTabId } from './components/SettingsModal';
 import { BackgroundPickerModal } from './components/BackgroundPickerModal';
 import { PeriodicReminderPopup } from './components/PeriodicReminderPopup';
@@ -24,7 +25,21 @@ import {
   saveWidgetConfig,
   syncWidgetDataBridge,
 } from './utils/widgetStudioData';
-import { CompanionHubSection } from './components/CompanionHubSection';
+import { CompanionHubSection, HubSectionTab } from './components/CompanionHubSection';
+import {
+  computeQadaAnalytics,
+  getTodayQadaDateKey,
+  isQadaReminderDue,
+  loadQadaState,
+  saveQadaState,
+} from './utils/qadaData';
+import {
+  getTodayHifzDateKey,
+  isHifzReminderDue,
+  loadHifzState,
+  saveHifzState,
+} from './utils/hifzData';
+import { toArabicDigits } from './utils/khatmaData';
 import { OfflineIndicator } from './components/PWAInstallButton';
 import { precacheEssentialAudioOnce } from './utils/offlineAudioManager';
 import { loadFastingPreferences, saveFastingPreferences } from './utils/fastingCalculator';
@@ -77,11 +92,11 @@ import {
 } from './utils/themesData';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion'>(() => {
+  const [activeTab, setActiveTab] = useState<'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute'>(() => {
     if (typeof window === 'undefined') return 'times';
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    const valid = ['times', 'tracker', 'qibla', 'adhkar', 'quran', 'ai', 'companion'];
+    const valid = ['times', 'tracker', 'qibla', 'adhkar', 'quran', 'ai', 'companion', 'commute'];
     if (tab && valid.includes(tab)) {
       try {
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -330,6 +345,12 @@ export default function App() {
   const [isBackgroundPickerOpen, setIsBackgroundPickerOpen] = useState(false);
   const [isPeriodicPopupOpen, setIsPeriodicPopupOpen] = useState(false);
   const [isSteadfastnessOpen, setIsSteadfastnessOpen] = useState(false);
+  const [companionSubTab, setCompanionSubTab] = useState<HubSectionTab>('calendar');
+  const [activeCompanionToast, setActiveCompanionToast] = useState<{
+    kind: 'qada' | 'hifz';
+    titleAr: string;
+    bodyAr: string;
+  } | null>(null);
   const [displayInitialMode, setDisplayInitialMode] = useState<UnifiedDisplayMode | undefined>(() => {
     if (typeof window === 'undefined') return undefined;
     const mode = new URLSearchParams(window.location.search).get('mode');
@@ -799,6 +820,73 @@ export default function App() {
     const timer = window.setInterval(checkDueCheckin, 30_000);
     return () => window.clearInterval(timer);
   }, [prayerTimes, settings.postPrayerCheckinEnabled, settings.postPrayerCheckinMinutes]);
+
+  const handleTriggerCompanionReminderTest = (kind: 'qada' | 'hifz') => {
+    if (kind === 'qada') {
+      const qState = loadQadaState();
+      const analytics = computeQadaAnalytics(qState);
+      const bodyAr =
+        analytics.totalRemainingWithWitr > 0
+          ? `متبقي ${toArabicDigits(analytics.totalRemainingWithWitr)} صلوات في خطتك — بادر بقضاء فرض الآن.`
+          : 'تذكير يومي بمتابعة خطة قضاء الصلوات والصيام الفائت.';
+      setActiveCompanionToast({
+        kind: 'qada',
+        titleAr: 'تذكير خطة قضاء الفوائت',
+        bodyAr,
+      });
+      backgroundService.sendPrayerNotification('تذكير خطة قضاء الفوائت', bodyAr);
+    } else {
+      const hState = loadHifzState();
+      const due = isHifzReminderDue(hState, new Date());
+      const bodyAr = due
+        ? due.summaryLabel
+        : 'حان وقت ورد الحفظ والمراجعة اليومي لتثبيت محفوظاتك من القرآن الكريم.';
+      setActiveCompanionToast({
+        kind: 'hifz',
+        titleAr: 'تذكير مراجعة الحفظ القرآني',
+        bodyAr,
+      });
+      backgroundService.sendPrayerNotification('تذكير مراجعة الحفظ القرآني', bodyAr);
+    }
+  };
+
+  // Scheduled Daily Qada & Hifz Revision Reminders
+  useEffect(() => {
+    const checkCompanionReminders = () => {
+      const now = new Date();
+      const qState = loadQadaState();
+      if (isQadaReminderDue(qState, now)) {
+        const analytics = computeQadaAnalytics(qState, now);
+        const bodyAr =
+          analytics.totalRemainingWithWitr > 0
+            ? `متبقي ${toArabicDigits(analytics.totalRemainingWithWitr)} صلوات في خطتك — خصص بضع دقائق الآن لقضاء فرض.`
+            : 'تذكير يومي بمتابعة خطة قضاء الصيام الفائت.';
+        saveQadaState({ ...qState, lastRemindedDate: getTodayQadaDateKey(now) });
+        setActiveCompanionToast({
+          kind: 'qada',
+          titleAr: 'تذكير قضاء الفوائت اليومي',
+          bodyAr,
+        });
+        backgroundService.sendPrayerNotification('تذكير قضاء الفوائت اليومي', bodyAr);
+      }
+
+      const hState = loadHifzState();
+      const dueHifz = isHifzReminderDue(hState, now);
+      if (dueHifz) {
+        saveHifzState({ ...hState, lastRemindedDate: getTodayHifzDateKey(now) });
+        setActiveCompanionToast({
+          kind: 'hifz',
+          titleAr: 'موعد مراجعة الحفظ المستحقة',
+          bodyAr: dueHifz.summaryLabel,
+        });
+        backgroundService.sendPrayerNotification('موعد مراجعة الحفظ المستحقة', dueHifz.summaryLabel);
+      }
+    };
+
+    checkCompanionReminders();
+    const timer = window.setInterval(checkCompanionReminders, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleToggleCheckinField = (
     prayerKey: CheckinPrayerKey,
@@ -1490,7 +1578,14 @@ export default function App() {
               prayerTimes={prayerTimes}
               settings={settings}
               onUpdateSettings={handleUpdateSettings}
+              initialSubTab={companionSubTab}
+              onSubTabChange={setCompanionSubTab}
+              onTestCompanionReminder={handleTriggerCompanionReminderTest}
             />
+          )}
+
+          {activeTab === 'commute' && (
+            <CommuteWirdSection />
           )}
         </main>
 
@@ -1684,6 +1779,53 @@ export default function App() {
             onToggleWird={() => handleTogglePrayerWird(forcedCheckinPrayer.prayerKey)}
             onToggleSunnah={() => handleTogglePrayerSunnah(forcedCheckinPrayer.prayerKey)}
           />
+        )}
+
+        {/* Daily Qada & Hifz Reminder Toast */}
+        {activeCompanionToast && (
+          <div
+            className="fixed bottom-5 right-5 z-[62] max-w-sm w-[calc(100vw-2.5rem)] rounded-2xl bg-[#041b16]/98 border-2 border-[#D4AF37]/65 shadow-[0_14px_40px_rgba(0,0,0,0.65)] p-4 text-right backdrop-blur-xl animate-fade-in"
+            dir="rtl"
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <span className="text-xs font-bold text-[#F3CA63]">
+                {activeCompanionToast.titleAr}
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveCompanionToast(null)}
+                className="text-slate-400 hover:text-[#F3CA63] text-xs px-1.5 py-0.5 rounded-lg"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed mb-3">
+              {activeCompanionToast.bodyAr}
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveCompanionToast(null)}
+                className="min-h-[36px] px-3 py-1 rounded-lg bg-[#071410] border border-slate-700 text-slate-300 text-xs font-bold"
+              >
+                لاحقاً
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = activeCompanionToast.kind;
+                  setActiveCompanionToast(null);
+                  setCompanionSubTab(target);
+                  setActiveTab('companion');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="min-h-[36px] px-4 py-1 rounded-lg bg-[#D4AF37] text-slate-950 text-xs font-black"
+              >
+                فتح الآن
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Periodic Salawat Audio Floating Mihrab Toast */}

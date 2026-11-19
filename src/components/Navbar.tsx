@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Timer,
   Calendar,
+  TrainFront,
 } from 'lucide-react';
 import { CityLocation, UserSettings } from '../types';
 import { adhanPlayer, AudioPlayerState } from '../utils/audioAdhan';
@@ -35,8 +36,8 @@ import {
 import { getThemeDefinition, normalizeThemeId } from '../utils/themesData';
 
 interface NavbarProps {
-  activeTab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion';
-  setActiveTab: (tab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion') => void;
+  activeTab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute';
+  setActiveTab: (tab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute') => void;
   currentLocation: CityLocation;
   settings: UserSettings;
   onOpenSettings: () => void;
@@ -452,8 +453,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
             }`}
           >
-            <span className="text-xs leading-none">📖</span>
-            <span>القرآن والأسماء</span>
+            <span className="text-xs leading-none text-[#fbbf24]">۞</span>
+            <span>خزائن النور</span>
           </button>
 
           <button
@@ -481,10 +482,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
                 : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
             }`}
-            title="التقويم الهجري الشهري · رخصة المسافر · الرقية الشرعية"
+            title="التقويم الهجري · رخصة المسافر · الرقية · قضاء الفوائت · الحفظ والتسميع"
           >
             <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-            <span>التقويم والسفر والرقية</span>
+            <span>زاد المسلم · القضاء والحفظ</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('commute');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
+              activeTab === 'commute'
+                ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
+                : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
+            }`}
+            title="وضع المترو والمواصلات بيد واحدة • بدون نت"
+          >
+            <TrainFront className="w-3.5 h-3.5 text-emerald-400" />
+            <span>🚇 وِرد الطريق</span>
           </button>
         </nav>
       </div>
