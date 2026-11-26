@@ -264,6 +264,33 @@ public class WidgetBridgePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void openAppDetailsSettings(PluginCall call) {
+        Context context = getContext();
+        boolean opened = false;
+        try {
+            Intent intent = new Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + context.getPackageName())
+            );
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            opened = true;
+        } catch (Exception ignored) {
+            try {
+                Intent fallback = new Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS);
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(fallback);
+                opened = true;
+            } catch (Exception ignoredEx) {
+                opened = false;
+            }
+        }
+        JSObject res = new JSObject();
+        res.put("opened", opened);
+        call.resolve(res);
+    }
+
+    @PluginMethod
     public void testBackgroundAlarmNow(PluginCall call) {
         Context context = getContext();
         String type = call.getString("type", "salawat");

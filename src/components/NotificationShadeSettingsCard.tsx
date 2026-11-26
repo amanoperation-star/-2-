@@ -21,6 +21,7 @@ import {
   getNativeBackgroundReliabilityStatus,
   getNativeNotificationPermission,
   isNativeAndroidApp,
+  openNativeAppInfoSettings,
   requestNativeExactAlarmPermission,
   requestNativeFullScreenIntentPermission,
   requestNativeIgnoreBatteryOptimizations,
@@ -595,29 +596,50 @@ export const NotificationShadeSettingsCard: React.FC<NotificationShadeSettingsCa
             </div>
 
             {/* Floating Overlay Permission (Periodic Verses/Hadiths Outside App) */}
-            <div className="sm:col-span-2 p-3 rounded-xl bg-[#052019] border border-[#e5b869]/20 flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-right flex-1 min-w-[180px]">
-                <div className="text-xs font-bold text-white">
-                  إذن الظهور فوق التطبيقات الأخرى (البطاقة العائمة للآيات والأحاديث)
+            <div className="sm:col-span-2 p-3 rounded-xl bg-[#052019] border border-[#e5b869]/20 space-y-2.5">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-right flex-1 min-w-[180px]">
+                  <div className="text-xs font-bold text-white">
+                    إذن الظهور فوق التطبيقات الأخرى (البطاقة العائمة للآيات والأحاديث)
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {reliabilityStatus.overlayGranted
+                      ? 'مفعّل — ستظهر بطاقة المحراب العائمة فوق أي تطبيق في الموعد المحدد'
+                      : 'اضغط للسماح بالبطاقة العائمة (أو سيصلك التذكير كإشعار منبثق عادي بدون قيود)'}
+                  </div>
                 </div>
-                <div className="text-[11px] text-slate-400">
-                  {reliabilityStatus.overlayGranted
-                    ? 'مفعّل — ستظهر بطاقة المحراب العائمة فوق أي تطبيق في الموعد المحدد'
-                    : 'اضغط للسماح بعرض بطاقة التذكير العائمة خارج التطبيق'}
-                </div>
+                {reliabilityStatus.overlayGranted ? (
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold shrink-0">
+                    مفعّل
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void requestNativeOverlayPermission().then(refreshReliability)}
+                      className="min-h-[40px] px-3.5 rounded-xl bg-[#fbbf24] text-slate-950 text-xs font-black shrink-0"
+                    >
+                      السماح بالظهور
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void openNativeAppInfoSettings()}
+                      className="min-h-[40px] px-3 rounded-xl bg-[#031713] border border-[#e5b869]/40 text-[#fbbf24] text-xs font-bold shrink-0"
+                    >
+                      فك الإعدادات المقيدة
+                    </button>
+                  </div>
+                )}
               </div>
-              {reliabilityStatus.overlayGranted ? (
-                <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold shrink-0">
-                  مفعّل
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void requestNativeOverlayPermission().then(refreshReliability)}
-                  className="min-h-[40px] px-3.5 rounded-xl bg-[#fbbf24] text-slate-950 text-xs font-black shrink-0"
-                >
-                  السماح بالظهور
-                </button>
+
+              {!reliabilityStatus.overlayGranted && (
+                <div className="p-2.5 rounded-xl bg-[#03130f] border border-amber-500/25 text-right text-[11px] text-slate-300 leading-relaxed">
+                  <span className="font-bold text-[#fbbf24]">حل رفض النظام: </span>
+                  افتح <strong className="text-white">«فك الإعدادات المقيدة»</strong> ← اضغط{' '}
+                  <strong className="text-white">الثلاث نقاط (⋮)</strong> بالأعلى ← اختر{' '}
+                  <strong className="text-emerald-300">Allow restricted settings / السماح بالإعدادات المقيدة</strong>، ثم عد وفعّل{' '}
+                  <strong className="text-white">«السماح بالظهور»</strong>.
+                </div>
               )}
             </div>
 

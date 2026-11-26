@@ -236,6 +236,32 @@ export default function App() {
     iqamaStyle: (typeof window !== 'undefined' ? (localStorage.getItem('iqama_style_preference') as 'ring' | 'split' | 'pill') : 'ring') || 'ring',
     adhanModalLayout: (typeof window !== 'undefined' ? (localStorage.getItem('adhan_modal_layout') as any) : 'editorial-horizon') || 'editorial-horizon',
     adhanCountdownStyle: (typeof window !== 'undefined' ? (localStorage.getItem('adhan_countdown_islamic_style') as any) : 'islamic-mihrab') || 'islamic-mihrab',
+    adhanBackgroundAutoRotate:
+      typeof window !== 'undefined' && localStorage.getItem('adhan_bg_auto_rotate') !== null
+        ? localStorage.getItem('adhan_bg_auto_rotate') === 'true'
+        : true,
+    adhanBackgroundMotionStyle: (() => {
+      if (typeof window === 'undefined') return 'hybrid';
+      const saved = localStorage.getItem('adhan_bg_motion_style');
+      return (saved === 'hybrid' || saved === 'video' || saved === 'cinematic' ? saved : 'hybrid') as
+        | 'hybrid'
+        | 'video'
+        | 'cinematic';
+    })(),
+    adhanEnabledMosques: (() => {
+      const defaults = ['makkah_haram', 'madinah_nabawi', 'aqsa_quds', 'azhar_cairo', 'zayed_istanbul'];
+      if (typeof window === 'undefined') return defaults;
+      try {
+        const raw = localStorage.getItem('adhan_enabled_mosques');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {
+        // ignore invalid json
+      }
+      return defaults;
+    })(),
     periodicReminderEnabled:
       typeof window !== 'undefined' && localStorage.getItem('periodic_reminder_enabled') !== null
         ? localStorage.getItem('periodic_reminder_enabled') === 'true'
@@ -1559,6 +1585,15 @@ export default function App() {
       }
       if (newSettings.adhanCountdownStyle) {
         localStorage.setItem('adhan_countdown_islamic_style', newSettings.adhanCountdownStyle);
+      }
+      if (typeof newSettings.adhanBackgroundAutoRotate === 'boolean') {
+        localStorage.setItem('adhan_bg_auto_rotate', String(newSettings.adhanBackgroundAutoRotate));
+      }
+      if (newSettings.adhanBackgroundMotionStyle) {
+        localStorage.setItem('adhan_bg_motion_style', newSettings.adhanBackgroundMotionStyle);
+      }
+      if (Array.isArray(newSettings.adhanEnabledMosques) && newSettings.adhanEnabledMosques.length > 0) {
+        localStorage.setItem('adhan_enabled_mosques', JSON.stringify(newSettings.adhanEnabledMosques));
       }
       if (typeof newSettings.periodicReminderEnabled === 'boolean') {
         localStorage.setItem('periodic_reminder_enabled', String(newSettings.periodicReminderEnabled));

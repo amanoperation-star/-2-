@@ -97,6 +97,9 @@ export interface UserSettings {
   iqamaStyle?: 'ring' | 'split' | 'pill'; // مظهر عدّاد الإقامة
   adhanModalLayout?: 'editorial-horizon' | 'architectural-sanctuary' | 'ambient-aura'; // تصميم شاشة الأذان الكاملة
   adhanCountdownStyle?: 'islamic-mihrab' | 'rub-el-hizb' | 'mashrabiya-arabesque' | 'celestial-astrolabe'; // الطراز الإسلامي لعدّاد الأذان
+  adhanBackgroundAutoRotate?: boolean; // تبديل تلقائي بين المساجد أثناء الأذان
+  adhanBackgroundMotionStyle?: 'hybrid' | 'video' | 'cinematic'; // أسلوب الحركة في خلفيات الأذان
+  adhanEnabledMosques?: string[]; // قائمة المساجد المختارة للظهور أثناء الأذان
   periodicReminderEnabled?: boolean;
   periodicReminderInterval?: 5 | 10 | 15 | 30 | 60;
   periodicReminderContentType?: 'both' | 'quran' | 'hadith';

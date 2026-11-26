@@ -75,6 +75,7 @@ import {
   getNativeBackgroundReliabilityStatus,
   isNativeAndroidApp,
   isLikelyAndroidTvDevice,
+  openNativeAppInfoSettings,
   requestNativeOverlayPermission,
   subscribeNativeResume,
   testNativeBackgroundAlarm,
@@ -101,6 +102,11 @@ import {
   saveWidgetConfig,
 } from '../utils/widgetStudioData';
 import { SHORT_ADHKAR_SHEIKHS, ShortAdhkarSheikhId } from '../utils/shortAdhkarAudio';
+import {
+  ADHAN_MOSQUE_SCENES,
+  AdhanMotionStyle,
+  DEFAULT_ENABLED_ADHAN_MOSQUES,
+} from '../utils/adhanScenesData';
 
 export type SettingsTabId = 'general' | 'iqama' | 'adhkar' | 'themes' | 'simulations' | 'fasting' | 'widgets' | 'android';
 
@@ -221,6 +227,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [selectedIqamaStyle, setSelectedIqamaStyle] = useState<'ring' | 'split' | 'pill'>(settings.iqamaStyle || 'ring');
   const [selectedAdhanLayout, setSelectedAdhanLayout] = useState<'editorial-horizon' | 'architectural-sanctuary' | 'ambient-aura'>(settings.adhanModalLayout || 'editorial-horizon');
   const [selectedAdhanCountdownStyle, setSelectedAdhanCountdownStyle] = useState<'islamic-mihrab' | 'rub-el-hizb' | 'mashrabiya-arabesque' | 'celestial-astrolabe'>(settings.adhanCountdownStyle || 'islamic-mihrab');
+  const [adhanBgAutoRotate, setAdhanBgAutoRotate] = useState<boolean>(settings.adhanBackgroundAutoRotate ?? true);
+  const [adhanBgMotionStyle, setAdhanBgMotionStyle] = useState<AdhanMotionStyle>(settings.adhanBackgroundMotionStyle || 'hybrid');
+  const [adhanEnabledMosques, setAdhanEnabledMosques] = useState<string[]>(
+    settings.adhanEnabledMosques && settings.adhanEnabledMosques.length > 0
+      ? settings.adhanEnabledMosques
+      : DEFAULT_ENABLED_ADHAN_MOSQUES
+  );
   const [periodicEnabled, setPeriodicEnabled] = useState<boolean>(settings.periodicReminderEnabled ?? true);
   const [periodicInterval, setPeriodicInterval] = useState<5 | 10 | 15 | 30 | 60>(settings.periodicReminderInterval ?? 15);
   const [periodicContentType, setPeriodicContentType] = useState<'both' | 'quran' | 'hadith'>(settings.periodicReminderContentType || 'both');
@@ -444,6 +457,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSelectedIqamaStyle(s.iqamaStyle || 'ring');
       setSelectedAdhanLayout(s.adhanModalLayout || 'editorial-horizon');
       setSelectedAdhanCountdownStyle(s.adhanCountdownStyle || 'islamic-mihrab');
+      setAdhanBgAutoRotate(s.adhanBackgroundAutoRotate ?? true);
+      setAdhanBgMotionStyle(s.adhanBackgroundMotionStyle || 'hybrid');
+      setAdhanEnabledMosques(
+        s.adhanEnabledMosques && s.adhanEnabledMosques.length > 0
+          ? s.adhanEnabledMosques
+          : DEFAULT_ENABLED_ADHAN_MOSQUES
+      );
       setPeriodicEnabled(s.periodicReminderEnabled ?? true);
       setPeriodicInterval(s.periodicReminderInterval ?? 15);
       setPeriodicContentType(s.periodicReminderContentType || 'both');
@@ -786,6 +806,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       iqamaStyle: selectedIqamaStyle,
       adhanModalLayout: selectedAdhanLayout,
       adhanCountdownStyle: selectedAdhanCountdownStyle,
+      adhanBackgroundAutoRotate: adhanBgAutoRotate,
+      adhanBackgroundMotionStyle: adhanBgMotionStyle,
+      adhanEnabledMosques,
       periodicReminderEnabled: periodicEnabled,
       periodicReminderInterval: periodicInterval,
       periodicReminderContentType: periodicContentType,
@@ -3605,6 +3628,155 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 );
               })}
             </div>
+
+            {/* خلفيات المساجد المتحركة والأجواء النورانية أثناء الأذان */}
+            <div className="pt-4 mt-2 border-t border-[#e5b869]/20 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-right">
+                  <h4 className="text-sm font-bold text-[#F3D078]">
+                    خلفيات المساجد المتحركة أثناء الأذان
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    تبديل تلقائي بين المساجد المختارة مع فيديو السماء والتحريك السينمائي والأجواء النورانية
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={adhanBgAutoRotate}
+                  onClick={() => {
+                    const next = !adhanBgAutoRotate;
+                    setAdhanBgAutoRotate(next);
+                    onUpdateSettings({ adhanBackgroundAutoRotate: next });
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors shrink-0 border ${
+                    adhanBgAutoRotate
+                      ? 'bg-[#10B981] border-emerald-400'
+                      : 'bg-slate-800 border-slate-600'
+                  }`}
+                  title="تفعيل التبديل التلقائي بين المساجد أثناء الأذان"
+                >
+                  <span
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      adhanBgAutoRotate ? 'left-1' : 'right-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* أسلوب الحركة */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-200 block text-right">
+                  أسلوب الحركة والأجواء:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {[
+                    {
+                      id: 'hybrid' as AdhanMotionStyle,
+                      title: 'مزيج فيديو وتحريك نوراني',
+                      desc: 'فيديو السماء والغيوم مع تقريب سينمائي وذرات ضوء',
+                    },
+                    {
+                      id: 'video' as AdhanMotionStyle,
+                      title: 'فيديو حي للسماء',
+                      desc: 'بث متكرر للغيوم والأجواء السماوية فوق المساجد',
+                    },
+                    {
+                      id: 'cinematic' as AdhanMotionStyle,
+                      title: 'تحريك سينمائي نوراني',
+                      desc: 'حركة كاميرا ناعمة وإضاءة نورانية خالصة بدون فيديو',
+                    },
+                  ].map((mode) => {
+                    const active = adhanBgMotionStyle === mode.id;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => {
+                          setAdhanBgMotionStyle(mode.id);
+                          onUpdateSettings({ adhanBackgroundMotionStyle: mode.id });
+                        }}
+                        className={`p-3 rounded-xl border text-right transition-all ${
+                          active
+                            ? 'bg-[#073f34] border-[#fbbf24] text-[#fbbf24]'
+                            : 'bg-[#041814]/90 border-[#e5b869]/20 text-slate-300 hover:border-[#e5b869]/50'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-white">{mode.title}</div>
+                        <div className="text-[11px] text-slate-300 mt-1 leading-relaxed">{mode.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* المساجد المختارة للظهور أثناء الأذان */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-200">
+                    المساجد الظاهرة أثناء الأذان ({adhanEnabledMosques.length}/{ADHAN_MOSQUE_SCENES.length}):
+                  </span>
+                  {onOpenFullScreenAdhanSimulation && (
+                    <button
+                      type="button"
+                      onClick={onOpenFullScreenAdhanSimulation}
+                      className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#073f34] border border-[#fbbf24]/50 text-[#fbbf24] hover:brightness-110 text-xs font-bold transition-all"
+                    >
+                      معاينة شاشة الأذان الآن
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {ADHAN_MOSQUE_SCENES.map((scene) => {
+                    const isChecked = adhanEnabledMosques.includes(scene.id);
+                    return (
+                      <button
+                        key={scene.id}
+                        type="button"
+                        onClick={() => {
+                          let next: string[];
+                          if (isChecked) {
+                            if (adhanEnabledMosques.length <= 1) return;
+                            next = adhanEnabledMosques.filter((id) => id !== scene.id);
+                          } else {
+                            next = [...adhanEnabledMosques, scene.id];
+                          }
+                          setAdhanEnabledMosques(next);
+                          onUpdateSettings({ adhanEnabledMosques: next });
+                        }}
+                        className={`group relative overflow-hidden rounded-xl border text-right transition-all flex items-center gap-2.5 p-2 ${
+                          isChecked
+                            ? 'border-[#34D399]/70 bg-[#062f26]/90 shadow-[0_4px_16px_rgba(16,185,129,0.16)]'
+                            : 'border-slate-700/80 bg-[#031612]/80 opacity-65 hover:opacity-100'
+                        }`}
+                      >
+                        <img
+                          src={scene.imageUrl}
+                          alt={scene.nameAr}
+                          referrerPolicy="no-referrer"
+                          className="w-16 h-12 rounded-lg object-cover shrink-0 border border-white/10"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-white truncate">{scene.shortNameAr}</div>
+                          <div className="text-[11px] text-slate-300 truncate">{scene.locationAr}</div>
+                        </div>
+                        <span
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 text-[11px] font-black ${
+                            isChecked
+                              ? 'bg-[#34D399] border-[#34D399] text-[#04130E]'
+                              : 'border-slate-600 text-transparent'
+                          }`}
+                        >
+                          ✓
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* 3. Audio, Muezzin & Pre-Adhan Preparation */}
@@ -4495,31 +4667,60 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {isNativeAndroidApp() && periodicOverlayEnabled && (
-                <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-[#e5b869]/15">
-                  {overlayGranted ? (
-                    <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
-                      إذن الظهور فوق التطبيقات مفعّل
+                <div className="pt-2 border-t border-[#e5b869]/15 space-y-2.5">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    {overlayGranted ? (
+                      <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
+                        إذن الظهور فوق التطبيقات مفعّل
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void requestNativeOverlayPermission().then(() =>
+                              getNativeBackgroundReliabilityStatus().then((st) =>
+                                setOverlayGranted(st.overlayGranted)
+                              )
+                            );
+                          }}
+                          className="min-h-[44px] px-4 py-2 rounded-xl bg-[#fbbf24] text-slate-950 text-xs font-black whitespace-nowrap"
+                        >
+                          منح إذن الظهور فوق التطبيقات
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void openNativeAppInfoSettings()}
+                          className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#07261E] border border-[#e5b869]/45 text-[#fbbf24] text-xs font-bold whitespace-nowrap"
+                        >
+                          فتح معلومات التطبيق (لفك القيد)
+                        </button>
+                      </div>
+                    )}
+                    <span className="text-[11px] text-slate-400 text-right">
+                      {overlayGranted
+                        ? 'سيتم عرض البطاقة العائمة تلقائياً خارج التطبيق حسب الفاصل المحدد'
+                        : 'مطلوب للبطاقة العائمة، وبدونه يصلك التذكير كإشعار منبثق عادي تلقائياً'}
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void requestNativeOverlayPermission().then(() =>
-                          getNativeBackgroundReliabilityStatus().then((st) =>
-                            setOverlayGranted(st.overlayGranted)
-                          )
-                        );
-                      }}
-                      className="min-h-[44px] px-4 py-2 rounded-xl bg-[#fbbf24] text-slate-950 text-xs font-black whitespace-nowrap"
-                    >
-                      منح إذن الظهور فوق التطبيقات
-                    </button>
+                  </div>
+
+                  {!overlayGranted && (
+                    <div className="p-3 rounded-xl bg-[#03130f] border border-amber-500/30 text-right space-y-1.5 text-[11px] text-slate-300 leading-relaxed">
+                      <div className="font-bold text-[#fbbf24]">
+                        إذا ظهرت رسالة «تم رفض وصول التطبيق / الإعدادات المقيدة» (Android 13+):
+                      </div>
+                      <p>
+                        ١. اضغط على <strong className="text-white">«فتح معلومات التطبيق (لفك القيد)»</strong>.
+                      </p>
+                      <p>
+                        ٢. اضغط على <strong className="text-white">الثلاث نقاط (⋮)</strong> أعلى الزاوية (أو أسفل الصفحة) واختر{' '}
+                        <strong className="text-emerald-300">«السماح بالإعدادات المقيدة / Allow restricted settings»</strong>.
+                      </p>
+                      <p>
+                        ٣. ارجع واضغط <strong className="text-white">«منح إذن الظهور فوق التطبيقات»</strong> وفعّل المفتاح.
+                      </p>
+                    </div>
                   )}
-                  <span className="text-[11px] text-slate-400 text-right">
-                    {overlayGranted
-                      ? 'سيتم عرض البطاقة العائمة تلقائياً خارج التطبيق حسب الفاصل المحدد'
-                      : 'مطلوب لتتمكن البطاقة العائمة من الظهور أثناء استخدام تطبيقات أخرى'}
-                  </span>
                 </div>
               )}
             </div>

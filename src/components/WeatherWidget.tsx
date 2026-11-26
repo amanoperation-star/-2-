@@ -16,9 +16,14 @@ import { WeatherData, fetchWeather } from '../utils/weatherService';
 interface WeatherWidgetProps {
   currentLocation: CityLocation;
   compact?: boolean;
+  showFullStripOnMobile?: boolean;
 }
 
-export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ currentLocation, compact = false }) => {
+export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
+  currentLocation,
+  compact = false,
+  showFullStripOnMobile = false,
+}) => {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -56,6 +61,51 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({ currentLocation, c
         return <Sun className="w-5 h-5 text-amber-400" />;
     }
   };
+
+  if (showFullStripOnMobile) {
+    return (
+      <div
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#071E17] border border-[#D4AF37]/30 text-xs text-slate-100 shadow-inner"
+        title={`الطقس في ${currentLocation.nameAr}: ${weather?.descriptionAr || 'غائم كلياً'}`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {loading ? (
+            <RefreshCw className="w-4 h-4 text-[#D4AF37] animate-spin shrink-0" />
+          ) : (
+            <span className="shrink-0">{renderIcon(weather?.iconType)}</span>
+          )}
+          <span className="font-bold text-[#F3D078] font-mono tabular-nums shrink-0" dir="ltr">
+            {weather?.temperature ?? 23}°C
+          </span>
+          <span className="text-slate-100 font-semibold truncate">
+            {weather?.descriptionAr || 'غائم كلياً'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 text-[11px] tabular-nums">
+          <span className="text-[#D4AF37]/35" aria-hidden="true">|</span>
+          <span className="inline-flex items-center gap-1 text-sky-300 font-mono">
+            <span aria-hidden="true">💧</span>
+            <span>{weather?.humidity ?? 48}%</span>
+          </span>
+          <span className="text-[#D4AF37]/35" aria-hidden="true">|</span>
+          <span className="inline-flex items-center gap-1 text-[#34D399] font-mono">
+            <span aria-hidden="true">💨</span>
+            <span>{weather?.windSpeed ?? 8} كم/س</span>
+          </span>
+          <button
+            type="button"
+            onClick={loadWeather}
+            className="p-1 rounded-lg text-[#D4AF37]/80 hover:text-[#F3D078] transition-colors"
+            title="تحديث الطقس"
+            aria-label="تحديث حالة الطقس"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (compact) {
     return (

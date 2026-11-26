@@ -14,10 +14,14 @@ import {
   BookOpen,
   Volume1,
   Compass,
+  ChevronLeft,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { CityLocation, UserSettings, PrayerName } from '../types';
 import { adhanPlayer, getAdhanSource, getDuaSource, AudioPlayerState, ActiveAudioType } from '../utils/audioAdhan';
-import { LIVE_BACKGROUNDS } from '../utils/backgroundsData';
+import { AnimatedAdhanBackdrop } from './AnimatedAdhanBackdrop';
+import { AdhanMotionStyle, getOrderedAdhanScenes } from '../utils/adhanScenesData';
 
 interface FullScreenAdhanModalProps {
   isOpen: boolean;
@@ -61,6 +65,9 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
   const [autoCloseCountdown, setAutoCloseCountdown] = useState<number | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [waveOffset, setWaveOffset] = useState<number>(0);
+  const [sceneIndex, setSceneIndex] = useState<number>(0);
+  const [isRotationPaused, setIsRotationPaused] = useState<boolean>(false);
+  const [rotationResetTick, setRotationResetTick] = useState<number>(0);
   const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -68,46 +75,39 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
   const duaText =
     'اللَّهُمَّ رَبَّ هَذِهِ الدَّعْوَةِ التَّامَّةِ، وَالصَّلَاةِ الْقَائِمَةِ، آتِ مُحَمَّدًا الْوَسِيلَةَ وَالْفَضِيلَةَ، وَابْعَثْهُ مَقَامًا مَحْمُودًا الَّذِي وَعَدْتَهُ، [إِنَّكَ لَا تُخْلِفُ الْمِيعَادَ]';
 
-  const isDaytime = prayerKey === 'dhuhr' || prayerKey === 'asr' || prayerKey === 'sunrise';
+  const autoRotateEnabled = settings.adhanBackgroundAutoRotate ?? true;
+  const motionStyle: AdhanMotionStyle = settings.adhanBackgroundMotionStyle || 'hybrid';
 
-  // Real cinematic mosque images matching Ken Burns motion
-  const mosqueBackground = useMemo(() => {
-    // Select curated high-res authentic mosques: Kaaba, Prophet's Mosque, Al-Aqsa, Al-Azhar
-    if (prayerKey === 'fajr') {
-      return {
-        name: 'المسجد النبوي الشريف • الروضة المباركة',
-        location: 'المدينة المنورة',
-        url: 'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=2600&q=95',
-      };
+  const orderedScenes = useMemo(
+    () => getOrderedAdhanScenes(prayerKey, settings.adhanEnabledMosques),
+    [prayerKey, settings.adhanEnabledMosques]
+  );
+
+  const currentScene = orderedScenes[sceneIndex % Math.max(1, orderedScenes.length)] || orderedScenes[0];
+
+  // Reset scene rotation when opening modal or changing prayer
+  useEffect(() => {
+    if (!isOpen) return;
+    setSceneIndex(0);
+    setIsRotationPaused(false);
+  }, [isOpen, prayerKey, orderedScenes.length]);
+
+  // Smooth auto-rotation across mosques during Adhan
+  useEffect(() => {
+    if (!isOpen || !autoRotateEnabled || isRotationPaused || orderedScenes.length <= 1) {
+      return;
     }
-    if (prayerKey === 'dhuhr' || prayerKey === 'sunrise') {
-      return {
-        name: 'الكعبة المشرفة والمسجد الحرام',
-        location: 'مكة المكرمة',
-        url: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?auto=format&fit=crop&w=2600&q=95',
-      };
-    }
-    if (prayerKey === 'asr') {
-      return {
-        name: 'الجامع الأزهر الشريف ومآذن القاهرة',
-        location: 'مصر، القاهرة المعز',
-        url: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=2600&q=95',
-      };
-    }
-    if (prayerKey === 'maghrib') {
-      return {
-        name: 'المسجد الأقصى المبارك وقبة الصخرة',
-        location: 'القدس الشريف',
-        url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=2600&q=95',
-      };
-    }
-    // isha & default
-    return {
-      name: 'الحرم المكي الشريف بأنواره الزاهرة',
-      location: 'مكة المكرمة',
-      url: 'https://images.unsplash.com/photo-1565552645632-d725f8bfc19a?auto=format&fit=crop&w=2600&q=95',
-    };
-  }, [prayerKey]);
+    const timer = window.setInterval(() => {
+      setSceneIndex((prev) => (prev + 1) % orderedScenes.length);
+    }, 14000);
+    return () => window.clearInterval(timer);
+  }, [isOpen, autoRotateEnabled, isRotationPaused, orderedScenes.length, rotationResetTick]);
+
+  const handleNextScene = () => {
+    if (orderedScenes.length <= 1) return;
+    setSceneIndex((prev) => (prev + 1) % orderedScenes.length);
+    setRotationResetTick((t) => t + 1);
+  };
 
   // Current live synchronized adhan phrase based on progression
   const currentPhrase = useMemo(() => {
@@ -320,32 +320,62 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
 
   // COMMON HEADER BAR
   const renderHeaderBar = () => (
-    <header className="relative z-20 w-full px-6 py-5 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-black/40 backdrop-blur-md border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-xl">
-          <Compass className="w-5 h-5 text-amber-300 animate-pulse" />
+    <header className="relative z-20 w-full px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="w-10 h-10 rounded-2xl bg-black/45 backdrop-blur-md border border-amber-500/35 flex items-center justify-center text-amber-400 shadow-xl shrink-0">
+          <Compass className="w-5 h-5 text-amber-300" />
         </div>
-        <div className="text-right">
-          <span className="text-[11px] font-bold text-amber-300/90 tracking-wide block uppercase">
-            {mosqueBackground.name}
+        <div className="text-right min-w-0">
+          <span className="text-xs sm:text-sm font-bold text-[#F3D078] tracking-wide block truncate">
+            {currentScene.nameAr}
           </span>
-          <span className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{currentLocation.nameAr} • {mosqueBackground.location}</span>
+          <span className="text-xs text-slate-200/90 font-medium flex items-center gap-1.5 truncate">
+            <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="truncate">{currentLocation.nameAr} · {currentScene.locationAr}</span>
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 text-emerald-300 font-mono text-sm shadow-xl">
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        {orderedScenes.length > 1 && (
+          <div className="flex items-center gap-1.5 bg-black/45 backdrop-blur-md border border-amber-500/30 rounded-2xl p-1 shadow-xl">
+            <button
+              type="button"
+              onClick={handleNextScene}
+              className="min-h-[36px] px-2.5 py-1 rounded-xl hover:bg-white/10 text-amber-200 text-xs font-bold flex items-center gap-1 transition-colors whitespace-nowrap shrink-0"
+              title="الانتقال إلى المسجد التالي"
+            >
+              <span className="hidden md:inline">المسجد التالي</span>
+              <span className="tabular-nums text-[11px] text-emerald-300">
+                {(sceneIndex % orderedScenes.length) + 1}/{orderedScenes.length}
+              </span>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            {autoRotateEnabled && (
+              <button
+                type="button"
+                onClick={() => setIsRotationPaused((p) => !p)}
+                className="min-h-[36px] w-9 rounded-xl hover:bg-white/10 text-slate-200 hover:text-[#F3D078] flex items-center justify-center transition-colors shrink-0"
+                title={isRotationPaused ? 'استئناف التبديل التلقائي للمساجد' : 'تثبيت المسجد الحالي'}
+                aria-label={isRotationPaused ? 'استئناف التبديل التلقائي للمساجد' : 'تثبيت المسجد الحالي'}
+              >
+                {isRotationPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-black/45 backdrop-blur-md border border-white/15 text-emerald-300 font-mono text-xs sm:text-sm tabular-nums shadow-xl">
           <Clock className="w-4 h-4 text-emerald-400" />
           <span>{currentTimeStr}</span>
         </div>
 
         <button
+          type="button"
           onClick={handleClose}
-          className="p-3 rounded-2xl bg-black/50 hover:bg-rose-950/80 backdrop-blur-md text-slate-200 hover:text-rose-200 border border-white/15 hover:border-rose-500/40 transition-all shadow-2xl hover:scale-105 active:scale-95"
+          className="min-h-[44px] min-w-[44px] p-2.5 rounded-2xl bg-black/50 hover:bg-rose-950/80 backdrop-blur-md text-slate-200 hover:text-rose-200 border border-white/15 hover:border-rose-500/40 transition-all shadow-2xl flex items-center justify-center shrink-0"
           title="إغلاق والعودة"
+          aria-label="إغلاق شاشة الأذان"
         >
           <X className="w-5 h-5" />
         </button>
@@ -472,19 +502,14 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
           ========================================================================= */}
       {layoutMode === 'editorial-horizon' && (
         <>
-          <div className="relative w-full h-[62vh] sm:h-[65vh] overflow-hidden">
-            <div
-              className="absolute inset-0 bg-cover bg-center transition-all duration-1000 animate-ken-burns scale-105"
-              style={{ backgroundImage: `url('${mosqueBackground.url}')` }}
+          <div className="relative w-full h-[58vh] sm:h-[64vh] overflow-hidden">
+            <AnimatedAdhanBackdrop
+              scenes={orderedScenes}
+              activeIndex={sceneIndex}
+              motionStyle={motionStyle}
+              variant="hero"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#020814] via-transparent to-black/60" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-black/30" />
             {renderHeaderBar()}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center opacity-30 select-none">
-              <span className="font-amiri text-6xl sm:text-8xl md:text-9xl font-bold text-amber-200/20 tracking-widest drop-shadow-2xl">
-                {stage === 'adhan' ? 'حَيَّ عَلَى الصَّلَاةِ' : 'اللَّهُ نُورُ السَّمَاوَاتِ'}
-              </span>
-            </div>
           </div>
 
           <div className="relative z-30 flex-1 w-full bg-gradient-to-t from-[#020713] via-[#040e21]/95 to-[#05142e]/90 backdrop-blur-2xl border-t border-amber-500/25 flex flex-col justify-between p-5 sm:p-8 shadow-[0_-25px_60px_rgba(0,0,0,0.85)]">
@@ -493,10 +518,9 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
             {stage === 'adhan' && (
               <div className="w-full flex-1 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="w-full md:w-auto text-right space-y-1.5 flex flex-col items-start shrink-0">
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs font-bold shadow-inner">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <span>الأفق الإشراقي • نداء الحق</span>
-                  </div>
+                  <p className="text-xs font-bold text-[#F3D078]">
+                    الأفق الإشراقي · نداء الحق
+                  </p>
                   <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white font-amiri tracking-wide drop-shadow-[0_4px_25px_rgba(229,184,105,0.35)]">
                     أذان صلاة {prayerNameAr}
                   </h1>
@@ -507,16 +531,15 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
                 </div>
 
                 <div className="w-full md:flex-1 max-w-xl flex flex-col items-center md:items-end text-center md:text-right bg-white/[0.03] border border-amber-500/20 rounded-3xl p-4 sm:p-6 shadow-2xl backdrop-blur-md relative overflow-hidden">
-                  <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest mb-1 block">
+                  <span className="text-[11px] font-bold text-emerald-400 tracking-wide mb-1 block">
                     {currentPhrase.sub}
                   </span>
                   <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#e5b869] font-amiri leading-relaxed tracking-wide drop-shadow-[0_2px_15px_rgba(229,184,105,0.4)]">
                     «{currentPhrase.text}»
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400 font-mono">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span className="text-slate-300">جاري البث الحي للأذان الشريف</span>
-                  </div>
+                  <p className="mt-2 text-xs text-slate-300">
+                    البث المباشر للأذان الشريف
+                  </p>
                 </div>
               </div>
             )}
@@ -547,32 +570,38 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
           ========================================================================= */}
       {layoutMode === 'architectural-sanctuary' && (
         <div className="relative flex-1 w-full flex flex-col justify-between overflow-hidden bg-slate-950">
-          <div className="absolute inset-0 bg-cover bg-center filter blur-xl opacity-30 scale-110" style={{ backgroundImage: `url('${mosqueBackground.url}')` }} />
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-950/90 to-slate-900/95" />
-          
+          <AnimatedAdhanBackdrop
+            scenes={orderedScenes}
+            activeIndex={sceneIndex}
+            motionStyle={motionStyle}
+            variant="ambient-blur"
+          />
+
           {renderHeaderBar()}
 
           <div className="relative z-20 flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col lg:flex-row items-center gap-8">
             {/* Left Column: Architectural Arch Frame (قوس محراب إسلامي فاخر) */}
             <div className="w-full lg:w-1/2 h-[45vh] lg:h-[70vh] relative rounded-t-[160px] rounded-b-3xl border-4 border-amber-500/60 shadow-[0_0_60px_rgba(245,158,11,0.25)] overflow-hidden group">
-              <div
-                className="absolute inset-0 bg-cover bg-center animate-ken-burns scale-105"
-                style={{ backgroundImage: `url('${mosqueBackground.url}')` }}
+              <AnimatedAdhanBackdrop
+                scenes={orderedScenes}
+                activeIndex={sceneIndex}
+                motionStyle={motionStyle}
+                variant="arch"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-black/30" />
-              <div className="absolute bottom-6 right-6 left-6 text-right bg-slate-950/70 backdrop-blur-md p-4 rounded-2xl border border-amber-500/30">
-                <span className="text-xs text-amber-300 font-bold block">{mosqueBackground.name}</span>
-                <span className="text-[11px] text-slate-300">{mosqueBackground.location}</span>
+              <div className="relative z-10 h-full flex flex-col justify-end p-5">
+                <div className="text-right bg-slate-950/75 backdrop-blur-md p-4 rounded-2xl border border-amber-500/30">
+                  <span className="text-xs text-amber-300 font-bold block">{currentScene.nameAr}</span>
+                  <span className="text-[11px] text-slate-300">{currentScene.locationAr}</span>
+                </div>
               </div>
             </div>
 
             {/* Right Column: Details, Live Lyrics & Controls */}
             <div className="w-full lg:w-1/2 flex flex-col justify-between space-y-6 bg-slate-900/80 backdrop-blur-2xl border border-amber-500/35 rounded-3xl p-6 lg:p-8 shadow-2xl">
               <div className="space-y-4 text-right">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/40">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>البوابة المعمارية • صلاة {prayerNameAr}</span>
-                </div>
+                <p className="text-xs font-bold text-emerald-300">
+                  البوابة المعمارية · صلاة {prayerNameAr}
+                </p>
                 <h1 className="text-3xl sm:text-4xl font-extrabold text-white font-amiri">
                   أذان صلاة {prayerNameAr}
                 </h1>
@@ -582,7 +611,7 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
 
                 {stage === 'adhan' && (
                   <div className="bg-slate-950/70 border border-amber-500/30 p-5 rounded-2xl space-y-2 relative overflow-hidden">
-                    <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-widest block">
+                    <span className="text-[10px] text-emerald-400 font-bold tracking-wide block">
                       {currentPhrase.sub}
                     </span>
                     <div className="text-2xl sm:text-3xl font-black text-[#e5b869] font-amiri leading-relaxed">
@@ -593,7 +622,7 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
 
                 {stage === 'dua' && (
                   <div className="bg-slate-950/70 border border-amber-500/30 p-5 rounded-2xl space-y-2">
-                    <span className="text-[10px] text-amber-400 uppercase font-bold tracking-widest block">
+                    <span className="text-[10px] text-amber-400 font-bold tracking-wide block">
                       دعاء ما بعد الأذان
                     </span>
                     <p className="text-lg sm:text-xl font-bold text-amber-200 font-amiri leading-relaxed">
@@ -618,22 +647,20 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
           ========================================================================= */}
       {layoutMode === 'ambient-aura' && (
         <div className="relative flex-1 w-full flex flex-col justify-between overflow-hidden bg-slate-950">
-          <div
-            className="absolute inset-0 bg-cover bg-center filter brightness-75 scale-105 animate-ken-burns"
-            style={{ backgroundImage: `url('${mosqueBackground.url}')` }}
+          <AnimatedAdhanBackdrop
+            scenes={orderedScenes}
+            activeIndex={sceneIndex}
+            motionStyle={motionStyle}
+            variant="hero"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-slate-950/60" />
-          
-          {/* Central Glowing Light Aura */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] bg-amber-500/15 rounded-full blur-[140px] pointer-events-none animate-pulse" />
+          <div className="absolute inset-0 z-[5] bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-950/45 pointer-events-none" />
 
           {renderHeaderBar()}
 
           <div className="relative z-20 flex-1 max-w-4xl w-full mx-auto px-6 flex flex-col justify-center items-center text-center space-y-8 my-auto">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-amber-500/40 text-amber-300 text-xs font-bold shadow-2xl">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>الضوء النوراني الحر • {mosqueBackground.name}</span>
-            </div>
+            <p className="text-xs sm:text-sm font-bold text-[#F3D078]">
+              الضوء النوراني الحر · {currentScene.nameAr}
+            </p>
 
             <div className="space-y-4">
               <h1 className="text-4xl sm:text-6xl font-black text-white font-amiri drop-shadow-[0_4px_30px_rgba(229,184,105,0.5)]">

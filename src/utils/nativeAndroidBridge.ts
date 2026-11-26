@@ -38,6 +38,7 @@ interface WidgetBridgePluginInterface {
   requestFullScreenIntentPermission(): Promise<{ opened: boolean; granted: boolean }>;
   requestIgnoreBatteryOptimizations(): Promise<{ opened: boolean; ignored: boolean }>;
   requestOverlayPermission(): Promise<{ opened: boolean; granted: boolean }>;
+  openAppDetailsSettings(): Promise<{ opened: boolean }>;
   testBackgroundAlarmNow(options: { type: 'adhan' | 'salawat' | 'periodic' }): Promise<{
     triggered: boolean;
   }>;
@@ -294,6 +295,15 @@ export async function requestNativeOverlayPermission(): Promise<{
     return await WidgetBridge.requestOverlayPermission();
   } catch {
     return { opened: false, granted: false };
+  }
+}
+
+export async function openNativeAppInfoSettings(): Promise<{ opened: boolean }> {
+  if (!isNativeAndroidApp()) return { opened: false };
+  try {
+    return await WidgetBridge.openAppDetailsSettings();
+  } catch {
+    return { opened: false };
   }
 }
 

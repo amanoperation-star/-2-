@@ -421,3 +421,111 @@ html.tv-remote-focus-enabled.tv-remote-active :is(button, a, input, select, text
   transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
   z-index: 20;
 }
+
+/* Full-Screen Adhan Cinematic Mosque Motion Presets (Compositor-Only) */
+@keyframes adhan-pan-zoom {
+  0% { transform: scale(1.03) translate3d(0%, 0%, 0); }
+  50% { transform: scale(1.12) translate3d(-1.2%, -1%, 0); }
+  100% { transform: scale(1.03) translate3d(0%, 0%, 0); }
+}
+
+@keyframes adhan-pan-left {
+  0% { transform: scale(1.1) translate3d(2%, 0%, 0); }
+  50% { transform: scale(1.14) translate3d(-2%, -1%, 0); }
+  100% { transform: scale(1.1) translate3d(2%, 0%, 0); }
+}
+
+@keyframes adhan-pan-right {
+  0% { transform: scale(1.1) translate3d(-2%, -0.5%, 0); }
+  50% { transform: scale(1.14) translate3d(2%, 0.5%, 0); }
+  100% { transform: scale(1.1) translate3d(-2%, -0.5%, 0); }
+}
+
+@keyframes adhan-drift-arc {
+  0% { transform: scale(1.06) translate3d(1%, 1%, 0); }
+  50% { transform: scale(1.13) translate3d(-1.5%, -1%, 0); }
+  100% { transform: scale(1.06) translate3d(1%, 1%, 0); }
+}
+
+@keyframes adhan-rise-glow {
+  0% { transform: scale(1.04) translate3d(0%, 1.2%, 0); }
+  50% { transform: scale(1.11) translate3d(0%, -1.4%, 0); }
+  100% { transform: scale(1.04) translate3d(0%, 1.2%, 0); }
+}
+
+@keyframes adhan-mote-rise {
+  0% {
+    transform: translate3d(0, 18px, 0) scale(0.7);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.72;
+  }
+  80% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate3d(14px, -90px, 0) scale(1.15);
+    opacity: 0;
+  }
+}
+
+@keyframes adhan-aurora-breathe {
+  0%, 100% {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.08) translate3d(0, -2%, 0);
+    opacity: 0.95;
+  }
+}
+
+.adhan-pan-zoom {
+  animation: adhan-pan-zoom 24s ease-in-out infinite;
+  will-change: transform;
+}
+
+.adhan-pan-left {
+  animation: adhan-pan-left 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+.adhan-pan-right {
+  animation: adhan-pan-right 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+.adhan-drift-arc {
+  animation: adhan-drift-arc 25s ease-in-out infinite;
+  will-change: transform;
+}
+
+.adhan-rise-glow {
+  animation: adhan-rise-glow 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+.adhan-mote-rise {
+  animation: adhan-mote-rise 9s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.adhan-aurora-breathe {
+  animation: adhan-aurora-breathe 12s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adhan-pan-zoom,
+  .adhan-pan-left,
+  .adhan-pan-right,
+  .adhan-drift-arc,
+  .adhan-rise-glow,
+  .adhan-mote-rise,
+  .adhan-aurora-breathe,
+  .animate-ken-burns {
+    animation: none !important;
+  }
+}
+
