@@ -77,6 +77,8 @@ interface PrayerTimesCardProps {
   onNavigateToAdhkar?: () => void;
   onOpenStandbyMode?: () => void;
   onOpenTravelTab?: () => void;
+  onOpenFullScreenAdhan?: (prayerKey: PrayerName, prayerNameAr?: string) => void;
+  isGlobalFullScreenAdhanOpen?: boolean;
 }
 
 interface PrayerInfo {
@@ -162,6 +164,8 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   onNavigateToAdhkar,
   onOpenStandbyMode,
   onOpenTravelTab,
+  onOpenFullScreenAdhan,
+  isGlobalFullScreenAdhanOpen = false,
 }) => {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [nextPrayerKey, setNextPrayerKey] = useState<PrayerName>('fajr');
@@ -351,9 +355,6 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     const handleJumuahToggle = () => setJumuahPreviewMode((prev) => !prev);
     const handleSunanToggle = () => setSimulateJumuahSunan((prev) => !prev);
     const handleGoldenHourToggle = () => setSimulateGoldenHour((prev) => !prev);
-    const handleOpenFullScreen = () => {
-      handleOpenFullScreenAdhan(nextPrayerKey);
-    };
     const handleOpenLastThird = () => setIsLastThirdModalOpen(true);
     const handleToggleLastThirdSim = () => setSimulateLastThirdNight((prev) => !prev);
 
@@ -362,7 +363,6 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     window.addEventListener('toggle_jumuah_preview', handleJumuahToggle);
     window.addEventListener('toggle_jumuah_sunan', handleSunanToggle);
     window.addEventListener('toggle_golden_hour', handleGoldenHourToggle);
-    window.addEventListener('open_fullscreen_adhan_simulation', handleOpenFullScreen);
     window.addEventListener('open_last_third_night_simulation', handleOpenLastThird);
     window.addEventListener('toggle_last_third_simulation', handleToggleLastThirdSim);
 
@@ -372,11 +372,13 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       window.removeEventListener('toggle_jumuah_preview', handleJumuahToggle);
       window.removeEventListener('toggle_jumuah_sunan', handleSunanToggle);
       window.removeEventListener('toggle_golden_hour', handleGoldenHourToggle);
-      window.removeEventListener('open_fullscreen_adhan_simulation', handleOpenFullScreen);
       window.removeEventListener('open_last_third_night_simulation', handleOpenLastThird);
       window.removeEventListener('toggle_last_third_simulation', handleToggleLastThirdSim);
     };
   }, [nextPrayerKey]);
+
+  const isFullScreenActiveRef = useRef<boolean>(false);
+  isFullScreenActiveRef.current = isFullScreenAdhanOpen || isGlobalFullScreenAdhanOpen;
 
   // Subscribe to adhanPlayer events
   useEffect(() => {
@@ -399,6 +401,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       },
       onUnlocked: () => setIsAudioUnlocked(true),
       onAdhanEnded: (prayerKey) => {
+        if (isFullScreenActiveRef.current) return;
         const pName = PRAYERS.find((p) => p.key === prayerKey)?.nameAr || 'الصلاة';
         setLastFinishedPrayer(pName);
         setIsDuaModalOpen(true);
@@ -512,8 +515,12 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
           );
         } else {
           backgroundService.sendPrayerNotification(displayMatchName, currentLocation.nameAr);
-          setFullScreenAdhanPrayer(matchingPrayer.key);
-          setIsFullScreenAdhanOpen(true);
+          if (onOpenFullScreenAdhan) {
+            onOpenFullScreenAdhan(matchingPrayer.key, displayMatchName);
+          } else {
+            setFullScreenAdhanPrayer(matchingPrayer.key);
+            setIsFullScreenAdhanOpen(true);
+          }
         }
       }
     }
@@ -712,7 +719,16 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   const reciterLabel = ADHAN_SOURCES[settings.adhanReciter]?.nameAr || 'الحرم المكي';
 
   const handleOpenFullScreenAdhan = (key?: PrayerName) => {
-    setFullScreenAdhanPrayer(key || nextPrayerKey);
+    const targetKey = key || nextPrayerKey;
+    const displayName = getDisplayPrayerName(
+      targetKey,
+      PRAYERS.find((p) => p.key === targetKey)?.nameAr || 'الفجر'
+    );
+    if (onOpenFullScreenAdhan) {
+      onOpenFullScreenAdhan(targetKey, displayName);
+      return;
+    }
+    setFullScreenAdhanPrayer(targetKey);
     setIsFullScreenAdhanOpen(true);
   };
 

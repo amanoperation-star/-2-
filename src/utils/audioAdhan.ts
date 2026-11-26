@@ -731,6 +731,8 @@ class AdhanPlayerManager {
   private fallbackDhikrText: string | null = null;
   private audioPlayNonce: number = 0;
   private skipNextAutoCache: boolean = false;
+  private autoDuaTimeoutId: number | null = null;
+  private suppressNextAutoDua: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -863,11 +865,19 @@ class AdhanPlayerManager {
       this.notifyProgress(0, 0, 0);
 
       if (finishedType === 'adhan') {
+        const shouldAutoPlayDua = this.autoDuaEnabled && !this.suppressNextAutoDua;
+        this.suppressNextAutoDua = false;
         this.listeners.forEach((l) => l.onAdhanEnded?.(finishedPrayerKey));
-        // Automatically play Dua After Adhan if enabled
-        if (this.autoDuaEnabled) {
-          setTimeout(() => {
-            this.playDua(this.duaReciter);
+        // Automatically play Dua After Adhan only if enabled, not suppressed, and no listener already started Dua
+        if (shouldAutoPlayDua && this.activeType !== 'dua') {
+          if (this.autoDuaTimeoutId !== null) {
+            window.clearTimeout(this.autoDuaTimeoutId);
+          }
+          this.autoDuaTimeoutId = window.setTimeout(() => {
+            this.autoDuaTimeoutId = null;
+            if (this.activeType === 'none' || this.state === 'idle') {
+              void this.playDua(this.duaReciter);
+            }
           }, 1000);
         }
       } else if (finishedType === 'dua') {
@@ -978,8 +988,12 @@ class AdhanPlayerManager {
     reciterId: string = 'makkah',
     prayerKey: string = 'dhuhr',
     boostVolume: boolean = false,
-    options?: { skipAutoCache?: boolean }
+    options?: { skipAutoCache?: boolean; disableAutoDua?: boolean }
   ): Promise<void> {
+    if (this.autoDuaTimeoutId !== null) {
+      window.clearTimeout(this.autoDuaTimeoutId);
+      this.autoDuaTimeoutId = null;
+    }
     const source = getAdhanSource(reciterId, prayerKey);
     this.audioPlayNonce++;
     this.activeType = 'adhan';
@@ -989,6 +1003,7 @@ class AdhanPlayerManager {
     this.currentUrlIndex = 0;
     this.lastError = null;
     this.skipNextAutoCache = Boolean(options?.skipAutoCache);
+    this.suppressNextAutoDua = Boolean(options?.disableAutoDua);
 
     if (!this.audio) {
       this.initAudioElement();
@@ -1002,6 +1017,10 @@ class AdhanPlayerManager {
 
   // Play Dua After Adhan
   public async playDua(duaId: string = 'shaarawy'): Promise<void> {
+    if (this.autoDuaTimeoutId !== null) {
+      window.clearTimeout(this.autoDuaTimeoutId);
+      this.autoDuaTimeoutId = null;
+    }
     const source = getDuaSource(duaId);
     this.audioPlayNonce++;
     this.activeType = 'dua';
@@ -1010,6 +1029,7 @@ class AdhanPlayerManager {
     this.currentUrlIndex = 0;
     this.lastError = null;
     this.skipNextAutoCache = false;
+    this.suppressNextAutoDua = false;
 
     if (!this.audio) {
       this.initAudioElement();
@@ -1802,10 +1822,18 @@ class AdhanPlayerManager {
         const finishedPrayerKey = this.currentPrayerKey;
         this.setState('idle', 'none');
         if (finishedType === 'adhan') {
+          const shouldAutoPlayDua = this.autoDuaEnabled && !this.suppressNextAutoDua;
+          this.suppressNextAutoDua = false;
           this.listeners.forEach((l) => l.onAdhanEnded?.(finishedPrayerKey));
-          if (this.autoDuaEnabled) {
-            setTimeout(() => {
-              this.playDua(this.duaReciter);
+          if (shouldAutoPlayDua && this.activeType !== 'dua') {
+            if (this.autoDuaTimeoutId !== null) {
+              window.clearTimeout(this.autoDuaTimeoutId);
+            }
+            this.autoDuaTimeoutId = window.setTimeout(() => {
+              this.autoDuaTimeoutId = null;
+              if (this.activeType === 'none' || this.state === 'idle') {
+                void this.playDua(this.duaReciter);
+              }
             }, 1000);
           }
         }
@@ -1821,6 +1849,11 @@ class AdhanPlayerManager {
     this.salawatPlayNonce++;
     this.preAdhanPlayNonce++;
     this.iqamaPlayNonce++;
+    this.suppressNextAutoDua = false;
+    if (this.autoDuaTimeoutId !== null) {
+      window.clearTimeout(this.autoDuaTimeoutId);
+      this.autoDuaTimeoutId = null;
+    }
     if (this.salawatTimeoutId !== null) {
       window.clearTimeout(this.salawatTimeoutId);
       this.salawatTimeoutId = null;

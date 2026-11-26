@@ -26,6 +26,7 @@ interface FullScreenAdhanModalProps {
   prayerNameAr: string;
   currentLocation: CityLocation;
   settings: UserSettings;
+  isSimulation?: boolean;
 }
 
 // Canonical sequences of Islamic Adhan phrases with relative timing milestones
@@ -47,6 +48,7 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
   prayerNameAr,
   currentLocation,
   settings,
+  isSimulation = false,
 }) => {
   const [stage, setStage] = useState<'adhan' | 'dua'>('adhan');
   const [playerState, setPlayerState] = useState<AudioPlayerState>('idle');
@@ -177,7 +179,8 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
       : activeSettings.adhanReciter || 'makkah';
     const boost = isFajr && activeSettings.fajrBoostVolume;
 
-    adhanPlayer.playAdhan(reciterToPlay, prayerKey, boost);
+    adhanPlayer.stop();
+    void adhanPlayer.playAdhan(reciterToPlay, prayerKey, boost, { disableAutoDua: true });
 
     const unsubscribe = adhanPlayer.subscribe({
       onStateChange: (state, type) => {
@@ -193,10 +196,13 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
         setAudioProgress(pct);
       },
       onAdhanEnded: () => {
-        setStage('dua');
+        if (isSimulation) {
+          return;
+        }
         const latestSettings = settingsRef.current;
         if (latestSettings.autoDuaAfterAdhan) {
-          adhanPlayer.playDua(getDuaSource(latestSettings.duaAudioReciter).id);
+          setStage('dua');
+          void adhanPlayer.playDua(getDuaSource(latestSettings.duaAudioReciter).id);
         }
       },
       onDuaEnded: () => {
@@ -208,7 +214,7 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
       unsubscribe();
       if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
     };
-  }, [isOpen, prayerKey]);
+  }, [isOpen, prayerKey, isSimulation]);
 
   const triggerAutoClose = () => {
     let secondsLeft = 5;
@@ -247,9 +253,11 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
       const reciterToPlay = isFajr
         ? settings.fajrAdhanReciter || 'fajr_makkah'
         : settings.adhanReciter || 'makkah';
-      adhanPlayer.playAdhan(reciterToPlay, prayerKey, isFajr && settings.fajrBoostVolume);
+      void adhanPlayer.playAdhan(reciterToPlay, prayerKey, isFajr && settings.fajrBoostVolume, {
+        disableAutoDua: true,
+      });
     } else {
-      adhanPlayer.playDua(getDuaSource(settings.duaAudioReciter).id);
+      void adhanPlayer.playDua(getDuaSource(settings.duaAudioReciter).id);
     }
   };
 
@@ -265,12 +273,30 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
     onClose();
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+        adhanPlayer.stop();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  const layoutMode =
+  const rawLayoutMode =
     settings.adhanModalLayout ||
-    (typeof window !== 'undefined' ? localStorage.getItem('adhan_modal_layout') : 'editorial-horizon') ||
+    (typeof window !== 'undefined' ? localStorage.getItem('adhan_modal_layout') : null) ||
     'editorial-horizon';
+  const layoutMode: 'editorial-horizon' | 'architectural-sanctuary' | 'ambient-aura' =
+    rawLayoutMode === 'architectural-sanctuary' || rawLayoutMode === 'ambient-aura'
+      ? rawLayoutMode
+      : 'editorial-horizon';
 
   const reciterInfo =
     stage === 'adhan'
@@ -433,7 +459,13 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden select-none bg-slate-950 text-slate-100 flex flex-col font-sans animate-in fade-in duration-500">
+    <div
+      dir="rtl"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`شاشة أذان صلاة ${prayerNameAr}`}
+      className="fixed inset-0 z-[120] overflow-hidden select-none bg-slate-950 text-slate-100 flex flex-col font-sans animate-in fade-in duration-500"
+    >
       
       {/* =========================================================================
           LAYOUT 1: EDITORIAL HORIZON (الأفق الإشراقي - الافتراضي)

@@ -8,12 +8,14 @@ import { AdhkarSection } from './components/AdhkarSection';
 import { QuranSection } from './components/QuranSection';
 import { AiAssistant } from './components/AiAssistant';
 import { CommuteWirdSection } from './components/CommuteWirdSection';
+import { FamilyHomeSection } from './components/FamilyHomeSection';
 import { SettingsModal, SettingsTabId } from './components/SettingsModal';
 import { BackgroundPickerModal } from './components/BackgroundPickerModal';
 import { PeriodicReminderPopup } from './components/PeriodicReminderPopup';
 import { QuranWirdModal } from './components/QuranWirdModal';
 import { SteadfastnessModal } from './components/SteadfastnessModal';
 import { AmbientStandByModal, UnifiedDisplayMode } from './components/AmbientStandByModal';
+import { FullScreenAdhanModal } from './components/FullScreenAdhanModal';
 import { IstikharaHajahModal } from './components/IstikharaHajahModal';
 import { WidgetStudioModal } from './components/WidgetStudioModal';
 import { PrayerWidgetPreview } from './components/PrayerWidgetPreview';
@@ -68,7 +70,7 @@ import {
   loadSunnahRawatibState,
   togglePrayerSunnahCompleted,
 } from './utils/sunnahRawatibData';
-import { CityLocation, UserSettings, PrayerTimeData, AppThemeId } from './types';
+import { CityLocation, UserSettings, PrayerTimeData, AppThemeId, PrayerName } from './types';
 import { CITIES, calculatePrayerTimes } from './utils/prayerCalculator';
 import { adhanPlayer, getDuaSource, SalawatVoiceProfile, PreAdhanVoiceProfile, IqamaVoiceProfile } from './utils/audioAdhan';
 import { LIVE_BACKGROUNDS, getSmartBackground, isCurrentTimeDay } from './utils/backgroundsData';
@@ -94,11 +96,11 @@ import {
 } from './utils/themesData';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute'>(() => {
+  const [activeTab, setActiveTab] = useState<'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute' | 'family'>(() => {
     if (typeof window === 'undefined') return 'times';
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    const valid = ['times', 'tracker', 'qibla', 'adhkar', 'quran', 'ai', 'companion', 'commute'];
+    const valid = ['times', 'tracker', 'qibla', 'adhkar', 'quran', 'ai', 'companion', 'commute', 'family'];
     if (tab && valid.includes(tab)) {
       try {
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -378,6 +380,17 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     const mode = new URLSearchParams(window.location.search).get('mode');
     return mode === 'standby' || mode === 'mosque';
+  });
+  const [fullScreenAdhanState, setFullScreenAdhanState] = useState<{
+    isOpen: boolean;
+    prayerKey: PrayerName;
+    prayerNameAr: string;
+    isSimulation: boolean;
+  }>({
+    isOpen: false,
+    prayerKey: 'asr',
+    prayerNameAr: 'العصر',
+    isSimulation: false,
   });
   const [isIstikharaHajahOpen, setIsIstikharaHajahOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -678,7 +691,106 @@ export default function App() {
     }
   }, []);
 
+  const familyBackHandlerRef = React.useRef<(() => boolean) | null>(null);
+  const pendingTimesSimulationEventRef = React.useRef<string | null>(null);
+
+  const getNextPrayerInfo = useCallback((times: PrayerTimeData): { key: PrayerName; nameAr: string } => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+    const isFriday = now.getDay() === 5;
+    const toMins = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    const list: { key: PrayerName; nameAr: string; mins: number }[] = [
+      { key: 'fajr', nameAr: 'الفجر', mins: toMins(times.fajr) },
+      { key: 'dhuhr', nameAr: isFriday ? 'الجمعة' : 'الظهر', mins: toMins(times.dhuhr) },
+      { key: 'asr', nameAr: 'العصر', mins: toMins(times.asr) },
+      { key: 'maghrib', nameAr: 'المغرب', mins: toMins(times.maghrib) },
+      { key: 'isha', nameAr: 'العشاء', mins: toMins(times.isha) },
+    ];
+    const next = list.find((p) => p.mins > currentMinutes) || list[0];
+    return { key: next.key, nameAr: next.nameAr };
+  }, []);
+
+  const handleOpenFullScreenAdhanModal = useCallback(
+    (prayerKey?: PrayerName, customNameAr?: string, isSimulation: boolean = false) => {
+      const fallback = getNextPrayerInfo(prayerTimes);
+      const targetKey = prayerKey || fallback.key;
+      const defaultNames: Record<PrayerName, string> = {
+        fajr: 'الفجر',
+        sunrise: 'الشروق',
+        dhuhr: new Date().getDay() === 5 ? 'الجمعة' : 'الظهر',
+        asr: 'العصر',
+        maghrib: 'المغرب',
+        isha: 'العشاء',
+      };
+      void adhanPlayer.unlockAudio();
+      setFullScreenAdhanState({
+        isOpen: true,
+        prayerKey: targetKey,
+        prayerNameAr: customNameAr || defaultNames[targetKey] || fallback.nameAr,
+        isSimulation,
+      });
+    },
+    [getNextPrayerInfo, prayerTimes]
+  );
+
+  // Global listener so Full-Screen Adhan simulation & PrayerTimesCard simulations work from ANY active tab
+  useEffect(() => {
+    const onOpenFullScreenSim = () => {
+      handleOpenFullScreenAdhanModal(undefined, undefined, true);
+    };
+    window.addEventListener('open_fullscreen_adhan_simulation', onOpenFullScreenSim);
+
+    const timesSimEvents = [
+      'toggle_near_adhan_simulation',
+      'open_post_prayer_simulation',
+      'toggle_jumuah_preview',
+      'toggle_jumuah_sunan',
+      'toggle_golden_hour',
+      'open_last_third_night_simulation',
+      'toggle_last_third_simulation',
+    ];
+    const eventHandlers = timesSimEvents.map((eventName) => {
+      const handler = () => {
+        if (activeTab !== 'times') {
+          pendingTimesSimulationEventRef.current = eventName;
+          setActiveTab('times');
+        }
+      };
+      window.addEventListener(eventName, handler);
+      return { eventName, handler };
+    });
+
+    return () => {
+      window.removeEventListener('open_fullscreen_adhan_simulation', onOpenFullScreenSim);
+      eventHandlers.forEach(({ eventName, handler }) => {
+        window.removeEventListener(eventName, handler);
+      });
+    };
+  }, [activeTab, handleOpenFullScreenAdhanModal]);
+
+  useEffect(() => {
+    if (activeTab === 'times' && pendingTimesSimulationEventRef.current) {
+      const pendingEvent = pendingTimesSimulationEventRef.current;
+      pendingTimesSimulationEventRef.current = null;
+      const timer = window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent(pendingEvent));
+      }, 60);
+      return () => window.clearTimeout(timer);
+    }
+  }, [activeTab]);
+
   const handleTvOrAndroidBack = useCallback((): boolean => {
+    if (fullScreenAdhanState.isOpen) {
+      adhanPlayer.stop();
+      setFullScreenAdhanState((prev) => ({ ...prev, isOpen: false }));
+      return true;
+    }
+    if (activeTab === 'family' && familyBackHandlerRef.current?.()) {
+      return true;
+    }
     if (isSettingsOpen) {
       setIsSettingsOpen(false);
       return true;
@@ -718,6 +830,8 @@ export default function App() {
     }
     return false;
   }, [
+    fullScreenAdhanState.isOpen,
+    activeTab,
     isSettingsOpen,
     isBackgroundPickerOpen,
     isWidgetStudioOpen,
@@ -1605,6 +1719,10 @@ export default function App() {
               onNavigateToAdhkar={() => setActiveTab('adhkar')}
               onOpenStandbyMode={() => setIsStandbyModeOpen(true)}
               onOpenTravelTab={() => setActiveTab('companion')}
+              onOpenFullScreenAdhan={(prayerKey, prayerNameAr) =>
+                handleOpenFullScreenAdhanModal(prayerKey, prayerNameAr, false)
+              }
+              isGlobalFullScreenAdhanOpen={fullScreenAdhanState.isOpen}
             />
           )}
 
@@ -1697,6 +1815,17 @@ export default function App() {
           {activeTab === 'commute' && (
             <CommuteWirdSection />
           )}
+
+          {activeTab === 'family' && (
+            <FamilyHomeSection
+              prayerTimes={prayerTimes}
+              currentLocation={currentLocation}
+              settings={settings}
+              onRegisterBackHandler={(fn) => {
+                familyBackHandlerRef.current = fn;
+              }}
+            />
+          )}
         </main>
 
         {/* Settings Modal matching user screenshots */}
@@ -1730,6 +1859,10 @@ export default function App() {
             setIsWidgetStudioOpen(true);
           }}
           onTestPostPrayerCheckin={handleTestPostPrayerCheckin}
+          onOpenFullScreenAdhanSimulation={() => {
+            setIsSettingsOpen(false);
+            handleOpenFullScreenAdhanModal(undefined, undefined, true);
+          }}
         />
 
         {/* Mosque Backgrounds & Clarity Modal */}
@@ -1767,6 +1900,17 @@ export default function App() {
           currentLocation={currentLocation}
           settings={settings}
           initialMode={displayInitialMode}
+        />
+
+        {/* Global Full-Screen Cinematic Adhan & Dua Modal */}
+        <FullScreenAdhanModal
+          isOpen={fullScreenAdhanState.isOpen}
+          onClose={() => setFullScreenAdhanState((prev) => ({ ...prev, isOpen: false }))}
+          prayerKey={fullScreenAdhanState.prayerKey}
+          prayerNameAr={fullScreenAdhanState.prayerNameAr}
+          currentLocation={currentLocation}
+          settings={settings}
+          isSimulation={fullScreenAdhanState.isSimulation}
         />
 
         {/* Istikhara & Hajah Prayer Helper Modal */}

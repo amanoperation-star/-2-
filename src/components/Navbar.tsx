@@ -20,6 +20,7 @@ import {
   Timer,
   Calendar,
   TrainFront,
+  Home,
 } from 'lucide-react';
 import { CityLocation, UserSettings } from '../types';
 import { adhanPlayer, AudioPlayerState } from '../utils/audioAdhan';
@@ -36,8 +37,8 @@ import {
 import { getThemeDefinition, normalizeThemeId } from '../utils/themesData';
 
 interface NavbarProps {
-  activeTab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute';
-  setActiveTab: (tab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute') => void;
+  activeTab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute' | 'family';
+  setActiveTab: (tab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute' | 'family') => void;
   currentLocation: CityLocation;
   settings: UserSettings;
   onOpenSettings: () => void;
@@ -502,6 +503,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <TrainFront className="w-3.5 h-3.5 text-emerald-400" />
             <span>🚇 وِرد الطريق</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('family');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
+              activeTab === 'family'
+                ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
+                : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
+            }`}
+            title="نظام البيت المسلم للأسرة وشاشة التلفاز وتحفيز الأطفال على الصلاة"
+          >
+            <Home className="w-3.5 h-3.5 text-[#fbbf24]" />
+            <span>البيت المسلم</span>
           </button>
         </nav>
       </div>

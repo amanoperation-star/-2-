@@ -116,6 +116,7 @@ interface SettingsModalProps {
   onUpdateWidgetConfig?: (partial: Partial<WidgetStudioConfig>) => void;
   onOpenWidgetsStudio?: () => void;
   onTestPostPrayerCheckin?: () => void;
+  onOpenFullScreenAdhanSimulation?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -139,6 +140,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateWidgetConfig,
   onOpenWidgetsStudio,
   onTestPostPrayerCheckin,
+  onOpenFullScreenAdhanSimulation,
 }) => {
   const [internalWidgetConfig, setInternalWidgetConfig] = useState<WidgetStudioConfig>(() =>
     loadWidgetConfig()
@@ -570,6 +572,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setPreviewingAdhanReciterId(reciterKey);
       adhanPlayer.playAdhan(reciterKey, isFajr ? 'fajr' : 'dhuhr', isFajr && fajrBoost, {
         skipAutoCache: true,
+        disableAutoDua: true,
       });
     }
   };
@@ -2999,8 +3002,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        onClose();
-                        window.dispatchEvent(new CustomEvent('open_fullscreen_adhan_simulation'));
+                        void adhanPlayer.unlockAudio();
+                        if (onOpenFullScreenAdhanSimulation) {
+                          onOpenFullScreenAdhanSimulation();
+                        } else {
+                          onClose();
+                          window.dispatchEvent(new CustomEvent('open_fullscreen_adhan_simulation'));
+                        }
                       }}
                       className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-[#fbbf24] via-[#e5b869] to-emerald-400 text-slate-950 font-black text-xs shadow hover:brightness-105 transition-all flex items-center justify-center gap-2"
                     >
@@ -3636,7 +3644,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <select
                 value={selectedAdhanReciter}
-                onChange={(e) => setSelectedAdhanReciter(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedAdhanReciter(val);
+                  onUpdateSettings({ adhanReciter: val });
+                }}
                 className="w-full bg-[#021410] border border-[#e5b869]/35 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-[#fbbf24] text-right font-sans"
               >
                 {Object.values(ADHAN_SOURCES).map((item) => (
@@ -3734,7 +3746,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <select
                 value={selectedFajrReciter}
-                onChange={(e) => setSelectedFajrReciter(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedFajrReciter(val);
+                  onUpdateSettings({ fajrAdhanReciter: val });
+                }}
                 className="w-full bg-[#021410] border border-[#e5b869]/35 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-[#fbbf24] text-right font-sans"
               >
                 {Object.values(FAJR_ADHAN_SOURCES).map((item) => (
@@ -4079,7 +4095,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <input
                     type="checkbox"
                     checked={autoDua}
-                    onChange={(e) => setAutoDua(e.target.checked)}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setAutoDua(next);
+                      onUpdateSettings({ autoDuaAfterAdhan: next });
+                      adhanPlayer.setAutoDua(next, selectedDuaReciter);
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-[#fbbf24] peer-checked:to-emerald-500"></div>
@@ -4241,7 +4262,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
                 <select
                   value={selectedDuaReciter}
-                  onChange={(e) => setSelectedDuaReciter(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedDuaReciter(val);
+                    onUpdateSettings({ duaAudioReciter: val });
+                    adhanPlayer.setAutoDua(autoDua, val);
+                  }}
                   className="w-full bg-[#021410] border border-[#e5b869]/30 rounded-xl px-4 py-2 text-xs text-slate-100 focus:outline-none focus:border-[#fbbf24] text-right"
                 >
                   {Object.values(DUA_SOURCES).map((item) => (
