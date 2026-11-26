@@ -274,10 +274,11 @@ export default function App() {
     periodicReminderContentType: (() => {
       if (typeof window === 'undefined') return 'both';
       const saved = localStorage.getItem('periodic_reminder_content_type');
-      return (saved === 'quran' || saved === 'hadith' || saved === 'both' ? saved : 'both') as
-        | 'both'
-        | 'quran'
-        | 'hadith';
+      return (
+        saved === 'quran' || saved === 'hadith' || saved === 'wisdom' || saved === 'both'
+          ? saved
+          : 'both'
+      ) as 'both' | 'quran' | 'hadith' | 'wisdom';
     })(),
     periodicOverlayEnabled:
       typeof window !== 'undefined' && localStorage.getItem('periodic_overlay_enabled') !== null
@@ -878,6 +879,7 @@ export default function App() {
       'toggle_golden_hour',
       'open_last_third_night_simulation',
       'toggle_last_third_simulation',
+      'simulate_last_third_qiyam_toast',
     ];
     const eventHandlers = timesSimEvents.map((eventName) => {
       const handler = () => {
@@ -1424,16 +1426,19 @@ export default function App() {
           Notification.permission === 'granted'
         ) {
           const picked = pickRandomReminder(settings.periodicReminderContentType || 'both');
+          const notifTitle =
+            picked.type === 'quran'
+              ? '✦ آية قرآنية كريمة'
+              : picked.type === 'wisdom'
+              ? '✦ حكمة اليوم الدينية'
+              : '✦ حديث نبوي شريف';
           try {
-            new Notification(
-              picked.type === 'quran' ? '✦ آية قرآنية كريمة' : '✦ حديث نبوي شريف',
-              {
-                body: `${picked.text}\n— ${picked.source}`,
-                icon: '/pwa-192x192.png',
-                dir: 'rtl',
-                lang: 'ar',
-              }
-            );
+            new Notification(notifTitle, {
+              body: `${picked.text}\n— ${picked.source}`,
+              icon: '/pwa-192x192.png',
+              dir: 'rtl',
+              lang: 'ar',
+            });
           } catch {
             // ignore browser notification restriction
           }

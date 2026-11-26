@@ -23,20 +23,163 @@ export const DIVINE_DESCENT_HADITH = {
   virtue: 'ساعة الإجابة والنزول الإلهي التي لا يرد فيها داعٍ بإذن الله',
 };
 
-export const QURAN_SAHAR_VERSES = [
+export type QiyamReciterId = 'qatami' | 'alafasy';
+
+export interface QiyamReciterInfo {
+  id: QiyamReciterId;
+  nameAr: string;
+  shortNameAr: string;
+  everyayahFolder: string;
+}
+
+export const QIYAM_RECITERS: Record<QiyamReciterId, QiyamReciterInfo> = {
+  qatami: {
+    id: 'qatami',
+    nameAr: 'الشيخ ناصر القطامي',
+    shortNameAr: 'ناصر القطامي',
+    everyayahFolder: 'Nasser_Alqatami_128kbps',
+  },
+  alafasy: {
+    id: 'alafasy',
+    nameAr: 'الشيخ مشاري راشد العفاسي',
+    shortNameAr: 'مشاري العفاسي',
+    everyayahFolder: 'Alafasy_128kbps',
+  },
+};
+
+export interface QiyamNightVerse {
+  id: string;
+  verse: string;
+  surah: string;
+  verseCodes: string[];
+  reflection: string;
+}
+
+export const QIYAM_NIGHT_VERSES: QiyamNightVerse[] = [
   {
-    verse: '﴿الصَّابِرِينَ وَالصَّادِقِينَ وَالْقَانِتِينَ وَالْمُنْفِقِينَ وَالْمُسْتَغْفِرِينَ بِالْأَسْحَارِ﴾',
-    surah: 'سورة آل عمران: الآية ١٧',
+    id: 'sajdah_16',
+    verse: '﴿ تَتَجَافَىٰ جُنُوبُهُمْ عَنِ الْمَضَاجِعِ يَدْعُونَ رَبَّهُمْ خَوْفًا وَطَمَعًا وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ ﴾',
+    surah: 'سورة السجدة • الآية ١٦',
+    verseCodes: ['032016'],
+    reflection: 'أهل القيام الذين هجروا المضاجع شوقاً إلى رحمة الله ورضوانه.',
   },
   {
-    verse: '﴿كَانُوا قَلِيلًا مِّنَ اللَّيْلِ مَا يَهْجَعُونَ * وَبِالْأَسْحَارِ هُمْ يَسْتَغْفِرُونَ﴾',
-    surah: 'سورة الذاريات: الآيات ١٧-١٨',
+    id: 'dhariyat_17_18',
+    verse: '﴿ كَانُوا قَلِيلًا مِّنَ اللَّيْلِ مَا يَهْجَعُونَ ۝ وَبِالْأَسْحَارِ هُمْ يَسْتَغْفِرُونَ ﴾',
+    surah: 'سورة الذاريات • الآيتان ١٧ - ١٨',
+    verseCodes: ['051017', '051018'],
+    reflection: 'إحياء معظم الليل بالصلاة والتهجد وختمه بالاستغفار بالأسحار.',
   },
   {
-    verse: '﴿تَتَجَافَىٰ جُنُوبُهُمْ عَنِ الْمَضَاجِعِ يَدْعُونَ رَبَّهُمْ خَوْفًا وَطَمَعًا وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ﴾',
-    surah: 'سورة السجدة: الآية ١٦',
+    id: 'zumar_9',
+    verse: '﴿ أَمَّنْ هُوَ قَانِتٌ آنَاءَ اللَّيْلِ سَاجِدًا وَقَائِمًا يَحْذَرُ الْآخِرَةَ وَيَرْجُو رَحْمَةَ رَبِّهِ ۗ قُلْ هَلْ يَسْتَوِي الَّذِينَ يَعْلَمُونَ وَالَّذِينَ لَا يَعْلَمُونَ ﴾',
+    surah: 'سورة الزمر • الآية ٩',
+    verseCodes: ['039009'],
+    reflection: 'شرف القانتين الساجدين القائمين آناء الليل خوفاً ورجاءً.',
+  },
+  {
+    id: 'furqan_64',
+    verse: '﴿ وَالَّذِينَ يَبِيتُونَ لِرَبِّهِمْ سُجَّدًا وَقِيَامًا ﴾',
+    surah: 'سورة الفرقان • الآية ٦٤',
+    verseCodes: ['025064'],
+    reflection: 'من أخص صفات عباد الرحمن المداومة على السجود والقيام في جوف الليل.',
+  },
+  {
+    id: 'al_imran_17',
+    verse: '﴿ الصَّابِرِينَ وَالصَّادِقِينَ وَالْقَانِتِينَ وَالْمُنْفِقِينَ وَالْمُسْتَغْفِرِينَ بِالْأَسْحَارِ ﴾',
+    surah: 'سورة آل عمران • الآية ١٧',
+    verseCodes: ['003017'],
+    reflection: 'الاستغفار بالأسحار تاج خصال المتقين وأهل السعادة.',
+  },
+  {
+    id: 'isra_79',
+    verse: '﴿ وَمِنَ اللَّيْلِ فَتَهَجَّدْ بِهِ نَافِلَةً لَّكَ عَسَىٰ أَن يَبْعَثَكَ رَبُّكَ مَقَامًا مَّحْمُودًا ﴾',
+    surah: 'سورة الإسراء • الآية ٧٩',
+    verseCodes: ['017079'],
+    reflection: 'صلاة التهجد في جوف الليل رفعة في الدرجات وقرب من المولى.',
   },
 ];
+
+export const QURAN_SAHAR_VERSES = QIYAM_NIGHT_VERSES.map((item) => ({
+  verse: item.verse,
+  surah: item.surah,
+}));
+
+const LAST_THIRD_NIGHT_ROTATION_KEY = 'last_third_qiyam_rotation_v1';
+
+export function buildQiyamVerseAudioUrls(
+  verse: QiyamNightVerse,
+  reciterId: QiyamReciterId
+): string[] {
+  const reciter = QIYAM_RECITERS[reciterId] || QIYAM_RECITERS.qatami;
+  return verse.verseCodes.map(
+    (code) => `https://everyayah.com/data/${reciter.everyayahFolder}/${code}.mp3`
+  );
+}
+
+export function pickNextQiyamVerse(currentVerseId?: string): QiyamNightVerse {
+  if (!currentVerseId) return QIYAM_NIGHT_VERSES[0];
+  const idx = QIYAM_NIGHT_VERSES.findIndex((item) => item.id === currentVerseId);
+  if (idx === -1) return QIYAM_NIGHT_VERSES[0];
+  return QIYAM_NIGHT_VERSES[(idx + 1) % QIYAM_NIGHT_VERSES.length];
+}
+
+export function pickTonightQiyamSelection(nightCycleKey: string): {
+  reciterId: QiyamReciterId;
+  verse: QiyamNightVerse;
+} {
+  const defaultResult = {
+    reciterId: 'qatami' as QiyamReciterId,
+    verse: QIYAM_NIGHT_VERSES[0],
+  };
+
+  if (typeof window === 'undefined') {
+    return defaultResult;
+  }
+
+  try {
+    const raw = localStorage.getItem(LAST_THIRD_NIGHT_ROTATION_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as {
+        nightCycleKey?: string;
+        reciterId?: string;
+        verseId?: string;
+      };
+      const matchedVerse = QIYAM_NIGHT_VERSES.find((v) => v.id === parsed.verseId);
+      const validReciter: QiyamReciterId =
+        parsed.reciterId === 'alafasy' ? 'alafasy' : 'qatami';
+
+      if (parsed.nightCycleKey === nightCycleKey && matchedVerse) {
+        return { reciterId: validReciter, verse: matchedVerse };
+      }
+
+      const nextReciter: QiyamReciterId = validReciter === 'qatami' ? 'alafasy' : 'qatami';
+      const nextVerse = pickNextQiyamVerse(parsed.verseId);
+      localStorage.setItem(
+        LAST_THIRD_NIGHT_ROTATION_KEY,
+        JSON.stringify({
+          nightCycleKey,
+          reciterId: nextReciter,
+          verseId: nextVerse.id,
+        })
+      );
+      return { reciterId: nextReciter, verse: nextVerse };
+    }
+
+    localStorage.setItem(
+      LAST_THIRD_NIGHT_ROTATION_KEY,
+      JSON.stringify({
+        nightCycleKey,
+        reciterId: defaultResult.reciterId,
+        verseId: defaultResult.verse.id,
+      })
+    );
+  } catch {
+    // ignore storage errors
+  }
+
+  return defaultResult;
+}
 
 export const SAHAR_DUAS: SaharDuaItem[] = [
   {

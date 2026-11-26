@@ -498,7 +498,7 @@ public final class PrayerNotificationHelper {
 
             String title = "quran".equals(itemType)
                 ? "✦ آية قرآنية كريمة"
-                : "✦ حديث نبوي شريف";
+                : ("wisdom".equals(itemType) ? "✦ حكمة اليوم الدينية" : "✦ حديث نبوي شريف");
             StringBuilder expanded = new StringBuilder();
             expanded.append(text);
             if (source != null && !source.isEmpty()) {

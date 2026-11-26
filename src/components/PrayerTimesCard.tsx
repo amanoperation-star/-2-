@@ -61,6 +61,15 @@ import {
 } from '../utils/sunnahRawatibData';
 import { evaluateFastingCalculator, loadFastingIntent, saveFastingIntent } from '../utils/fastingCalculator';
 import { SunnahRadarCard } from './SunnahRadarCard';
+import { LastThirdQiyamToast, QiyamToastPlaybackState } from './LastThirdQiyamToast';
+import {
+  QIYAM_RECITERS,
+  QiyamNightVerse,
+  QiyamReciterId,
+  buildQiyamVerseAudioUrls,
+  pickNextQiyamVerse,
+  pickTonightQiyamSelection,
+} from '../utils/lastThirdNightData';
 
 interface PrayerTimesCardProps {
   prayerTimes: PrayerTimeData;
@@ -251,10 +260,17 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     return { count: s.count, target: s.target };
   });
 
-  // Last Third of the Night State
+  // Last Third of the Night State & Qiyam Verse Auto-Recitation Toast
   const [isLastThirdModalOpen, setIsLastThirdModalOpen] = useState<boolean>(false);
   const [simulateLastThirdNight, setSimulateLastThirdNight] = useState<boolean>(false);
+  const [isQiyamToastOpen, setIsQiyamToastOpen] = useState<boolean>(false);
+  const [activeQiyamReciter, setActiveQiyamReciter] = useState<QiyamReciterId>('qatami');
+  const [activeQiyamVerse, setActiveQiyamVerse] = useState<QiyamNightVerse>(() =>
+    pickTonightQiyamSelection('init').verse
+  );
+  const [qiyamPlaybackState, setQiyamPlaybackState] = useState<QiyamToastPlaybackState>('paused');
   const lastThirdAutoOpenedRef = useRef<string>('');
+  const qiyamNightInitRef = useRef<string>('');
   const witrAlertSentRef = useRef<string>('');
   const suhoorAlertSentRef = useRef<string>('');
   const iqamaAlertSentRef = useRef<Set<string>>(new Set());
@@ -364,7 +380,15 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     const handleSunanToggle = () => setSimulateJumuahSunan((prev) => !prev);
     const handleGoldenHourToggle = () => setSimulateGoldenHour((prev) => !prev);
     const handleOpenLastThird = () => setIsLastThirdModalOpen(true);
-    const handleToggleLastThirdSim = () => setSimulateLastThirdNight((prev) => !prev);
+    const handleToggleLastThirdSim = () => {
+      setSimulateLastThirdNight((prev) => {
+        const next = !prev;
+        if (next) {
+          window.dispatchEvent(new CustomEvent('simulate_last_third_qiyam_toast'));
+        }
+        return next;
+      });
+    };
 
     window.addEventListener('toggle_near_adhan_simulation', handleToggleNear);
     window.addEventListener('open_post_prayer_simulation', handlePostPrayer);
@@ -826,6 +850,61 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     (settings.lastThirdNightEnabled !== false && nightThirds.isLastThirdNow) ||
     simulateLastThirdNight;
 
+  const startQiyamVersePlayback = async (
+    verse: QiyamNightVerse,
+    reciterId: QiyamReciterId,
+    allowFadeFallback: boolean = false
+  ) => {
+    setActiveQiyamVerse(verse);
+    setActiveQiyamReciter(reciterId);
+    setIsQiyamToastOpen(true);
+
+    if (meetingModeEnabled) {
+      setQiyamPlaybackState('paused');
+      return;
+    }
+
+    setQiyamPlaybackState('loading');
+    const urls = buildQiyamVerseAudioUrls(verse, reciterId);
+    const result = await adhanPlayer.playQiyamRecitation(urls, settings.volume ?? 0.85, () => {
+      setQiyamPlaybackState('ended');
+    });
+
+    if (result === 'playing') {
+      setQiyamPlaybackState('playing');
+    } else if (result === 'blocked') {
+      setQiyamPlaybackState('blocked');
+      if (allowFadeFallback && settings.lastThirdFadeInAlarm !== false) {
+        adhanPlayer.playGentleFadeInAlarm();
+      }
+    } else {
+      setQiyamPlaybackState('paused');
+      if (allowFadeFallback && settings.lastThirdFadeInAlarm !== false) {
+        adhanPlayer.playGentleFadeInAlarm();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const nightCycleKey = `${todayDateKey}-${nextNightFajrStr}`;
+    if (qiyamNightInitRef.current !== nightCycleKey) {
+      qiyamNightInitRef.current = nightCycleKey;
+      const tonight = pickTonightQiyamSelection(nightCycleKey);
+      setActiveQiyamReciter(tonight.reciterId);
+      setActiveQiyamVerse(tonight.verse);
+    }
+
+    const onSimulateQiyamToast = () => {
+      const tonight = pickTonightQiyamSelection(nightCycleKey);
+      void startQiyamVersePlayback(tonight.verse, tonight.reciterId, false);
+    };
+
+    window.addEventListener('simulate_last_third_qiyam_toast', onSimulateQiyamToast);
+    return () => {
+      window.removeEventListener('simulate_last_third_qiyam_toast', onSimulateQiyamToast);
+    };
+  }, [todayDateKey, nextNightFajrStr, meetingModeEnabled, settings.volume]);
+
   useEffect(() => {
     const nightCycleKey = `${todayDateKey}-${nextNightFajrStr}`;
 
@@ -837,15 +916,15 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
 
       if (shouldAutoAct && (settings.lastThirdAutoOpen || settings.lastThirdAutoOpenAdhkar || settings.lastThirdFadeInAlarm)) {
         lastThirdAutoOpenedRef.current = nightCycleKey;
+        const tonight = pickTonightQiyamSelection(nightCycleKey);
+        const reciterInfo = QIYAM_RECITERS[tonight.reciterId];
 
         if (nightThirds.isLastThirdNow && settings.lastThirdNightEnabled !== false) {
-          if (settings.lastThirdFadeInAlarm !== false) {
-            adhanPlayer.playGentleFadeInAlarm();
-          }
+          void startQiyamVersePlayback(tonight.verse, tonight.reciterId, true);
           if (!notificationsMuted) {
             backgroundService.sendPrayerNotification(
-              'دخول الثلث الأخير من الليل',
-              `وقت السحر والتهجد · متبقي حتى الفجر ${nightThirds.formattedRemainingToFajr}`
+              `دخول الثلث الأخير · ${reciterInfo.shortNameAr}`,
+              `${tonight.verse.verse} (${tonight.verse.surah}) · متبقي حتى الفجر ${nightThirds.formattedRemainingToFajr}`
             );
           }
         }
@@ -933,6 +1012,49 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         settings={settings}
         onUpdateSettings={onUpdateSettings}
         onNavigateToAdhkar={onNavigateToAdhkar}
+      />
+
+      {/* Interactive Last Third Entry Qiyam Verse Toast (Al-Qatami & Alafasy) */}
+      <LastThirdQiyamToast
+        isOpen={isQiyamToastOpen}
+        verse={activeQiyamVerse}
+        reciterId={activeQiyamReciter}
+        playbackState={qiyamPlaybackState}
+        remainingToFajr={nightThirds.formattedRemainingToFajr}
+        onTogglePlayPause={() => {
+          if (qiyamPlaybackState === 'playing') {
+            adhanPlayer.pauseQiyamRecitation();
+            setQiyamPlaybackState('paused');
+          } else if (qiyamPlaybackState === 'paused') {
+            void adhanPlayer.resumeQiyamRecitation().then((res) => {
+              if (res === 'playing') {
+                setQiyamPlaybackState('playing');
+              } else {
+                void startQiyamVersePlayback(activeQiyamVerse, activeQiyamReciter, false);
+              }
+            });
+          } else {
+            void startQiyamVersePlayback(activeQiyamVerse, activeQiyamReciter, false);
+          }
+        }}
+        onSwitchReciter={() => {
+          const nextReciter: QiyamReciterId =
+            activeQiyamReciter === 'qatami' ? 'alafasy' : 'qatami';
+          void startQiyamVersePlayback(activeQiyamVerse, nextReciter, false);
+        }}
+        onNextVerse={() => {
+          const nextVerse = pickNextQiyamVerse(activeQiyamVerse.id);
+          void startQiyamVersePlayback(nextVerse, activeQiyamReciter, false);
+        }}
+        onOpenSanctuary={() => {
+          setIsQiyamToastOpen(false);
+          setIsLastThirdModalOpen(true);
+        }}
+        onClose={() => {
+          adhanPlayer.stopQiyamRecitation();
+          setQiyamPlaybackState('paused');
+          setIsQiyamToastOpen(false);
+        }}
       />
 
       {/* Full-Screen Adhan & Dua Cinematic Modal */}
@@ -1689,10 +1811,10 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
               <div className="h-px w-full max-w-md bg-gradient-to-l from-[#D4AF37]/35 via-[#D4AF37]/15 to-transparent my-2.5" />
 
               <p className="font-amiri text-base sm:text-lg font-bold text-[#F3D06B] leading-relaxed">
-                ﴿وَالْمُسْتَغْفِرِينَ بِالْأَسْحَارِ﴾
+                {activeQiyamVerse.verse}
               </p>
               <p className="text-xs sm:text-sm text-slate-300/90 mt-0.5">
-                وقت النزول الإلهي واستجابة الدعوات
+                {activeQiyamVerse.surah} · بصوت {QIYAM_RECITERS[activeQiyamReciter].nameAr}
               </p>
             </div>
 
@@ -1713,18 +1835,29 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
             </div>
           </div>
 
-          {/* Bottom Section: Metallic Gold CTA Button */}
-          <button
-            type="button"
-            onClick={() => setIsLastThirdModalOpen(true)}
-            style={{
-              background: 'linear-gradient(135deg, #F3D06B 0%, #D4AF37 55%, #B89124 100%)',
-            }}
-            className="relative z-10 w-full py-3.5 px-5 rounded-2xl font-extrabold text-sm sm:text-base text-[#060B09] shadow-[0_8px_24px_rgba(212,175,55,0.28)] hover:brightness-105 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 text-[#060B09] fill-current shrink-0" />
-            <span>دخول خلوة السحر والتهجد</span>
-          </button>
+          {/* Bottom Section: Metallic Gold CTA Button + Qiyam Verse Playback Trigger */}
+          <div className="relative z-10 flex flex-col sm:flex-row items-stretch gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsLastThirdModalOpen(true)}
+              style={{
+                background: 'linear-gradient(135deg, #F3D06B 0%, #D4AF37 55%, #B89124 100%)',
+              }}
+              className="flex-1 py-3.5 px-5 rounded-2xl font-extrabold text-sm sm:text-base text-[#060B09] shadow-[0_8px_24px_rgba(212,175,55,0.28)] hover:brightness-105 active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-[#060B09] fill-current shrink-0" />
+              <span>دخول خلوة السحر والتهجد</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void startQiyamVersePlayback(activeQiyamVerse, activeQiyamReciter, false)}
+              className="min-h-[48px] px-4 py-3 rounded-2xl bg-[#0B1D17] border border-[#10B981]/50 hover:border-[#34D399] text-[#34D399] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+            >
+              <Play className="w-4 h-4 fill-current shrink-0" />
+              <span>استماع لآية القيام ({QIYAM_RECITERS[activeQiyamReciter].shortNameAr})</span>
+            </button>
+          </div>
         </div>
       )}
 

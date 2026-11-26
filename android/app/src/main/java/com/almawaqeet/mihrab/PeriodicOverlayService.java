@@ -149,11 +149,13 @@ public class PeriodicOverlayService extends Service {
         View cardRoot = overlayView.findViewById(R.id.overlay_card_root);
 
         if (typeBadge != null) {
-            typeBadge.setText(
-                "quran".equals(currentItemType)
-                    ? "✦  آيـة قـرآنـيـة كـريـمـة  ✦"
-                    : "✦  حـديـث نـبـوي شـريـف  ✦"
-            );
+            if ("quran".equals(currentItemType)) {
+                typeBadge.setText("آية قرآنية");
+            } else if ("wisdom".equals(currentItemType)) {
+                typeBadge.setText("حكمة اليوم الدينية");
+            } else {
+                typeBadge.setText("حديث نبوي شريف");
+            }
         }
         if (quoteTv != null) quoteTv.setText(currentText);
         if (sourceTv != null) sourceTv.setText(currentSource);

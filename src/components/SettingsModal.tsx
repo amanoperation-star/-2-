@@ -236,7 +236,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
   const [periodicEnabled, setPeriodicEnabled] = useState<boolean>(settings.periodicReminderEnabled ?? true);
   const [periodicInterval, setPeriodicInterval] = useState<5 | 10 | 15 | 30 | 60>(settings.periodicReminderInterval ?? 15);
-  const [periodicContentType, setPeriodicContentType] = useState<'both' | 'quran' | 'hadith'>(settings.periodicReminderContentType || 'both');
+  const [periodicContentType, setPeriodicContentType] = useState<'both' | 'quran' | 'hadith' | 'wisdom'>(settings.periodicReminderContentType || 'both');
   const [periodicOverlayEnabled, setPeriodicOverlayEnabled] = useState<boolean>(settings.periodicOverlayEnabled ?? true);
   const [periodicQuietHoursEnabled, setPeriodicQuietHoursEnabled] = useState<boolean>(settings.periodicQuietHoursEnabled ?? true);
   const [periodicQuietStart, setPeriodicQuietStart] = useState<string>(settings.periodicQuietStart || '23:00');
@@ -3101,6 +3101,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         تبديل ظهور شريط السحر في الرئيسية
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void adhanPlayer.unlockAudio();
+                        onClose();
+                        window.dispatchEvent(new CustomEvent('simulate_last_third_qiyam_toast'));
+                      }}
+                      className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-[#07261E] border border-[#10B981]/50 hover:border-[#34D399] text-[#34D399] font-bold text-xs shadow transition-all flex items-center justify-center gap-2"
+                    >
+                      <Volume2 className="w-4 h-4 shrink-0" />
+                      <span>معاينة إشعار وتلاوة دخول الثلث الأخير (القطامي / العفاسي)</span>
+                    </button>
                   </div>
 
                   {/* 1. Near Adhan Simulation (5 minutes left) */}
@@ -4536,7 +4548,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div className="flex items-center gap-2 text-[#fbbf24] font-bold text-base font-amiri">
-                <span className="text-lg">4. التذكير الدوري بالآيات والأحاديث</span>
+                <span className="text-lg">4. التذكير الدوري بالآيات والأحاديث والحِكم</span>
                 <BookOpen className="w-5 h-5 text-[#fbbf24]" />
               </div>
             </div>
@@ -4612,11 +4624,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="text-xs font-bold text-[#e5b869] text-right">
                 نوع المحتوى المعروض:
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
-                  { id: 'both', label: 'آيات وأحاديث معاً' },
+                  { id: 'both', label: 'الكل بالتناوب' },
                   { id: 'quran', label: 'آيات قرآنية فقط' },
                   { id: 'hadith', label: 'أحاديث نبوية فقط' },
+                  { id: 'wisdom', label: 'حكمة اليوم الدينية' },
                 ] as const).map((filter) => {
                   const isSelected = periodicContentType === filter.id;
                   return (
@@ -4627,7 +4640,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         setPeriodicContentType(filter.id);
                         onUpdateSettings({ periodicReminderContentType: filter.id });
                       }}
-                      className={`min-h-[44px] px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-center whitespace-nowrap ${
+                      className={`min-h-[44px] px-2.5 py-2 rounded-xl border text-xs font-bold transition-all text-center whitespace-nowrap ${
                         isSelected
                           ? 'bg-[#073f34] border-[#fbbf24] text-[#fbbf24] ring-1 ring-[#e5b869]/40 shadow-[0_0_12px_rgba(229,184,105,0.2)]'
                           : 'bg-[#041814] border-[#e5b869]/20 text-slate-300 hover:border-[#e5b869]/45'
@@ -4661,7 +4674,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     الظهور كبطاقة محراب عائمة خارج التطبيق
                   </span>
                   <span className="text-[11px] text-slate-400">
-                    تظهر فوق أي تطبيق آخر بنفس تصميم المحراب وأزرار التالي والنسخ والإغلاق (مع إشعار احتياطي عند قفل الشاشة)
+                    تظهر فوق أي تطبيق آخر كبطاقة مصغرة بأزرار التالي والإغلاق (مع إشعار احتياطي عند قفل الشاشة)
                   </span>
                 </div>
               </div>

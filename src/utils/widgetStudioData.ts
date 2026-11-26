@@ -1,4 +1,11 @@
-import { CityLocation, PeriodicReminderItem, PrayerName, PrayerTimeData, UserSettings } from '../types';
+import {
+  CityLocation,
+  PeriodicReminderContentFilter,
+  PeriodicReminderItem,
+  PrayerName,
+  PrayerTimeData,
+  UserSettings,
+} from '../types';
 import { evaluateFastingCalculator } from './fastingCalculator';
 import { getDailyWirdSchedule, loadKhatmaState } from './khatmaData';
 import {
@@ -98,7 +105,7 @@ export interface WidgetBridgePayload {
     salawatVoiceMode: string;
     periodicReminderEnabled: boolean;
     periodicReminderInterval: number;
-    periodicReminderContentType: 'both' | 'quran' | 'hadith';
+    periodicReminderContentType: PeriodicReminderContentFilter;
     periodicOverlayEnabled: boolean;
     periodicQuietHoursEnabled: boolean;
     periodicQuietStart: string;

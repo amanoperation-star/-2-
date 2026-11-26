@@ -102,7 +102,7 @@ export interface UserSettings {
   adhanEnabledMosques?: string[]; // قائمة المساجد المختارة للظهور أثناء الأذان
   periodicReminderEnabled?: boolean;
   periodicReminderInterval?: 5 | 10 | 15 | 30 | 60;
-  periodicReminderContentType?: 'both' | 'quran' | 'hadith';
+  periodicReminderContentType?: PeriodicReminderContentFilter;
   periodicOverlayEnabled?: boolean;
   periodicQuietHoursEnabled?: boolean;
   periodicQuietStart?: string;
@@ -183,9 +183,11 @@ export interface NightThirdsInfo {
   nightProgressPercent: number;
 }
 
+export type PeriodicReminderContentFilter = 'both' | 'quran' | 'hadith' | 'wisdom';
+
 export interface PeriodicReminderItem {
   id: string;
-  type: 'quran' | 'hadith';
+  type: 'quran' | 'hadith' | 'wisdom';
   text: string;
   source: string;
   reflection?: string;
