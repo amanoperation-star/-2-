@@ -36,9 +36,8 @@ import {
   ChevronDown,
   ChevronUp,
   Tv,
-  Copy,
-  Terminal,
 } from 'lucide-react';
+import { ApkGuideCard } from './ApkGuideCard';
 import {
   CityLocation,
   CalculationMethodId,
@@ -317,7 +316,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (typeof window === 'undefined') return '';
     return settings.remoteApiBaseUrl || localStorage.getItem('remote_api_base_url') || '';
   });
-  const [copiedApkCmd, setCopiedApkCmd] = useState<boolean>(false);
 
   useEffect(() => {
     setIsAudioUnlocked(adhanPlayer.getIsUnlocked());
@@ -479,7 +477,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         s.remoteApiBaseUrl ||
           (typeof window !== 'undefined' ? localStorage.getItem('remote_api_base_url') || '' : '')
       );
-      setCopiedApkCmd(false);
     }
   }, [isOpen, initialTab]);
 
@@ -785,16 +782,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   };
 
-  const handleCopyApkSyncCommand = async () => {
-    try {
-      await navigator.clipboard.writeText('npm run apk:sync');
-      setCopiedApkCmd(true);
-      setTimeout(() => setCopiedApkCmd(false), 2200);
-    } catch {
-      // ignore clipboard restrictions
-    }
-  };
-
   const renderAndroidApkSettingsSection = () => {
     const isNativeAndroid = isNativeAndroidApp();
     const isTvDevice = isLikelyAndroidTvDevice();
@@ -914,51 +901,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* Two Easy Ways to Generate & Install the APK */}
-        <div className="p-5 rounded-3xl bg-[#03201a]/85 border border-[#e5b869]/35 space-y-4 shadow-lg">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void handleCopyApkSyncCommand()}
-              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              <span>{copiedApkCmd ? 'تم نسخ الأمر ✓' : 'نسخ أمر المزامنة'}</span>
-            </button>
-            <div className="flex items-center gap-2 text-[#fbbf24]">
-              <h4 className="text-base sm:text-lg font-bold font-amiri">
-                خطوات استخراج ملف APK وتثبيته على الهاتف والشاشة
-              </h4>
-              <Terminal className="w-5 h-5" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            <div className="p-4 rounded-2xl bg-[#041814] border border-emerald-500/30 space-y-2">
-              <div className="text-xs font-bold text-emerald-300">
-                1. الطريقة الأسهل (تلقائياً عبر GitHub Actions بدون Android Studio)
-              </div>
-              <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside leading-relaxed">
-                <li>قم بتنزيل المشروع أو رفعه إلى مستودع GitHub خاص بك.</li>
-                <li>من تبويب <strong>Actions</strong> في GitHub شغّل مسار بناء الأندرويد المرفق تلقائياً.</li>
-                <li>بعد ~3 دقائق قم بتنزيل ملف <strong>app-debug.apk</strong> الجاهز من قسم Artifacts وثبّته مباشرة.</li>
-              </ol>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[#041814] border border-[#e5b869]/30 space-y-2">
-              <div className="text-xs font-bold text-[#fbbf24]">
-                2. البناء المحلي على حاسوبك عبر Android Studio
-              </div>
-              <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside leading-relaxed">
-                <li>
-                  نفّذ الأمر <code dir="ltr" className="text-[#fbbf24] font-mono">npm run apk:sync</code> لتجهيز الحزمة الخفيفة ومزامنة مشروع الأندرويد.
-                </li>
-                <li>افتح مجلد <strong>android</strong> داخل Android Studio ثم اختر <strong>Build &gt; Build APK(s)</strong>.</li>
-                <li>للتلفاز: انقل الـ APK عبر USB أو تطبيق Send Files to TV، وسيظهر في قائمة تطبيقات Android TV تلقائياً.</li>
-              </ol>
-            </div>
-          </div>
-        </div>
+        {/* Interactive GitHub Actions, Releases & Android TV / Mobile Step-by-Step Guide */}
+        <ApkGuideCard />
       </div>
     );
   };
