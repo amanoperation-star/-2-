@@ -6,6 +6,8 @@ import {
   countCompletedRawatibRakats,
   loadSunnahRawatibState,
 } from './sunnahRawatibData';
+import { calculatePrayerTimes } from './prayerCalculator';
+import { syncNativeAndroidWidgetData } from './nativeAndroidBridge';
 
 export type WidgetThemeId = 'emerald' | 'glass' | 'oled';
 export type WidgetSizeId = 'lock_pill' | 'medium' | 'large';
@@ -46,7 +48,12 @@ export interface WidgetBridgePayload {
   };
   nextTime: string;
   hijriDate: string;
+  todayDateKey: string;
+  tomorrowDateKey: string;
+  tomorrowHijriDate: string;
   dailyPrayers: WidgetBridgePrayerEntry[];
+  todaySchedule: WidgetBridgePrayerEntry[];
+  tomorrowSchedule: WidgetBridgePrayerEntry[];
   sunnahProgress: {
     rawatibCompleted: number;
     rawatibTarget: number;
@@ -63,6 +70,11 @@ export interface WidgetBridgePayload {
     suhoorTimeStr: string;
   };
   widgetSettings: WidgetStudioConfig;
+  notificationSettings: {
+    stickyEnabled: boolean;
+    adhanBannerEnabled: boolean;
+    mosqueTheme: 'auto' | 'nabawi' | 'kaaba' | 'azhar';
+  };
 }
 
 export const WIDGET_STUDIO_STORAGE_KEY = 'al_mawaqeet_widget_studio_v1';
@@ -212,6 +224,13 @@ function addMinutes12HourShort(timeStr: string, addMins: number): string {
   return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
+function toLocalDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function buildWidgetBridgePayload(params: {
   prayerTimes: PrayerTimeData;
   currentLocation: CityLocation;
@@ -264,6 +283,41 @@ export function buildWidgetBridgePayload(params: {
     isNext: key === nextKey,
   }));
 
+  const todaySchedule: WidgetBridgePrayerEntry[] = order.map((key) => ({
+    key,
+    nameAr: namesAr[key],
+    time24: prayerTimes[key],
+    time12: format12HourShort(prayerTimes[key]),
+    isNext: key === nextKey,
+  }));
+
+  const tomorrowDate = new Date(now);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowTimes = calculatePrayerTimes(
+    tomorrowDate,
+    currentLocation.lat,
+    currentLocation.lng,
+    currentLocation.timezone,
+    settings.calculationMethod,
+    settings.asrMethod
+  );
+  const isTomorrowFriday = tomorrowDate.getDay() === 5;
+  const tomorrowNamesAr: Record<PrayerName, string> = {
+    fajr: 'الفجر',
+    sunrise: 'الشروق',
+    dhuhr: isTomorrowFriday ? 'الجمعة' : 'الظهر',
+    asr: 'العصر',
+    maghrib: 'المغرب',
+    isha: 'العشاء',
+  };
+  const tomorrowSchedule: WidgetBridgePrayerEntry[] = order.map((key) => ({
+    key,
+    nameAr: tomorrowNamesAr[key],
+    time24: tomorrowTimes[key],
+    time12: format12HourShort(tomorrowTimes[key]),
+    isNext: false,
+  }));
+
   const rawatibCompleted = countCompletedRawatibRakats(loadSunnahRawatibState());
   const rawatibPercent = Math.round((rawatibCompleted / RAWATIB_TOTAL_TARGET) * 100);
   const khatmaSchedule = getDailyWirdSchedule(loadKhatmaState());
@@ -288,7 +342,12 @@ export function buildWidgetBridgePayload(params: {
     },
     nextTime: nextTime12,
     hijriDate: prayerTimes.hijriDate,
+    todayDateKey: toLocalDateKey(now),
+    tomorrowDateKey: toLocalDateKey(tomorrowDate),
+    tomorrowHijriDate: tomorrowTimes.hijriDate,
     dailyPrayers,
+    todaySchedule,
+    tomorrowSchedule,
     sunnahProgress: {
       rawatibCompleted,
       rawatibTarget: RAWATIB_TOTAL_TARGET,
@@ -305,6 +364,11 @@ export function buildWidgetBridgePayload(params: {
       suhoorTimeStr: fastingInfo.suhoorTimeStr,
     },
     widgetSettings: widgetConfig,
+    notificationSettings: {
+      stickyEnabled: settings.stickyNotificationEnabled ?? true,
+      adhanBannerEnabled: settings.adhanBannerNotificationEnabled ?? true,
+      mosqueTheme: settings.notificationMosqueTheme || 'auto',
+    },
   };
 }
 
@@ -319,6 +383,7 @@ export function syncWidgetDataBridge(params: {
     try {
       localStorage.setItem(MIHRAB_WIDGET_BRIDGE_KEY, JSON.stringify(payload));
       window.dispatchEvent(new CustomEvent('mihrabWidgetSync', { detail: payload }));
+      void syncNativeAndroidWidgetData(payload);
     } catch {
       // ignore storage errors
     }

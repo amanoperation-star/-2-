@@ -41,7 +41,57 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
         </activity>
+
+        <!-- Home Screen Widget: Small (2x1) -->
+        <receiver
+            android:name=".PrayerWidgetSmallProvider"
+            android:exported="true"
+            android:label="@string/widget_small_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_WIDGET_REFRESH" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_ADHAN_TRANSITION" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/prayer_widget_small_info" />
+        </receiver>
+
+        <!-- Home Screen Widget: Medium (2x2) -->
+        <receiver
+            android:name=".PrayerWidgetMediumProvider"
+            android:exported="true"
+            android:label="@string/widget_medium_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_WIDGET_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/prayer_widget_medium_info" />
+        </receiver>
+
+        <!-- Home Screen Widget: Large (4x2) -->
+        <receiver
+            android:name=".PrayerWidgetLargeProvider"
+            android:exported="true"
+            android:label="@string/widget_large_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_WIDGET_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/prayer_widget_large_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -38,6 +38,7 @@ import {
   Tv,
 } from 'lucide-react';
 import { ApkGuideCard } from './ApkGuideCard';
+import { NotificationShadeSettingsCard } from './NotificationShadeSettingsCard';
 import {
   CityLocation,
   CalculationMethodId,
@@ -70,6 +71,7 @@ import {
   removeAudioUrlsFromOffline,
 } from '../utils/offlineAudioManager';
 import {
+  NotificationMosqueTheme,
   isNativeAndroidApp,
   isLikelyAndroidTvDevice,
 } from '../utils/nativeAndroidBridge';
@@ -316,6 +318,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (typeof window === 'undefined') return '';
     return settings.remoteApiBaseUrl || localStorage.getItem('remote_api_base_url') || '';
   });
+  const [stickyNotificationEnabled, setStickyNotificationEnabled] = useState<boolean>(
+    settings.stickyNotificationEnabled ?? true
+  );
+  const [adhanBannerNotificationEnabled, setAdhanBannerNotificationEnabled] = useState<boolean>(
+    settings.adhanBannerNotificationEnabled ?? true
+  );
+  const [notificationMosqueTheme, setNotificationMosqueTheme] = useState<NotificationMosqueTheme>(
+    settings.notificationMosqueTheme || 'auto'
+  );
 
   useEffect(() => {
     setIsAudioUnlocked(adhanPlayer.getIsUnlocked());
@@ -477,6 +488,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         s.remoteApiBaseUrl ||
           (typeof window !== 'undefined' ? localStorage.getItem('remote_api_base_url') || '' : '')
       );
+      setStickyNotificationEnabled(s.stickyNotificationEnabled ?? true);
+      setAdhanBannerNotificationEnabled(s.adhanBannerNotificationEnabled ?? true);
+      setNotificationMosqueTheme(s.notificationMosqueTheme || 'auto');
     }
   }, [isOpen, initialTab]);
 
@@ -763,6 +777,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       keepScreenAwakeAlways,
       autoEnterTvDisplay,
       remoteApiBaseUrl: remoteApiBaseUrl.trim(),
+      stickyNotificationEnabled,
+      adhanBannerNotificationEnabled,
+      notificationMosqueTheme,
     });
     if (typeof window !== 'undefined') {
       const cleanApi = remoteApiBaseUrl.trim().replace(/\/+$/, '');
@@ -900,6 +917,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </p>
           </div>
         </div>
+
+        <NotificationShadeSettingsCard
+          stickyEnabled={stickyNotificationEnabled}
+          adhanBannerEnabled={adhanBannerNotificationEnabled}
+          mosqueTheme={notificationMosqueTheme}
+          onChangeStickyEnabled={(val) => {
+            setStickyNotificationEnabled(val);
+            onUpdateSettings({ stickyNotificationEnabled: val });
+          }}
+          onChangeAdhanBannerEnabled={(val) => {
+            setAdhanBannerNotificationEnabled(val);
+            onUpdateSettings({ adhanBannerNotificationEnabled: val });
+          }}
+          onChangeMosqueTheme={(val) => {
+            setNotificationMosqueTheme(val);
+            onUpdateSettings({ notificationMosqueTheme: val });
+          }}
+          currentLocation={currentLocation}
+          prayerTimes={prayerTimes}
+        />
 
         {/* Interactive GitHub Actions, Releases & Android TV / Mobile Step-by-Step Guide */}
         <ApkGuideCard />
@@ -4223,6 +4260,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+
+          <NotificationShadeSettingsCard
+            stickyEnabled={stickyNotificationEnabled}
+            adhanBannerEnabled={adhanBannerNotificationEnabled}
+            mosqueTheme={notificationMosqueTheme}
+            onChangeStickyEnabled={(val) => {
+              setStickyNotificationEnabled(val);
+              onUpdateSettings({ stickyNotificationEnabled: val });
+            }}
+            onChangeAdhanBannerEnabled={(val) => {
+              setAdhanBannerNotificationEnabled(val);
+              onUpdateSettings({ adhanBannerNotificationEnabled: val });
+            }}
+            onChangeMosqueTheme={(val) => {
+              setNotificationMosqueTheme(val);
+              onUpdateSettings({ notificationMosqueTheme: val });
+            }}
+            currentLocation={currentLocation}
+            prayerTimes={prayerTimes}
+          />
 
           {/* 4. Periodic Verse & Hadith Popup */}
           <div className="p-5 rounded-2xl bg-[#03201a]/85 border border-[#e5b869]/35 space-y-4 shadow-lg">

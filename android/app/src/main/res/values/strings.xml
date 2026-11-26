@@ -4,4 +4,22 @@
     <string name="title_activity_main">مواقيت الصلاة - محراب</string>
     <string name="package_name">com.almawaqeet.mihrab</string>
     <string name="custom_url_scheme">com.almawaqeet.mihrab</string>
+
+    <!-- Native Home Screen Widgets -->
+    <string name="widget_small_name">محراب · مصغّر (2×1)</string>
+    <string name="widget_small_desc">يعرض الصلاة القادمة والعد التنازلي والمدينة والتاريخ الهجري</string>
+    <string name="widget_medium_name">محراب · متوسط (2×2)</string>
+    <string name="widget_medium_desc">بطاقة محراب تعرض الصلاة القادمة والعد التنازلي والمدينة والتاريخ الهجري</string>
+    <string name="widget_large_name">محراب · كبير (4×2)</string>
+    <string name="widget_large_desc">لوحة المحراب والعد التنازلي مع جدول الصلوات الخمس كاملة</string>
+
+    <!-- App Icon Long-Press Shortcuts -->
+    <string name="shortcut_times_short">المواقيت</string>
+    <string name="shortcut_times_long">مواقيت الصلاة الرئيسية</string>
+    <string name="shortcut_adhkar_short">الأذكار</string>
+    <string name="shortcut_adhkar_long">الأذكار وحصن المسلم</string>
+    <string name="shortcut_qibla_short">القبلة</string>
+    <string name="shortcut_qibla_long">بوصلة اتجاه القبلة</string>
+    <string name="shortcut_wird_short">وِرد القرآن</string>
+    <string name="shortcut_wird_long">متابعة وِرد القرآن اليومي</string>
 </resources>

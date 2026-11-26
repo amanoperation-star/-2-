@@ -82,7 +82,7 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
 
   const isJumuahActive =
     new Date().getDay() === 5 ||
-    (typeof window !== 'undefined' && localStorage.getItem('jumuah_preview_mode') !== 'false');
+    (typeof window !== 'undefined' && localStorage.getItem('jumuah_preview_mode') === 'true');
 
   const baseFilteredAdhkar =
     activeCategory === 'all'

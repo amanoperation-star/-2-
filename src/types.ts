@@ -147,6 +147,10 @@ export interface UserSettings {
   keepScreenAwakeAlways?: boolean;
   autoEnterTvDisplay?: boolean;
   remoteApiBaseUrl?: string;
+  // إشعار شريط الموبايل العلوي الدائم وتنبيه الأذان بصور المساجد
+  stickyNotificationEnabled?: boolean;
+  adhanBannerNotificationEnabled?: boolean;
+  notificationMosqueTheme?: 'auto' | 'nabawi' | 'kaaba' | 'azhar';
 }
 
 export type AppThemeId = 'emerald' | 'indigo' | 'obsidian' | 'parchment';

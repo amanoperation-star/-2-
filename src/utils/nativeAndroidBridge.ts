@@ -1,6 +1,35 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { KeepAwake } from '@capacitor-community/keep-awake';
+
+export type NativeShortcutRoute = 'times' | 'adhkar' | 'qibla' | 'wird';
+export type NotificationMosqueTheme = 'auto' | 'nabawi' | 'kaaba' | 'azhar';
+
+interface WidgetBridgePluginInterface {
+  syncWidgetData(options: { payload: string }): Promise<{
+    synced: boolean;
+    activeCount: number;
+    notificationsGranted?: boolean;
+  }>;
+  getNotificationPermissionStatus(): Promise<{ granted: boolean; requiresPrompt: boolean }>;
+  requestNotificationPermission(): Promise<{ granted: boolean }>;
+  showTestPrayerNotification(options: { mosqueTheme?: NotificationMosqueTheme }): Promise<{
+    shown: boolean;
+    granted: boolean;
+  }>;
+  requestPinWidget(options: { size: 'small' | 'medium' | 'large' | 'lock_pill' }): Promise<{
+    supported: boolean;
+    requested: boolean;
+  }>;
+  getWidgetStatus(): Promise<{
+    isSupported: boolean;
+    pinSupported: boolean;
+    activeCount: number;
+  }>;
+  consumeLaunchShortcut(): Promise<{ route: string | null }>;
+}
+
+const WidgetBridge = registerPlugin<WidgetBridgePluginInterface>('WidgetBridge');
 
 export function isNativeCapacitorApp(): boolean {
   if (typeof window === 'undefined') return false;
@@ -66,6 +95,124 @@ export async function setNativeKeepAwake(enabled: boolean): Promise<boolean> {
     console.warn('Native KeepAwake call failed:', err);
     return false;
   }
+}
+
+export async function syncNativeAndroidWidgetData(
+  payload: unknown
+): Promise<{ synced: boolean; activeCount: number; notificationsGranted?: boolean }> {
+  if (!isNativeAndroidApp()) {
+    return { synced: false, activeCount: 0 };
+  }
+  try {
+    return await WidgetBridge.syncWidgetData({ payload: JSON.stringify(payload) });
+  } catch {
+    return { synced: false, activeCount: 0 };
+  }
+}
+
+export async function getNativeNotificationPermission(): Promise<{
+  granted: boolean;
+  requiresPrompt: boolean;
+}> {
+  if (!isNativeAndroidApp()) {
+    return { granted: false, requiresPrompt: false };
+  }
+  try {
+    return await WidgetBridge.getNotificationPermissionStatus();
+  } catch {
+    return { granted: false, requiresPrompt: false };
+  }
+}
+
+export async function requestNativeNotificationPermission(): Promise<{ granted: boolean }> {
+  if (!isNativeAndroidApp()) {
+    return { granted: false };
+  }
+  try {
+    return await WidgetBridge.requestNotificationPermission();
+  } catch {
+    return { granted: false };
+  }
+}
+
+export async function sendNativeTestPrayerNotification(
+  mosqueTheme: NotificationMosqueTheme = 'auto'
+): Promise<{ shown: boolean; granted: boolean }> {
+  if (!isNativeAndroidApp()) {
+    return { shown: false, granted: false };
+  }
+  try {
+    return await WidgetBridge.showTestPrayerNotification({ mosqueTheme });
+  } catch {
+    return { shown: false, granted: false };
+  }
+}
+
+export async function requestPinNativeAndroidWidget(
+  size: 'lock_pill' | 'small' | 'medium' | 'large'
+): Promise<{ supported: boolean; requested: boolean }> {
+  if (!isNativeAndroidApp()) {
+    return { supported: false, requested: false };
+  }
+  try {
+    return await WidgetBridge.requestPinWidget({ size });
+  } catch {
+    return { supported: false, requested: false };
+  }
+}
+
+export async function getNativeAndroidWidgetStatus(): Promise<{
+  isSupported: boolean;
+  pinSupported: boolean;
+  activeCount: number;
+}> {
+  if (!isNativeAndroidApp()) {
+    return { isSupported: false, pinSupported: false, activeCount: 0 };
+  }
+  try {
+    return await WidgetBridge.getWidgetStatus();
+  } catch {
+    return { isSupported: false, pinSupported: false, activeCount: 0 };
+  }
+}
+
+export async function consumeNativeShortcutRoute(): Promise<NativeShortcutRoute | null> {
+  if (!isNativeAndroidApp()) return null;
+  try {
+    const res = await WidgetBridge.consumeLaunchShortcut();
+    const r = res?.route;
+    if (r === 'times' || r === 'adhkar' || r === 'qibla' || r === 'wird') {
+      return r;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeNativeResume(onResume: () => void): () => void {
+  if (!isNativeAndroidApp()) return () => {};
+  let removed = false;
+  let listenerHandle: { remove: () => Promise<void> } | null = null;
+
+  void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) {
+      onResume();
+    }
+  }).then((handle) => {
+    if (removed) {
+      void handle.remove();
+    } else {
+      listenerHandle = handle;
+    }
+  });
+
+  return () => {
+    removed = true;
+    if (listenerHandle) {
+      void listenerHandle.remove();
+    }
+  };
 }
 
 export function subscribeNativeBackButton(onBackPress: () => boolean): () => void {

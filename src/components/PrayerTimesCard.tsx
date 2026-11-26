@@ -237,14 +237,13 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     saveFastingIntent(next);
   };
 
-  // Jumu'ah Golden Sanctuary Mode & Preview Controls
+  // Jumu'ah Golden Sanctuary Mode & Preview Controls (off by default on non-Fridays)
   const [jumuahPreviewMode, setJumuahPreviewMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('jumuah_preview_mode');
-    return saved === null ? true : saved === 'true';
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('jumuah_preview_mode') === 'true';
   });
-  const [simulateJumuahSunan, setSimulateJumuahSunan] = useState<boolean>(true);
-  const [simulateGoldenHour, setSimulateGoldenHour] = useState<boolean>(true);
+  const [simulateJumuahSunan, setSimulateJumuahSunan] = useState<boolean>(false);
+  const [simulateGoldenHour, setSimulateGoldenHour] = useState<boolean>(false);
   const [isGoldenHourDuasOpen, setIsGoldenHourDuasOpen] = useState<boolean>(false);
   const [previewGoldenSeconds, setPreviewGoldenSeconds] = useState<number>(47 * 60 + 25);
   const [salawatSummary, setSalawatSummary] = useState<{ count: number; target: 100 | 1000 }>(() => {
@@ -352,7 +351,16 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       setIsPostPrayerSimulated(true);
       setIsPostPrayerModalOpen(true);
     };
-    const handleJumuahToggle = () => setJumuahPreviewMode((prev) => !prev);
+    const handleJumuahToggle = () => {
+      setJumuahPreviewMode((prev) => {
+        const next = !prev;
+        if (!next) {
+          setSimulateJumuahSunan(false);
+          setSimulateGoldenHour(false);
+        }
+        return next;
+      });
+    };
     const handleSunanToggle = () => setSimulateJumuahSunan((prev) => !prev);
     const handleGoldenHourToggle = () => setSimulateGoldenHour((prev) => !prev);
     const handleOpenLastThird = () => setIsLastThirdModalOpen(true);
@@ -763,13 +771,11 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
 
   const isRealEarlyJumuahWindow =
     isActualFriday && diffToJumuahMinutes > 0 && diffToJumuahMinutes <= 60;
-  const isEarlyJumuahVisible =
-    isRealEarlyJumuahWindow || (jumuahPreviewMode && simulateJumuahSunan);
+  const isEarlyJumuahVisible = isRealEarlyJumuahWindow || simulateJumuahSunan;
 
   const isRealGoldenHourWindow =
     isActualFriday && diffToMaghribMinutes > 0 && diffToMaghribMinutes <= 60;
-  const isGoldenHourVisible =
-    isRealGoldenHourWindow || (jumuahPreviewMode && simulateGoldenHour);
+  const isGoldenHourVisible = isRealGoldenHourWindow || simulateGoldenHour;
 
   const goldenHourCountdownStr = (() => {
     const totalSecs = isRealGoldenHourWindow

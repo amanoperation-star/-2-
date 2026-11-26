@@ -47,7 +47,13 @@ import { precacheEssentialAudioOnce } from './utils/offlineAudioManager';
 import { loadFastingPreferences, saveFastingPreferences } from './utils/fastingCalculator';
 import { backgroundService } from './utils/backgroundService';
 import { useTvRemoteNavigation } from './hooks/useTvRemoteNavigation';
-import { isLikelyAndroidTvDevice, subscribeNativeBackButton } from './utils/nativeAndroidBridge';
+import {
+  consumeNativeShortcutRoute,
+  isLikelyAndroidTvDevice,
+  isNativeAndroidApp,
+  subscribeNativeBackButton,
+  subscribeNativeResume,
+} from './utils/nativeAndroidBridge';
 import {
   CheckinPrayerKey,
   DailyCheckinState,
@@ -96,16 +102,22 @@ import {
 } from './utils/themesData';
 
 const STARTUP_HOME_RESET_KEY = 'mihrab_startup_home_reset_v1';
+const JUMUAH_DEFAULT_OFF_RESET_KEY = 'mihrab_jumuah_default_off_v1';
 
 function ensureDefaultMainPageStartup(): void {
   if (typeof window === 'undefined') return;
   try {
-    if (localStorage.getItem(STARTUP_HOME_RESET_KEY) === 'done') return;
-    localStorage.setItem('auto_enter_tv_display', 'false');
-    localStorage.setItem('ambient_standby_auto_landscape', 'false');
-    localStorage.setItem('last_third_auto_open', 'false');
-    localStorage.setItem('last_third_auto_open_adhkar', 'false');
-    localStorage.setItem(STARTUP_HOME_RESET_KEY, 'done');
+    if (localStorage.getItem(STARTUP_HOME_RESET_KEY) !== 'done') {
+      localStorage.setItem('auto_enter_tv_display', 'false');
+      localStorage.setItem('ambient_standby_auto_landscape', 'false');
+      localStorage.setItem('last_third_auto_open', 'false');
+      localStorage.setItem('last_third_auto_open_adhkar', 'false');
+      localStorage.setItem(STARTUP_HOME_RESET_KEY, 'done');
+    }
+    if (localStorage.getItem(JUMUAH_DEFAULT_OFF_RESET_KEY) !== 'done') {
+      localStorage.setItem('jumuah_preview_mode', 'false');
+      localStorage.setItem(JUMUAH_DEFAULT_OFF_RESET_KEY, 'done');
+    }
   } catch {
     // ignore storage access issues
   }
@@ -360,6 +372,23 @@ export default function App() {
         : false,
     remoteApiBaseUrl:
       typeof window !== 'undefined' ? localStorage.getItem('remote_api_base_url') || '' : '',
+    stickyNotificationEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('sticky_notification_enabled') !== null
+        ? localStorage.getItem('sticky_notification_enabled') === 'true'
+        : true,
+    adhanBannerNotificationEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('adhan_banner_notification_enabled') !== null
+        ? localStorage.getItem('adhan_banner_notification_enabled') === 'true'
+        : true,
+    notificationMosqueTheme: (() => {
+      if (typeof window === 'undefined') return 'auto';
+      const saved = localStorage.getItem('notification_mosque_theme');
+      return (saved === 'nabawi' || saved === 'kaaba' || saved === 'azhar' ? saved : 'auto') as
+        | 'auto'
+        | 'nabawi'
+        | 'kaaba'
+        | 'azhar';
+    })(),
   });
 
   const [autoThemeManualPause, setAutoThemeManualPause] = useState<boolean>(false);
@@ -738,15 +767,30 @@ export default function App() {
         maghrib: 'المغرب',
         isha: 'العشاء',
       };
+      const resolvedName = customNameAr || defaultNames[targetKey] || fallback.nameAr;
       void adhanPlayer.unlockAudio();
+      if (!isSimulation && !isNativeAndroidApp() && settings.adhanBannerNotificationEnabled !== false) {
+        backgroundService.sendPrayerNotification(
+          resolvedName,
+          currentLocation.nameAr,
+          settings.notificationMosqueTheme || 'auto',
+          targetKey
+        );
+      }
       setFullScreenAdhanState({
         isOpen: true,
         prayerKey: targetKey,
-        prayerNameAr: customNameAr || defaultNames[targetKey] || fallback.nameAr,
+        prayerNameAr: resolvedName,
         isSimulation,
       });
     },
-    [getNextPrayerInfo, prayerTimes]
+    [
+      getNextPrayerInfo,
+      prayerTimes,
+      currentLocation.nameAr,
+      settings.adhanBannerNotificationEnabled,
+      settings.notificationMosqueTheme,
+    ]
   );
 
   // Global listener so Full-Screen Adhan simulation & PrayerTimesCard simulations work from ANY active tab
@@ -944,6 +988,61 @@ export default function App() {
       }
     }
   }, []);
+
+  // Native Android App Icon Shortcuts & Home-Screen Widget launch router
+  useEffect(() => {
+    const handleNativeShortcut = async () => {
+      const route = await consumeNativeShortcutRoute();
+      if (!route) return;
+      setIsSettingsOpen(false);
+      setIsBackgroundPickerOpen(false);
+      setIsWidgetStudioOpen(false);
+      setIsStandbyModeOpen(false);
+      setIsSteadfastnessOpen(false);
+      setIsIstikharaHajahOpen(false);
+
+      if (route === 'times') {
+        setActiveTab('times');
+      } else if (route === 'adhkar') {
+        setActiveTab('adhkar');
+      } else if (route === 'qibla') {
+        setActiveTab('qibla');
+      } else if (route === 'wird') {
+        setActiveTab('times');
+        const now = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const prayers: Array<{ key: KhatmaPrayerKey; label: string; time: string }> = [
+          { key: 'fajr', label: 'الفجر', time: prayerTimes.fajr },
+          { key: 'dhuhr', label: now.getDay() === 5 ? 'الجمعة' : 'الظهر', time: prayerTimes.dhuhr },
+          { key: 'asr', label: 'العصر', time: prayerTimes.asr },
+          { key: 'maghrib', label: 'المغرب', time: prayerTimes.maghrib },
+          { key: 'isha', label: 'العشاء', time: prayerTimes.isha },
+        ];
+        let target = prayers[0];
+        for (const p of prayers) {
+          const [h, m] = p.time.split(':').map(Number);
+          if ((h || 0) * 60 + (m || 0) > nowMins) {
+            target = p;
+            break;
+          }
+        }
+        setSelectedWirdModal({ prayerKey: target.key, prayerNameAr: target.label });
+      }
+    };
+
+    void handleNativeShortcut();
+    const unsubResume = subscribeNativeResume(() => {
+      void handleNativeShortcut();
+    });
+    const onShortcutEvent = () => {
+      void handleNativeShortcut();
+    };
+    window.addEventListener('mihrabNativeShortcutCheck', onShortcutEvent);
+    return () => {
+      unsubResume();
+      window.removeEventListener('mihrabNativeShortcutCheck', onShortcutEvent);
+    };
+  }, [prayerTimes]);
 
   // Widget Data Bridge: syncs unified JSON in localStorage & dispatches 'mihrabWidgetSync'
   useEffect(() => {
@@ -1459,6 +1558,26 @@ export default function App() {
         } else {
           localStorage.removeItem('remote_api_base_url');
         }
+      }
+      if (typeof newSettings.stickyNotificationEnabled === 'boolean') {
+        localStorage.setItem(
+          'sticky_notification_enabled',
+          String(newSettings.stickyNotificationEnabled)
+        );
+      }
+      if (typeof newSettings.adhanBannerNotificationEnabled === 'boolean') {
+        localStorage.setItem(
+          'adhan_banner_notification_enabled',
+          String(newSettings.adhanBannerNotificationEnabled)
+        );
+      }
+      if (
+        newSettings.notificationMosqueTheme === 'auto' ||
+        newSettings.notificationMosqueTheme === 'nabawi' ||
+        newSettings.notificationMosqueTheme === 'kaaba' ||
+        newSettings.notificationMosqueTheme === 'azhar'
+      ) {
+        localStorage.setItem('notification_mosque_theme', newSettings.notificationMosqueTheme);
       }
       return updated;
     });

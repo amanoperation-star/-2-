@@ -102,8 +102,36 @@ class BackgroundService {
     return Notification.permission;
   }
 
-  // Send Prayer notification with icon and sound trigger
-  public sendPrayerNotification(prayerNameAr: string, cityName: string): void {
+  public getMosqueNotificationAsset(
+    theme: 'auto' | 'nabawi' | 'kaaba' | 'azhar' = 'auto',
+    prayerKey: string = 'dhuhr'
+  ): { imageUrl: string; titleAr: string } {
+    if (theme === 'kaaba') {
+      return { imageUrl: '/assets/mosques/kaaba.jpg', titleAr: 'الكعبة المشرفة · المسجد الحرام' };
+    }
+    if (theme === 'nabawi') {
+      return { imageUrl: '/assets/mosques/nabawi.jpg', titleAr: 'المسجد النبوي الشريف' };
+    }
+    if (theme === 'azhar') {
+      return { imageUrl: '/assets/mosques/azhar.jpg', titleAr: 'الجامع الأزهر الشريف' };
+    }
+    if (prayerKey === 'dhuhr' || prayerKey === 'sunrise') {
+      return { imageUrl: '/assets/mosques/azhar.jpg', titleAr: 'الجامع الأزهر الشريف' };
+    }
+    if (prayerKey === 'asr' || prayerKey === 'isha') {
+      return { imageUrl: '/assets/mosques/nabawi.jpg', titleAr: 'المسجد النبوي الشريف' };
+    }
+    return { imageUrl: '/assets/mosques/kaaba.jpg', titleAr: 'الكعبة المشرفة · المسجد الحرام' };
+  }
+
+  // Send Prayer notification with bundled mosque artwork and sound trigger
+  public sendPrayerNotification(
+    prayerNameAr: string,
+    cityName: string,
+    mosqueTheme: 'auto' | 'nabawi' | 'kaaba' | 'azhar' = 'auto',
+    prayerKey: string = 'dhuhr',
+    forceTest: boolean = false
+  ): void {
     if (!('Notification' in window) || Notification.permission !== 'granted') {
       return;
     }
@@ -111,20 +139,30 @@ class BackgroundService {
     const todayStr = new Date().toDateString();
     const notificationKey = `${todayStr}-${prayerNameAr}`;
 
-    if (this.notifiedPrayers.has(notificationKey)) {
+    if (!forceTest && this.notifiedPrayers.has(notificationKey)) {
       return; // Already notified today
     }
 
-    this.notifiedPrayers.add(notificationKey);
+    if (!forceTest) {
+      this.notifiedPrayers.add(notificationKey);
+    }
+
+    const mosque = this.getMosqueNotificationAsset(mosqueTheme, prayerKey);
 
     try {
-      new Notification(`حان الآن موعد أذان ${prayerNameAr}`, {
-        body: `حي على الصلاة • حان وقت صلاة ${prayerNameAr} حسب التوقيت المحلي لمدينة ${cityName}`,
-        icon: 'https://cdn-icons-png.flaticon.com/512/2855/2855663.png',
-        badge: 'https://cdn-icons-png.flaticon.com/512/2855/2855663.png',
-        tag: `adhan-${prayerNameAr}`,
-        requireInteraction: true,
-      });
+      new Notification(
+        forceTest ? `معاينة إشعار الصلاة: ${prayerNameAr}` : `حان الآن موعد أذان ${prayerNameAr}`,
+        {
+          body: `${cityName} · ${mosque.titleAr}`,
+          icon: mosque.imageUrl,
+          image: mosque.imageUrl,
+          badge: '/pwa-192x192.png',
+          tag: forceTest ? `adhan-test-${Date.now()}` : `adhan-${prayerNameAr}`,
+          dir: 'rtl',
+          lang: 'ar',
+          requireInteraction: true,
+        } as NotificationOptions & { image?: string }
+      );
     } catch (err) {
       console.warn('Failed to display Notification:', err);
     }

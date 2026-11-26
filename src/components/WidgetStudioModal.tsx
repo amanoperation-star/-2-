@@ -38,6 +38,12 @@ import {
   countCompletedRawatibRakats,
   loadSunnahRawatibState,
 } from '../utils/sunnahRawatibData';
+import {
+  getNativeAndroidWidgetStatus,
+  isNativeAndroidApp,
+  requestPinNativeAndroidWidget,
+  syncNativeAndroidWidgetData,
+} from '../utils/nativeAndroidBridge';
 
 interface WidgetStudioModalProps {
   isOpen: boolean;
@@ -72,6 +78,17 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
   const [now, setNow] = useState<Date>(() => new Date());
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
   const [copiedBridgeCode, setCopiedBridgeCode] = useState<boolean>(false);
+  const [nativePinStatus, setNativePinStatus] = useState<{
+    isAndroid: boolean;
+    pinSupported: boolean;
+    activeCount: number;
+    feedback: string | null;
+  }>({
+    isAndroid: false,
+    pinSupported: false,
+    activeCount: 0,
+    feedback: null,
+  });
 
   useEffect(() => {
     if (!controlledConfig) {
@@ -83,6 +100,19 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
     if (!isOpen) return;
     setNow(new Date());
     const id = window.setInterval(() => setNow(new Date()), 1000);
+
+    const isAndroid = isNativeAndroidApp();
+    if (isAndroid) {
+      void getNativeAndroidWidgetStatus().then((status) => {
+        setNativePinStatus((prev) => ({
+          ...prev,
+          isAndroid: true,
+          pinSupported: status.pinSupported,
+          activeCount: status.activeCount,
+        }));
+      });
+    }
+
     return () => window.clearInterval(id);
   }, [isOpen]);
 
@@ -128,6 +158,27 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
     } catch {
       setCopiedUrl(false);
     }
+  };
+
+  const handlePinNativeAndroidWidget = async () => {
+    const payload = buildWidgetBridgePayload({
+      prayerTimes,
+      currentLocation,
+      settings,
+      widgetConfig: config,
+      now,
+    });
+    await syncNativeAndroidWidgetData(payload);
+    const res = await requestPinNativeAndroidWidget(config.size);
+    const updatedStatus = await getNativeAndroidWidgetStatus();
+    setNativePinStatus({
+      isAndroid: true,
+      pinSupported: updatedStatus.pinSupported,
+      activeCount: updatedStatus.activeCount,
+      feedback: res.requested
+        ? 'تم إرسال طلب إضافة الويدجت لشاشة الهاتف، وافق من نافذة النظام لإتمام التثبيت.'
+        : 'اضغط مطولاً على مساحة فارغة في شاشة الهاتف ← الأدوات (Widgets) ← اختر «مواقيت الصلاة - محراب».',
+    });
   };
 
   const handleCopyWidgetBridgeData = async () => {
@@ -453,13 +504,35 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                 </div>
               </div>
 
-              {/* 4. Launch Standalone Widget / Export */}
+              {/* 4. Launch Standalone Widget / Native Android Pin & Export */}
               <div className="rounded-2xl bg-[#09120F] border border-[#10B981]/35 p-4 space-y-3">
-                <h3 className="text-sm font-bold text-emerald-300">
-                  ٤. تشغيل الودجت الحي والتصدير
-                </h3>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-emerald-300">
+                    ٤. إضافة الويدجت على شاشة الهاتف والتصدير
+                  </h3>
+                  {nativePinStatus.isAndroid && nativePinStatus.activeCount > 0 && (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-[#08241C] border border-[#10B981]/50 text-emerald-300">
+                      مُثبّت حالياً: {toArabicDigits(nativePinStatus.activeCount)} ويدجت
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  {nativePinStatus.isAndroid && (
+                    <button
+                      type="button"
+                      onClick={() => void handlePinNativeAndroidWidget()}
+                      className="min-h-[42px] px-4 py-2 rounded-xl bg-gradient-to-r from-[#10B981] to-[#059669] text-slate-950 font-black text-xs flex items-center gap-1.5 hover:brightness-105 transition-all shadow"
+                    >
+                      <Smartphone className="w-4 h-4" />
+                      <span>
+                        {nativePinStatus.pinSupported
+                          ? 'تثبيت هذا المقاس على شاشة الموبايل'
+                          : 'إضافة ويدجت الشاشة الرئيسية'}
+                      </span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => onLaunchStandaloneWidget(config)}
@@ -496,6 +569,12 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                     <span>تصدير صورة PNG</span>
                   </button>
                 </div>
+
+                {nativePinStatus.feedback && (
+                  <div className="p-2.5 rounded-xl bg-[#08241C] border border-[#10B981]/45 text-[11px] text-emerald-200 leading-relaxed">
+                    {nativePinStatus.feedback}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -724,31 +803,32 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="p-3.5 rounded-xl bg-[#111C18] border border-[#D4AF37]/25 space-y-1.5">
                 <div className="text-xs font-bold text-[#F3CA63]">
-                  ١. التثبيت على الشاشة الرئيسية
+                  ١. ويدجات شاشة الموبايل (APK أندرويد)
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  على <strong>iPhone (Safari)</strong>: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».
-                  وعلى <strong>Android (Chrome)</strong>: اضغط «تثبيت التطبيق» أو قائمة المتصفح.
+                  بعد تثبيت التطبيق، اضغط مطولاً على مساحة فارغة في شاشة الموبايل ← اختر{' '}
+                  <strong>الأدوات (Widgets)</strong> ← ستظهر ٣ مقاسات باسم{' '}
+                  <strong>مواقيت الصلاة - محراب</strong>: مصغّر (2×1)، متوسط (2×2)، وكبير (4×2).
                 </p>
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#111C18] border border-[#D4AF37]/25 space-y-1.5">
                 <div className="text-xs font-bold text-emerald-300">
-                  ٢. اختصارات الضغط المطوّل
+                  ٢. اختصارات الضغط المطوّل للأيقونة
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  بعد التثبيت، اضغط مطوّلاً على أيقونة التطبيق في الشاشة الرئيسية للوصول الفوري إلى:{' '}
-                  <strong>📖 وِرد اليوم</strong> · <strong>🤲 الاستخارة والحاجة</strong> ·{' '}
-                  <strong>🖥️ وضع المنضدة</strong>.
+                  اضغط مطوّلاً على أيقونة التطبيق للوصول السريع إلى:{' '}
+                  <strong>المواقيت</strong> · <strong>الأذكار</strong> · <strong>القبلة</strong> ·{' '}
+                  <strong>وِرد القرآن</strong>، بينما الضغط على الويدجت يفتح الرئيسية مباشرة.
                 </p>
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#111C18] border border-[#D4AF37]/25 space-y-1.5">
                 <div className="text-xs font-bold text-[#F3CA63]">
-                  ٣. ربط WidgetKit / AppWidget
+                  ٣. المزامنة والتحديث التلقائي
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  انسخ بيانات الجسر أعلاه أو افتح «تشغيل كودجت حي مستقل» لتثبيت ودجت الويب عبر أدوات الشاشة أو دمجه مع Capacitor/Cordova.
+                  تُحدَّث المدينة والتاريخ الهجري ومظهر الويدجت تلقائياً بمجرد تغيير الإعدادات، مع عدّ تنازلي حي وانتقال تلقائي عند كل صلاة.
                 </p>
               </div>
             </div>

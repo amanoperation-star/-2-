@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="shortcut_times"
+        android:shortcutLongLabel="@string/shortcut_times_long"
+        android:shortcutShortLabel="@string/shortcut_times_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.almawaqeet.mihrab.MainActivity"
+            android:targetPackage="com.almawaqeet.mihrab">
+            <extra
+                android:name="mihrab_shortcut_route"
+                android:value="times" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="shortcut_adhkar"
+        android:shortcutLongLabel="@string/shortcut_adhkar_long"
+        android:shortcutShortLabel="@string/shortcut_adhkar_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.almawaqeet.mihrab.MainActivity"
+            android:targetPackage="com.almawaqeet.mihrab">
+            <extra
+                android:name="mihrab_shortcut_route"
+                android:value="adhkar" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="shortcut_qibla"
+        android:shortcutLongLabel="@string/shortcut_qibla_long"
+        android:shortcutShortLabel="@string/shortcut_qibla_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.almawaqeet.mihrab.MainActivity"
+            android:targetPackage="com.almawaqeet.mihrab">
+            <extra
+                android:name="mihrab_shortcut_route"
+                android:value="qibla" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="shortcut_wird"
+        android:shortcutLongLabel="@string/shortcut_wird_long"
+        android:shortcutShortLabel="@string/shortcut_wird_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.almawaqeet.mihrab.MainActivity"
+            android:targetPackage="com.almawaqeet.mihrab">
+            <extra
+                android:name="mihrab_shortcut_route"
+                android:value="wird" />
+        </intent>
+    </shortcut>
+</shortcuts>
