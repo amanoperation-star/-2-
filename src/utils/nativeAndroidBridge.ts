@@ -5,6 +5,22 @@ import { KeepAwake } from '@capacitor-community/keep-awake';
 export type NativeShortcutRoute = 'times' | 'adhkar' | 'qibla' | 'wird';
 export type NotificationMosqueTheme = 'auto' | 'nabawi' | 'kaaba' | 'azhar';
 
+export interface NativeBackgroundReliabilityStatus {
+  notificationsGranted: boolean;
+  exactAlarmsGranted: boolean;
+  fullScreenIntentGranted: boolean;
+  batteryOptimizationIgnored: boolean;
+  overlayGranted: boolean;
+  sdkInt: number;
+}
+
+export interface NativeLaunchAction {
+  route: string | null;
+  adhanPrayerKey: string | null;
+  adhanPrayerName: string | null;
+  periodicReminderId: string | null;
+}
+
 interface WidgetBridgePluginInterface {
   syncWidgetData(options: { payload: string }): Promise<{
     synced: boolean;
@@ -17,6 +33,14 @@ interface WidgetBridgePluginInterface {
     shown: boolean;
     granted: boolean;
   }>;
+  getBackgroundReliabilityStatus(): Promise<NativeBackgroundReliabilityStatus>;
+  requestExactAlarmPermission(): Promise<{ opened: boolean; granted: boolean }>;
+  requestFullScreenIntentPermission(): Promise<{ opened: boolean; granted: boolean }>;
+  requestIgnoreBatteryOptimizations(): Promise<{ opened: boolean; ignored: boolean }>;
+  requestOverlayPermission(): Promise<{ opened: boolean; granted: boolean }>;
+  testBackgroundAlarmNow(options: { type: 'adhan' | 'salawat' | 'periodic' }): Promise<{
+    triggered: boolean;
+  }>;
   requestPinWidget(options: { size: 'small' | 'medium' | 'large' | 'lock_pill' }): Promise<{
     supported: boolean;
     requested: boolean;
@@ -27,6 +51,7 @@ interface WidgetBridgePluginInterface {
     activeCount: number;
   }>;
   consumeLaunchShortcut(): Promise<{ route: string | null }>;
+  consumeLaunchAction(): Promise<NativeLaunchAction>;
 }
 
 const WidgetBridge = registerPlugin<WidgetBridgePluginInterface>('WidgetBridge');
@@ -187,6 +212,99 @@ export async function consumeNativeShortcutRoute(): Promise<NativeShortcutRoute 
     return null;
   } catch {
     return null;
+  }
+}
+
+export async function consumeNativeLaunchAction(): Promise<NativeLaunchAction | null> {
+  if (!isNativeAndroidApp()) return null;
+  try {
+    return await WidgetBridge.consumeLaunchAction();
+  } catch {
+    return null;
+  }
+}
+
+export async function getNativeBackgroundReliabilityStatus(): Promise<NativeBackgroundReliabilityStatus> {
+  if (!isNativeAndroidApp()) {
+    return {
+      notificationsGranted: false,
+      exactAlarmsGranted: false,
+      fullScreenIntentGranted: false,
+      batteryOptimizationIgnored: false,
+      overlayGranted: false,
+      sdkInt: 0,
+    };
+  }
+  try {
+    return await WidgetBridge.getBackgroundReliabilityStatus();
+  } catch {
+    return {
+      notificationsGranted: false,
+      exactAlarmsGranted: false,
+      fullScreenIntentGranted: false,
+      batteryOptimizationIgnored: false,
+      overlayGranted: false,
+      sdkInt: 0,
+    };
+  }
+}
+
+export async function requestNativeExactAlarmPermission(): Promise<{
+  opened: boolean;
+  granted: boolean;
+}> {
+  if (!isNativeAndroidApp()) return { opened: false, granted: false };
+  try {
+    return await WidgetBridge.requestExactAlarmPermission();
+  } catch {
+    return { opened: false, granted: false };
+  }
+}
+
+export async function requestNativeFullScreenIntentPermission(): Promise<{
+  opened: boolean;
+  granted: boolean;
+}> {
+  if (!isNativeAndroidApp()) return { opened: false, granted: false };
+  try {
+    return await WidgetBridge.requestFullScreenIntentPermission();
+  } catch {
+    return { opened: false, granted: false };
+  }
+}
+
+export async function requestNativeIgnoreBatteryOptimizations(): Promise<{
+  opened: boolean;
+  ignored: boolean;
+}> {
+  if (!isNativeAndroidApp()) return { opened: false, ignored: false };
+  try {
+    return await WidgetBridge.requestIgnoreBatteryOptimizations();
+  } catch {
+    return { opened: false, ignored: false };
+  }
+}
+
+export async function requestNativeOverlayPermission(): Promise<{
+  opened: boolean;
+  granted: boolean;
+}> {
+  if (!isNativeAndroidApp()) return { opened: false, granted: false };
+  try {
+    return await WidgetBridge.requestOverlayPermission();
+  } catch {
+    return { opened: false, granted: false };
+  }
+}
+
+export async function testNativeBackgroundAlarm(
+  type: 'adhan' | 'salawat' | 'periodic'
+): Promise<{ triggered: boolean }> {
+  if (!isNativeAndroidApp()) return { triggered: false };
+  try {
+    return await WidgetBridge.testBackgroundAlarmNow({ type });
+  } catch {
+    return { triggered: false };
   }
 }
 

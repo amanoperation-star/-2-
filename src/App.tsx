@@ -11,13 +11,14 @@ import { CommuteWirdSection } from './components/CommuteWirdSection';
 import { FamilyHomeSection } from './components/FamilyHomeSection';
 import { SettingsModal, SettingsTabId } from './components/SettingsModal';
 import { BackgroundPickerModal } from './components/BackgroundPickerModal';
-import { PeriodicReminderPopup } from './components/PeriodicReminderPopup';
+import { PeriodicReminderPopup, pickRandomReminder } from './components/PeriodicReminderPopup';
 import { QuranWirdModal } from './components/QuranWirdModal';
 import { SteadfastnessModal } from './components/SteadfastnessModal';
 import { AmbientStandByModal, UnifiedDisplayMode } from './components/AmbientStandByModal';
 import { FullScreenAdhanModal } from './components/FullScreenAdhanModal';
 import { IstikharaHajahModal } from './components/IstikharaHajahModal';
 import { WidgetStudioModal } from './components/WidgetStudioModal';
+import { SpiritualSplashOverlay } from './components/SpiritualSplashOverlay';
 import { PrayerWidgetPreview } from './components/PrayerWidgetPreview';
 import {
   WIDGET_SIZES,
@@ -46,9 +47,13 @@ import { OfflineIndicator } from './components/PWAInstallButton';
 import { precacheEssentialAudioOnce } from './utils/offlineAudioManager';
 import { loadFastingPreferences, saveFastingPreferences } from './utils/fastingCalculator';
 import { backgroundService } from './utils/backgroundService';
+import {
+  getNextTimeAfterPeriodicQuietHours,
+  isWithinPeriodicQuietHours,
+} from './utils/periodicQuietHours';
 import { useTvRemoteNavigation } from './hooks/useTvRemoteNavigation';
 import {
-  consumeNativeShortcutRoute,
+  consumeNativeLaunchAction,
   isLikelyAndroidTvDevice,
   isNativeAndroidApp,
   subscribeNativeBackButton,
@@ -135,6 +140,16 @@ export default function App() {
       return tab as any;
     }
     return 'times';
+  });
+  const [showSplashOverlay, setShowSplashOverlay] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const valid = ['times', 'tracker', 'qibla', 'adhkar', 'quran', 'ai', 'companion', 'commute', 'family'];
+    if (tab && valid.includes(tab)) {
+      return false;
+    }
+    return true;
   });
   const [currentLocation, setCurrentLocation] = useState<CityLocation>(CITIES[0]); // Default Cairo
   const [settings, setSettings] = useState<UserSettings>({
@@ -238,6 +253,22 @@ export default function App() {
         | 'quran'
         | 'hadith';
     })(),
+    periodicOverlayEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('periodic_overlay_enabled') !== null
+        ? localStorage.getItem('periodic_overlay_enabled') === 'true'
+        : true,
+    periodicQuietHoursEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('periodic_quiet_hours_enabled') !== null
+        ? localStorage.getItem('periodic_quiet_hours_enabled') === 'true'
+        : true,
+    periodicQuietStart:
+      (typeof window !== 'undefined' ? localStorage.getItem('periodic_quiet_start') : null) || '23:00',
+    periodicQuietEnd:
+      (typeof window !== 'undefined' ? localStorage.getItem('periodic_quiet_end') : null) || '06:00',
+    periodicReminderSoundEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('periodic_reminder_sound_enabled') !== null
+        ? localStorage.getItem('periodic_reminder_sound_enabled') === 'true'
+        : false,
     salawatEnabled:
       typeof window !== 'undefined' && localStorage.getItem('salawat_enabled') !== null
         ? localStorage.getItem('salawat_enabled') === 'true'
@@ -423,6 +454,8 @@ export default function App() {
     const mode = new URLSearchParams(window.location.search).get('mode');
     return mode === 'standby' || mode === 'mosque';
   });
+  const [forcedPeriodicItemId, setForcedPeriodicItemId] = useState<string | null>(null);
+  const lastAdhanTriggerRef = React.useRef<{ key: string; at: number } | null>(null);
   const [fullScreenAdhanState, setFullScreenAdhanState] = useState<{
     isOpen: boolean;
     prayerKey: PrayerName;
@@ -759,6 +792,17 @@ export default function App() {
     (prayerKey?: PrayerName, customNameAr?: string, isSimulation: boolean = false) => {
       const fallback = getNextPrayerInfo(prayerTimes);
       const targetKey = prayerKey || fallback.key;
+      if (!isSimulation) {
+        const nowTs = Date.now();
+        if (
+          lastAdhanTriggerRef.current &&
+          lastAdhanTriggerRef.current.key === targetKey &&
+          nowTs - lastAdhanTriggerRef.current.at < 65000
+        ) {
+          return;
+        }
+        lastAdhanTriggerRef.current = { key: targetKey, at: nowTs };
+      }
       const defaultNames: Record<PrayerName, string> = {
         fajr: 'الفجر',
         sunrise: 'الشروق',
@@ -989,17 +1033,38 @@ export default function App() {
     }
   }, []);
 
-  // Native Android App Icon Shortcuts & Home-Screen Widget launch router
+  // Native Android App Icon Shortcuts, Widget Launch & Alarm Notification Router
   useEffect(() => {
     const handleNativeShortcut = async () => {
-      const route = await consumeNativeShortcutRoute();
-      if (!route) return;
+      const action = await consumeNativeLaunchAction();
+      if (!action) return;
+      const { route, adhanPrayerKey, adhanPrayerName, periodicReminderId } = action;
+      if (!route && !adhanPrayerKey && !periodicReminderId) return;
+
+      setShowSplashOverlay(false);
       setIsSettingsOpen(false);
       setIsBackgroundPickerOpen(false);
       setIsWidgetStudioOpen(false);
       setIsStandbyModeOpen(false);
       setIsSteadfastnessOpen(false);
       setIsIstikharaHajahOpen(false);
+
+      if (adhanPrayerKey) {
+        const validKeys: PrayerName[] = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+        const safeKey = validKeys.includes(adhanPrayerKey as PrayerName)
+          ? (adhanPrayerKey as PrayerName)
+          : 'dhuhr';
+        setActiveTab('times');
+        handleOpenFullScreenAdhanModal(safeKey, adhanPrayerName || undefined, false);
+        return;
+      }
+
+      if (periodicReminderId) {
+        setActiveTab('times');
+        setForcedPeriodicItemId(periodicReminderId);
+        setIsPeriodicPopupOpen(true);
+        return;
+      }
 
       if (route === 'times') {
         setActiveTab('times');
@@ -1030,6 +1095,14 @@ export default function App() {
       }
     };
 
+    const onNativeAdhanTriggered = (evt: Event) => {
+      const detail = (evt as CustomEvent<{ prayerKey?: PrayerName; prayerNameAr?: string }>).detail;
+      if (detail?.prayerKey) {
+        setShowSplashOverlay(false);
+        handleOpenFullScreenAdhanModal(detail.prayerKey, detail.prayerNameAr, false);
+      }
+    };
+
     void handleNativeShortcut();
     const unsubResume = subscribeNativeResume(() => {
       void handleNativeShortcut();
@@ -1038,11 +1111,13 @@ export default function App() {
       void handleNativeShortcut();
     };
     window.addEventListener('mihrabNativeShortcutCheck', onShortcutEvent);
+    window.addEventListener('mihrabNativeAdhanTriggered', onNativeAdhanTriggered);
     return () => {
       unsubResume();
       window.removeEventListener('mihrabNativeShortcutCheck', onShortcutEvent);
+      window.removeEventListener('mihrabNativeAdhanTriggered', onNativeAdhanTriggered);
     };
-  }, [prayerTimes]);
+  }, [prayerTimes, handleOpenFullScreenAdhanModal]);
 
   // Widget Data Bridge: syncs unified JSON in localStorage & dispatches 'mihrabWidgetSync'
   useEffect(() => {
@@ -1277,15 +1352,89 @@ export default function App() {
     });
   };
 
-  // Periodic Verse & Hadith Popup scheduler
+  // Periodic Verse & Hadith Popup scheduler (+ Night Quiet Hours + optional soft chime)
   useEffect(() => {
     if (!settings.periodicReminderEnabled) return;
-    const intervalMinutes = settings.periodicReminderInterval ?? 15;
-    const timer = window.setInterval(() => {
-      setIsPeriodicPopupOpen(true);
-    }, intervalMinutes * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, [settings.periodicReminderEnabled, settings.periodicReminderInterval]);
+    const intervalMs = (settings.periodicReminderInterval ?? 15) * 60 * 1000;
+    const quietEnabled = settings.periodicQuietHoursEnabled ?? true;
+    const quietStart = settings.periodicQuietStart || '23:00';
+    const quietEnd = settings.periodicQuietEnd || '06:00';
+    let timeoutId: number | null = null;
+    let cancelled = false;
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const now = new Date();
+      let targetMs = now.getTime() + intervalMs;
+      if (quietEnabled && isWithinPeriodicQuietHours(new Date(targetMs), quietStart, quietEnd)) {
+        targetMs = getNextTimeAfterPeriodicQuietHours(
+          new Date(targetMs),
+          quietStart,
+          quietEnd
+        ).getTime();
+      }
+      const delay = Math.max(5000, targetMs - now.getTime());
+
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+        const fireNow = new Date();
+        if (quietEnabled && isWithinPeriodicQuietHours(fireNow, quietStart, quietEnd)) {
+          scheduleNext();
+          return;
+        }
+
+        setForcedPeriodicItemId(null);
+        setIsPeriodicPopupOpen(true);
+
+        if (settings.periodicReminderSoundEnabled && !settings.meetingModeEnabled) {
+          adhanPlayer.playPeriodicChime(settings.volume ?? 0.8);
+        }
+
+        if (
+          !isNativeAndroidApp() &&
+          typeof document !== 'undefined' &&
+          document.hidden &&
+          'Notification' in window &&
+          Notification.permission === 'granted'
+        ) {
+          const picked = pickRandomReminder(settings.periodicReminderContentType || 'both');
+          try {
+            new Notification(
+              picked.type === 'quran' ? '✦ آية قرآنية كريمة' : '✦ حديث نبوي شريف',
+              {
+                body: `${picked.text}\n— ${picked.source}`,
+                icon: '/pwa-192x192.png',
+                dir: 'rtl',
+                lang: 'ar',
+              }
+            );
+          } catch {
+            // ignore browser notification restriction
+          }
+        }
+
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    settings.periodicReminderEnabled,
+    settings.periodicReminderInterval,
+    settings.periodicReminderContentType,
+    settings.periodicQuietHoursEnabled,
+    settings.periodicQuietStart,
+    settings.periodicQuietEnd,
+    settings.periodicReminderSoundEnabled,
+    settings.meetingModeEnabled,
+    settings.volume,
+  ]);
 
   // Periodic Salawat upon the Prophet (ﷺ) audio scheduler (every N minutes)
   useEffect(() => {
@@ -1297,6 +1446,24 @@ export default function App() {
       });
       if (spokenProfile) {
         setActiveSalawatToast(spokenProfile);
+        if (
+          !isNativeAndroidApp() &&
+          typeof document !== 'undefined' &&
+          document.hidden &&
+          'Notification' in window &&
+          Notification.permission === 'granted'
+        ) {
+          try {
+            new Notification('ﷺ صلِّ على سيدنا محمد', {
+              body: `${spokenProfile.nameAr} · ${spokenProfile.formulaAr}`,
+              icon: '/pwa-192x192.png',
+              dir: 'rtl',
+              lang: 'ar',
+            });
+          } catch {
+            // ignore
+          }
+        }
       }
     }, intervalMinutes * 60 * 1000);
     return () => window.clearInterval(timer);
@@ -1401,6 +1568,21 @@ export default function App() {
       }
       if (newSettings.periodicReminderContentType) {
         localStorage.setItem('periodic_reminder_content_type', newSettings.periodicReminderContentType);
+      }
+      if (typeof newSettings.periodicOverlayEnabled === 'boolean') {
+        localStorage.setItem('periodic_overlay_enabled', String(newSettings.periodicOverlayEnabled));
+      }
+      if (typeof newSettings.periodicQuietHoursEnabled === 'boolean') {
+        localStorage.setItem('periodic_quiet_hours_enabled', String(newSettings.periodicQuietHoursEnabled));
+      }
+      if (newSettings.periodicQuietStart) {
+        localStorage.setItem('periodic_quiet_start', newSettings.periodicQuietStart);
+      }
+      if (newSettings.periodicQuietEnd) {
+        localStorage.setItem('periodic_quiet_end', newSettings.periodicQuietEnd);
+      }
+      if (typeof newSettings.periodicReminderSoundEnabled === 'boolean') {
+        localStorage.setItem('periodic_reminder_sound_enabled', String(newSettings.periodicReminderSoundEnabled));
       }
       if (typeof newSettings.salawatEnabled === 'boolean') {
         localStorage.setItem('salawat_enabled', String(newSettings.salawatEnabled));
@@ -2000,6 +2182,9 @@ export default function App() {
           onTestPeriodicReminder={() => {
             setIsSettingsOpen(false);
             setIsPeriodicPopupOpen(true);
+            if (settings.periodicReminderSoundEnabled && !settings.meetingModeEnabled) {
+              adhanPlayer.playPeriodicChime(settings.volume ?? 0.8);
+            }
           }}
           onTestSalawat={handleTestSalawat}
           onTestPreAdhan={(voiceMode) => handleTestPreAdhan(voiceMode, undefined, false)}
@@ -2029,7 +2214,11 @@ export default function App() {
         <PeriodicReminderPopup
           isOpen={isPeriodicPopupOpen}
           contentType={settings.periodicReminderContentType || 'both'}
-          onClose={() => setIsPeriodicPopupOpen(false)}
+          forcedItemId={forcedPeriodicItemId}
+          onClose={() => {
+            setIsPeriodicPopupOpen(false);
+            setForcedPeriodicItemId(null);
+          }}
         />
 
         {/* Heart Steadfastness Record Modal */}
@@ -2468,6 +2657,19 @@ export default function App() {
           تطبيق مواقيت الصلاة والأذان الشامل · حساب فلكي رسمي دقيق · جميع الحقوق محفوظة © {new Date().getFullYear()}
         </footer>
       </div>
+
+      {/* Independent Spiritual Audio Splash Overlay (does not modify main app screen) */}
+      <SpiritualSplashOverlay
+        isOpen={showSplashOverlay && !fullScreenAdhanState.isOpen}
+        onEnterCommute={() => {
+          setShowSplashOverlay(false);
+          setActiveTab('commute');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onEnterHome={() => {
+          setShowSplashOverlay(false);
+        }}
+      />
     </div>
   );
 }

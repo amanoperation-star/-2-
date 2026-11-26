@@ -1,4 +1,4 @@
-import { CityLocation, PrayerName, PrayerTimeData, UserSettings } from '../types';
+import { CityLocation, PeriodicReminderItem, PrayerName, PrayerTimeData, UserSettings } from '../types';
 import { evaluateFastingCalculator } from './fastingCalculator';
 import { getDailyWirdSchedule, loadKhatmaState } from './khatmaData';
 import {
@@ -8,6 +8,8 @@ import {
 } from './sunnahRawatibData';
 import { calculatePrayerTimes } from './prayerCalculator';
 import { syncNativeAndroidWidgetData } from './nativeAndroidBridge';
+import { getAdhanSource, getDuaSource } from './audioAdhan';
+import { PERIODIC_VERSES_AND_HADITHS } from './islamicData';
 
 export type WidgetThemeId = 'emerald' | 'glass' | 'oled';
 export type WidgetSizeId = 'lock_pill' | 'medium' | 'large';
@@ -74,6 +76,35 @@ export interface WidgetBridgePayload {
     stickyEnabled: boolean;
     adhanBannerEnabled: boolean;
     mosqueTheme: 'auto' | 'nabawi' | 'kaaba' | 'azhar';
+  };
+  audioSettings: {
+    notificationsEnabled: boolean;
+    adhanReciter: string;
+    fajrAdhanReciter: string;
+    volume: number;
+    fajrBoostVolume: boolean;
+    autoDuaAfterAdhan: boolean;
+    duaAudioReciter: string;
+    meetingModeEnabled: boolean;
+    adhanAssetUrl: string;
+    fajrAdhanAssetUrl: string;
+    duaAssetUrl: string;
+    adhanReciterNameAr: string;
+    fajrAdhanReciterNameAr: string;
+  };
+  backgroundReminders: {
+    salawatEnabled: boolean;
+    salawatIntervalMinutes: number;
+    salawatVoiceMode: string;
+    periodicReminderEnabled: boolean;
+    periodicReminderInterval: number;
+    periodicReminderContentType: 'both' | 'quran' | 'hadith';
+    periodicOverlayEnabled: boolean;
+    periodicQuietHoursEnabled: boolean;
+    periodicQuietStart: string;
+    periodicQuietEnd: string;
+    periodicReminderSoundEnabled: boolean;
+    periodicPool: PeriodicReminderItem[];
   };
 }
 
@@ -328,6 +359,10 @@ export function buildWidgetBridgePayload(params: {
     ashuraArafahEnabled: settings.fastingAshuraArafahEnabled,
   });
 
+  const adhanSource = getAdhanSource(settings.adhanReciter || 'makkah', 'dhuhr');
+  const fajrAdhanSource = getAdhanSource(settings.fajrAdhanReciter || 'fajr_makkah', 'fajr');
+  const duaSource = getDuaSource(settings.duaAudioReciter || 'shaarawy');
+
   return {
     updatedAt: now.toISOString(),
     cityId: currentLocation.id,
@@ -368,6 +403,35 @@ export function buildWidgetBridgePayload(params: {
       stickyEnabled: settings.stickyNotificationEnabled ?? true,
       adhanBannerEnabled: settings.adhanBannerNotificationEnabled ?? true,
       mosqueTheme: settings.notificationMosqueTheme || 'auto',
+    },
+    audioSettings: {
+      notificationsEnabled: settings.notificationsEnabled !== false,
+      adhanReciter: settings.adhanReciter || 'makkah',
+      fajrAdhanReciter: settings.fajrAdhanReciter || 'fajr_makkah',
+      volume: typeof settings.volume === 'number' ? settings.volume : 1,
+      fajrBoostVolume: settings.fajrBoostVolume !== false,
+      autoDuaAfterAdhan: settings.autoDuaAfterAdhan !== false,
+      duaAudioReciter: settings.duaAudioReciter || 'shaarawy',
+      meetingModeEnabled: Boolean(settings.meetingModeEnabled),
+      adhanAssetUrl: adhanSource.urls[0] || '/audio/adhan-makkah.mp3',
+      fajrAdhanAssetUrl: fajrAdhanSource.urls[0] || '/audio/adhan-fajr-makkah.mp3',
+      duaAssetUrl: duaSource.urls[0] || '/audio/dua-shaarawy.mp3',
+      adhanReciterNameAr: adhanSource.nameAr,
+      fajrAdhanReciterNameAr: fajrAdhanSource.nameAr,
+    },
+    backgroundReminders: {
+      salawatEnabled: settings.salawatEnabled ?? true,
+      salawatIntervalMinutes: settings.salawatIntervalMinutes ?? 10,
+      salawatVoiceMode: settings.salawatVoiceMode || 'rotate',
+      periodicReminderEnabled: settings.periodicReminderEnabled ?? true,
+      periodicReminderInterval: settings.periodicReminderInterval ?? 15,
+      periodicReminderContentType: settings.periodicReminderContentType || 'both',
+      periodicOverlayEnabled: settings.periodicOverlayEnabled ?? true,
+      periodicQuietHoursEnabled: settings.periodicQuietHoursEnabled ?? true,
+      periodicQuietStart: settings.periodicQuietStart || '23:00',
+      periodicQuietEnd: settings.periodicQuietEnd || '06:00',
+      periodicReminderSoundEnabled: Boolean(settings.periodicReminderSoundEnabled),
+      periodicPool: PERIODIC_VERSES_AND_HADITHS,
     },
   };
 }

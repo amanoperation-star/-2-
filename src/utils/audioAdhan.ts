@@ -1597,6 +1597,47 @@ class AdhanPlayerManager {
     }
   }
 
+  public playPeriodicChime(volumeMultiplier = 0.5): void {
+    try {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!this.audioCtx && AudioContextClass) {
+        this.audioCtx = new AudioContextClass();
+      }
+      if (!this.audioCtx) return;
+      if (this.audioCtx.state === 'suspended') {
+        void this.audioCtx.resume().catch(() => {});
+      }
+
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+      const safeVol = Math.max(0.05, Math.min(0.35, volumeMultiplier * 0.22));
+      const notes = [523.25, 659.25];
+
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startAt = now + idx * 0.16;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startAt);
+
+        gain.gain.setValueAtTime(0.001, startAt);
+        gain.gain.linearRampToValueAtTime(safeVol, startAt + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.65);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startAt);
+        osc.stop(startAt + 0.68);
+      });
+    } catch {
+      // ignore audio autoplay restriction
+    }
+  }
+
   private async tryPlayCurrentUrl() {
     const nonce = this.audioPlayNonce;
     if (!this.audio || this.currentUrlIndex >= this.currentReciterUrls.length) {

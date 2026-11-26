@@ -100,6 +100,11 @@ export interface UserSettings {
   periodicReminderEnabled?: boolean;
   periodicReminderInterval?: 5 | 10 | 15 | 30 | 60;
   periodicReminderContentType?: 'both' | 'quran' | 'hadith';
+  periodicOverlayEnabled?: boolean;
+  periodicQuietHoursEnabled?: boolean;
+  periodicQuietStart?: string;
+  periodicQuietEnd?: string;
+  periodicReminderSoundEnabled?: boolean;
   salawatEnabled?: boolean;
   salawatIntervalMinutes?: 5 | 10 | 15 | 30 | 60;
   salawatVoiceMode?: 'rotate' | 'mishary' | 'dosari' | 'muaiqly' | 'naqshabandi' | 'naqshabandi_radio';

@@ -17,6 +17,10 @@ const ESSENTIAL_APK_AUDIO_FILES = new Set([
   'iqama-classic.mp3',
   'prayer-alert-mishary.mp3',
   'salawat-mishary.mp3',
+  'salawat-dosari.mp3',
+  'salawat-muaiqly.mp3',
+  'salawat-naqshabandi.mp3',
+  'salawat-naqshabandi-radio.mp3',
 ]);
 
 function removeEmptyDirs(dirPath) {

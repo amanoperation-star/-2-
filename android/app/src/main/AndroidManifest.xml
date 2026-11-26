@@ -15,6 +15,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
@@ -46,6 +52,44 @@
                 android:resource="@xml/shortcuts" />
 
         </activity>
+
+        <!-- Full-Screen Lock-Screen Adhan Alarm Screen -->
+        <activity
+            android:name=".AdhanAlarmActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/AppTheme.NoActionBar" />
+
+        <!-- Background Audio Foreground Service (Adhan & Salawat MP3 playback) -->
+        <service
+            android:name=".MihrabAudioService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Floating Out-of-App Periodic Quran & Hadith Overlay Service -->
+        <service
+            android:name=".PeriodicOverlayService"
+            android:exported="false" />
+
+        <!-- Background Exact Alarm Receiver (Adhan, Salawat, Periodic Verses/Hadiths) -->
+        <receiver
+            android:name=".BackgroundAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.almawaqeet.mihrab.ACTION_EXACT_ADHAN_ALARM" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_SALAWAT_ALARM" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_PERIODIC_REMINDER_ALARM" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_STOP_AUDIO_SERVICE" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Home Screen Widget: Small (2x1) -->
         <receiver

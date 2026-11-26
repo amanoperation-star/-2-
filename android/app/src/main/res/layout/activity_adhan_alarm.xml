@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#03120F"
+    android:layoutDirection="rtl">
+
+    <ImageView
+        android:id="@+id/adhan_bg_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/app_name"
+        android:scaleType="centerCrop"
+        android:src="@drawable/notif_kaaba" />
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:src="@drawable/adhan_screen_overlay" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingTop="44dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="36dp">
+
+        <TextView
+            android:id="@+id/adhan_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/notif_countdown_pill"
+            android:paddingStart="18dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="8dp"
+            android:text="حان الآن موعد الأذان"
+            android:textColor="#FBBF24"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/adhan_clock_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="12:00"
+            android:textColor="#FFFFFF"
+            android:textSize="48sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/adhan_prayer_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="صلاة الظهر"
+            android:textColor="#F3CA63"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/adhan_city_mosque"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="القاهرة · الكعبة المشرفة"
+            android:textColor="#E2E8F0"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/adhan_reciter_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="بصوت أذان مكة المكرمة"
+            android:textColor="#94A3B8"
+            android:textSize="13sp" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/adhan_dhikr_quote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:background="@drawable/notif_card_bg"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:padding="16dp"
+            android:text="اللَّهُ أَكْبَرُ، اللَّهُ أَكْبَرُ • حَيَّ عَلَى الصَّلَاةِ، حَيَّ عَلَى الْفَلَاحِ\nحافظوا على الصلوات والصلاة الوسطى وقوموا لله قانتين"
+            android:textColor="#F8FAFC"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/btn_stop_adhan"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/adhan_stop_button_bg"
+            android:text="إيقاف صوت الأذان"
+            android:textAllCaps="false"
+            android:textColor="#041510"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_open_mihrab"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/adhan_open_button_bg"
+            android:text="فتح شاشة الأذان الكاملة في التطبيق"
+            android:textAllCaps="false"
+            android:textColor="#FBBF24"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+</FrameLayout>

@@ -1,13 +1,34 @@
-import React, { useEffect, useState } from 'react';
-import { Bell, BellRing, Check, ChevronDown, ChevronUp, ShieldCheck, Smartphone } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  AlarmClockCheck,
+  BatteryCharging,
+  Bell,
+  BellRing,
+  BookOpen,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Heart,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+} from 'lucide-react';
 import { CityLocation, PrayerName, PrayerTimeData } from '../types';
 import { backgroundService } from '../utils/backgroundService';
 import {
+  NativeBackgroundReliabilityStatus,
   NotificationMosqueTheme,
+  getNativeBackgroundReliabilityStatus,
   getNativeNotificationPermission,
   isNativeAndroidApp,
+  requestNativeExactAlarmPermission,
+  requestNativeFullScreenIntentPermission,
+  requestNativeIgnoreBatteryOptimizations,
   requestNativeNotificationPermission,
+  requestNativeOverlayPermission,
   sendNativeTestPrayerNotification,
+  subscribeNativeResume,
+  testNativeBackgroundAlarm,
 } from '../utils/nativeAndroidBridge';
 
 interface NotificationShadeSettingsCardProps {
@@ -82,8 +103,27 @@ export const NotificationShadeSettingsCard: React.FC<NotificationShadeSettingsCa
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [isAndroidApk] = useState<boolean>(() => isNativeAndroidApp());
   const [nativePermissionGranted, setNativePermissionGranted] = useState<boolean>(true);
+  const [reliabilityStatus, setReliabilityStatus] = useState<NativeBackgroundReliabilityStatus>({
+    notificationsGranted: true,
+    exactAlarmsGranted: true,
+    fullScreenIntentGranted: true,
+    batteryOptimizationIgnored: false,
+    overlayGranted: true,
+    sdkInt: 0,
+  });
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const [isSendingTest, setIsSendingTest] = useState<boolean>(false);
+
+  const refreshReliability = useCallback(() => {
+    if (!isAndroidApk) return;
+    void getNativeNotificationPermission().then((res) => {
+      setNativePermissionGranted(res.granted);
+    });
+    void getNativeBackgroundReliabilityStatus().then((status) => {
+      setReliabilityStatus(status);
+      setNativePermissionGranted(status.notificationsGranted);
+    });
+  }, [isAndroidApk]);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -91,11 +131,15 @@ export const NotificationShadeSettingsCard: React.FC<NotificationShadeSettingsCa
   }, []);
 
   useEffect(() => {
+    refreshReliability();
     if (!isAndroidApk) return;
-    void getNativeNotificationPermission().then((res) => {
-      setNativePermissionGranted(res.granted);
-    });
-  }, [isAndroidApk]);
+    const unsubResume = subscribeNativeResume(refreshReliability);
+    window.addEventListener('focus', refreshReliability);
+    return () => {
+      unsubResume();
+      window.removeEventListener('focus', refreshReliability);
+    };
+  }, [isAndroidApk, refreshReliability]);
 
   // Compute upcoming prayer & live countdown
   const times = prayerTimes || {
@@ -479,6 +523,184 @@ export const NotificationShadeSettingsCard: React.FC<NotificationShadeSettingsCa
           {feedbackMsg}
         </div>
       )}
+
+      {/* Background Reliability While App Is Closed (Adhan Screen + Salawat + Quran/Hadith) */}
+      <div className="rounded-2xl bg-[#031612] border border-[#e5b869]/35 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 text-[#fbbf24]">
+            <AlarmClockCheck className="w-4 h-4" />
+            <h5 className="text-xs sm:text-sm font-bold">
+              ضمان عمل الأذان والصلاة على النبي ﷺ والآيات عند إغلاق التطبيق
+            </h5>
+          </div>
+          <span className="text-[11px] text-slate-300">
+            {isAndroidApk ? 'جدولة أندرويد أصلية (AlarmManager)' : 'متاح بالكامل داخل تطبيق APK'}
+          </span>
+        </div>
+
+        <p className="text-[11px] text-slate-300 leading-relaxed">
+          تمت جدولة أوقات الأذان وشاشة الأذان الكاملة، والصلاة على النبي ﷺ بصوت المشايخ، والتذكير الدوري بالآيات والأحاديث عبر منبّه النظام الأصلي لتعمل حتى مع إغلاق التطبيق أو قفل الشاشة.
+        </p>
+
+        {isAndroidApk && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Exact Alarms */}
+            <div className="p-3 rounded-xl bg-[#052019] border border-[#e5b869]/20 flex items-center justify-between gap-2">
+              <div className="text-right min-w-0">
+                <div className="text-xs font-bold text-white truncate">المنبه الدقيق للأذان</div>
+                <div className="text-[11px] text-slate-400">
+                  {reliabilityStatus.exactAlarmsGranted ? 'مفعّل ويعمل بدقة الثانية' : 'يحتاج تفعيل السماح'}
+                </div>
+              </div>
+              {reliabilityStatus.exactAlarmsGranted ? (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold shrink-0">
+                  مفعّل
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void requestNativeExactAlarmPermission().then(refreshReliability)}
+                  className="min-h-[38px] px-3 rounded-lg bg-[#fbbf24] text-slate-950 text-[11px] font-black shrink-0"
+                >
+                  تفعيل
+                </button>
+              )}
+            </div>
+
+            {/* Full-Screen Adhan Over Lock Screen */}
+            <div className="p-3 rounded-xl bg-[#052019] border border-[#e5b869]/20 flex items-center justify-between gap-2">
+              <div className="text-right min-w-0">
+                <div className="text-xs font-bold text-white truncate">شاشة الأذان فوق القفل</div>
+                <div className="text-[11px] text-slate-400">
+                  {reliabilityStatus.fullScreenIntentGranted
+                    ? 'تفتح تلقائياً وقت الأذان'
+                    : 'يحتاج السماح بالظهور'}
+                </div>
+              </div>
+              {reliabilityStatus.fullScreenIntentGranted ? (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold shrink-0">
+                  مفعّل
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void requestNativeFullScreenIntentPermission().then(refreshReliability)
+                  }
+                  className="min-h-[38px] px-3 rounded-lg bg-[#fbbf24] text-slate-950 text-[11px] font-black shrink-0"
+                >
+                  تفعيل
+                </button>
+              )}
+            </div>
+
+            {/* Floating Overlay Permission (Periodic Verses/Hadiths Outside App) */}
+            <div className="sm:col-span-2 p-3 rounded-xl bg-[#052019] border border-[#e5b869]/20 flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-right flex-1 min-w-[180px]">
+                <div className="text-xs font-bold text-white">
+                  إذن الظهور فوق التطبيقات الأخرى (البطاقة العائمة للآيات والأحاديث)
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {reliabilityStatus.overlayGranted
+                    ? 'مفعّل — ستظهر بطاقة المحراب العائمة فوق أي تطبيق في الموعد المحدد'
+                    : 'اضغط للسماح بعرض بطاقة التذكير العائمة خارج التطبيق'}
+                </div>
+              </div>
+              {reliabilityStatus.overlayGranted ? (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold shrink-0">
+                  مفعّل
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void requestNativeOverlayPermission().then(refreshReliability)}
+                  className="min-h-[40px] px-3.5 rounded-xl bg-[#fbbf24] text-slate-950 text-xs font-black shrink-0"
+                >
+                  السماح بالظهور
+                </button>
+              )}
+            </div>
+
+            {/* Battery Optimization Exemption */}
+            <div className="sm:col-span-2 p-3 rounded-xl bg-[#052019] border border-[#e5b869]/20 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-right flex-1 min-w-[180px]">
+                <BatteryCharging className="w-4 h-4 text-[#fbbf24] shrink-0" />
+                <div>
+                  <div className="text-xs font-bold text-white">
+                    استثناء توفير البطارية (مهم في هواتف سامسونج وشاومي وأوبو)
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {reliabilityStatus.batteryOptimizationIgnored
+                      ? 'التطبيق مستثنى ولن يوقفه النظام في الخلفية'
+                      : 'اضغط للسماح للتطبيق بالعمل في الخلفية دون إيقافه عند إغلاق الشاشة'}
+                  </div>
+                </div>
+              </div>
+              {reliabilityStatus.batteryOptimizationIgnored ? (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold shrink-0">
+                  مستثنى ومستقر
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void requestNativeIgnoreBatteryOptimizations().then(refreshReliability)
+                  }
+                  className="min-h-[40px] px-3.5 rounded-xl bg-[#fbbf24] text-slate-950 text-xs font-black shrink-0"
+                >
+                  السماح بالعمل في الخلفية
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Instant Native Background Verification Buttons */}
+        {isAndroidApk && (
+          <div className="pt-1 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void testNativeBackgroundAlarm('adhan').then(() => {
+                  setFeedbackMsg('تم تشغيل شاشة الأذان الأصلية وصوت الأذان للمعاينة.');
+                });
+              }}
+              className="min-h-[40px] px-3 py-2 rounded-xl bg-[#073329] border border-[#e5b869]/40 text-[#fbbf24] text-xs font-bold flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>تجربة شاشة الأذان المغلقة</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                void testNativeBackgroundAlarm('salawat').then(() => {
+                  setFeedbackMsg(
+                    'تم تشغيل إشعار وصوت الصلاة على النبي ﷺ عبر خدمة الخلفية — اسحب الشريط العلوي للمعاينة.'
+                  );
+                });
+              }}
+              className="min-h-[40px] px-3 py-2 rounded-xl bg-[#073329] border border-[#e5b869]/40 text-emerald-200 text-xs font-bold flex items-center gap-1.5"
+            >
+              <Heart className="w-3.5 h-3.5" />
+              <span>تجربة الصلاة على النبي في الخلفية</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                void testNativeBackgroundAlarm('periodic').then(() => {
+                  setFeedbackMsg('تم إرسال إشعار الآية/الحديث الدوري إلى الشريط العلوي للمعاينة.');
+                });
+              }}
+              className="min-h-[40px] px-3 py-2 rounded-xl bg-[#073329] border border-[#e5b869]/40 text-slate-100 text-xs font-bold flex items-center gap-1.5"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>تجربة إشعار الآية والحديث</span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

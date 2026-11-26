@@ -1,10 +1,15 @@
 package com.almawaqeet.mihrab;
 
 import android.Manifest;
+import android.app.NotificationManager;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -25,10 +30,26 @@ import com.getcapacitor.annotation.PermissionCallback;
 )
 public class WidgetBridgePlugin extends Plugin {
     private static volatile String pendingShortcutRoute = null;
+    private static volatile String pendingAdhanPrayerKey = null;
+    private static volatile String pendingAdhanPrayerName = null;
+    private static volatile String pendingPeriodicReminderId = null;
 
     public static void setPendingShortcutRoute(String route) {
         if (route != null && !route.trim().isEmpty()) {
             pendingShortcutRoute = route.trim();
+        }
+    }
+
+    public static void setPendingAdhanOpen(String prayerKey, String prayerNameAr) {
+        if (prayerKey != null && !prayerKey.trim().isEmpty()) {
+            pendingAdhanPrayerKey = prayerKey.trim();
+            pendingAdhanPrayerName = prayerNameAr != null ? prayerNameAr.trim() : null;
+        }
+    }
+
+    public static void setPendingPeriodicReminderId(String reminderId) {
+        if (reminderId != null && !reminderId.trim().isEmpty()) {
+            pendingPeriodicReminderId = reminderId.trim();
         }
     }
 
@@ -43,6 +64,7 @@ public class WidgetBridgePlugin extends Plugin {
         PrayerWidgetHelper.savePayload(context, payload);
         PrayerWidgetHelper.updateAllWidgets(context);
         PrayerNotificationHelper.refreshOngoingNotification(context);
+        BackgroundReminderScheduler.scheduleAll(context);
 
         JSObject res = new JSObject();
         res.put("synced", true);
@@ -72,6 +94,7 @@ public class WidgetBridgePlugin extends Plugin {
                 || getPermissionState("notifications") == PermissionState.GRANTED
         ) {
             PrayerNotificationHelper.refreshOngoingNotification(context);
+            BackgroundReminderScheduler.scheduleAll(context);
             JSObject res = new JSObject();
             res.put("granted", PrayerNotificationHelper.hasNotificationPermission(context));
             call.resolve(res);
@@ -86,9 +109,167 @@ public class WidgetBridgePlugin extends Plugin {
         boolean granted = PrayerNotificationHelper.hasNotificationPermission(context);
         if (granted) {
             PrayerNotificationHelper.refreshOngoingNotification(context);
+            BackgroundReminderScheduler.scheduleAll(context);
         }
         JSObject res = new JSObject();
         res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void getBackgroundReliabilityStatus(PluginCall call) {
+        Context context = getContext();
+        boolean notificationsGranted = PrayerNotificationHelper.hasNotificationPermission(context);
+        boolean exactAlarmsGranted = BackgroundReminderScheduler.canScheduleExactAlarms(context);
+        boolean fullScreenIntentGranted = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            NotificationManager nm =
+                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            fullScreenIntentGranted = nm == null || nm.canUseFullScreenIntent();
+        }
+        boolean batteryIgnored = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            batteryIgnored = pm == null || pm.isIgnoringBatteryOptimizations(context.getPackageName());
+        }
+        boolean overlayGranted = canDrawOverlays(context);
+
+        JSObject res = new JSObject();
+        res.put("notificationsGranted", notificationsGranted);
+        res.put("exactAlarmsGranted", exactAlarmsGranted);
+        res.put("fullScreenIntentGranted", fullScreenIntentGranted);
+        res.put("batteryOptimizationIgnored", batteryIgnored);
+        res.put("overlayGranted", overlayGranted);
+        res.put("sdkInt", Build.VERSION.SDK_INT);
+        call.resolve(res);
+    }
+
+    public static boolean canDrawOverlays(Context context) {
+        if (context == null) return false;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        return Settings.canDrawOverlays(context);
+    }
+
+    @PluginMethod
+    public void requestExactAlarmPermission(PluginCall call) {
+        Context context = getContext();
+        boolean granted = BackgroundReminderScheduler.canScheduleExactAlarms(context);
+        boolean opened = false;
+        if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                intent.setData(Uri.parse("package:" + context.getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+                opened = true;
+            } catch (Exception ignored) {
+                opened = false;
+            }
+        }
+        JSObject res = new JSObject();
+        res.put("opened", opened);
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void requestFullScreenIntentPermission(PluginCall call) {
+        Context context = getContext();
+        boolean granted = true;
+        boolean opened = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            NotificationManager nm =
+                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            granted = nm == null || nm.canUseFullScreenIntent();
+            if (!granted) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+                    intent.setData(Uri.parse("package:" + context.getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(intent);
+                    opened = true;
+                } catch (Exception ignored) {
+                    opened = false;
+                }
+            }
+        }
+        JSObject res = new JSObject();
+        res.put("opened", opened);
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void requestIgnoreBatteryOptimizations(PluginCall call) {
+        Context context = getContext();
+        boolean ignored = true;
+        boolean opened = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            ignored = pm == null || pm.isIgnoringBatteryOptimizations(context.getPackageName());
+            if (!ignored) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    intent.setData(Uri.parse("package:" + context.getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(intent);
+                    opened = true;
+                } catch (Exception e) {
+                    try {
+                        Intent fallback = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                        fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        context.startActivity(fallback);
+                        opened = true;
+                    } catch (Exception ignoredEx) {
+                        opened = false;
+                    }
+                }
+            }
+        }
+        JSObject res = new JSObject();
+        res.put("opened", opened);
+        res.put("ignored", ignored);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void requestOverlayPermission(PluginCall call) {
+        Context context = getContext();
+        boolean granted = canDrawOverlays(context);
+        boolean opened = false;
+        if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                Intent intent = new Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + context.getPackageName())
+                );
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+                opened = true;
+            } catch (Exception e) {
+                try {
+                    Intent fallback = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+                    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(fallback);
+                    opened = true;
+                } catch (Exception ignoredEx) {
+                    opened = false;
+                }
+            }
+        }
+        JSObject res = new JSObject();
+        res.put("opened", opened);
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void testBackgroundAlarmNow(PluginCall call) {
+        Context context = getContext();
+        String type = call.getString("type", "salawat");
+        BackgroundAlarmReceiver.triggerTestFromUi(context, type);
+        JSObject res = new JSObject();
+        res.put("triggered", true);
         call.resolve(res);
     }
 
@@ -162,6 +343,20 @@ public class WidgetBridgePlugin extends Plugin {
 
         JSObject res = new JSObject();
         res.put("route", route);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void consumeLaunchAction(PluginCall call) {
+        JSObject res = new JSObject();
+        res.put("route", pendingShortcutRoute);
+        res.put("adhanPrayerKey", pendingAdhanPrayerKey);
+        res.put("adhanPrayerName", pendingAdhanPrayerName);
+        res.put("periodicReminderId", pendingPeriodicReminderId);
+        pendingShortcutRoute = null;
+        pendingAdhanPrayerKey = null;
+        pendingAdhanPrayerName = null;
+        pendingPeriodicReminderId = null;
         call.resolve(res);
     }
 }

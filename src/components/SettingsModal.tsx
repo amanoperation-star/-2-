@@ -72,9 +72,17 @@ import {
 } from '../utils/offlineAudioManager';
 import {
   NotificationMosqueTheme,
+  getNativeBackgroundReliabilityStatus,
   isNativeAndroidApp,
   isLikelyAndroidTvDevice,
+  requestNativeOverlayPermission,
+  subscribeNativeResume,
+  testNativeBackgroundAlarm,
 } from '../utils/nativeAndroidBridge';
+import {
+  formatQuietTime12Ar,
+  isWithinPeriodicQuietHours,
+} from '../utils/periodicQuietHours';
 import { LIVE_BACKGROUNDS } from '../utils/backgroundsData';
 import { APP_THEMES, evaluateAutoThemePeriod, normalizeThemeId } from '../utils/themesData';
 import {
@@ -216,6 +224,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [periodicEnabled, setPeriodicEnabled] = useState<boolean>(settings.periodicReminderEnabled ?? true);
   const [periodicInterval, setPeriodicInterval] = useState<5 | 10 | 15 | 30 | 60>(settings.periodicReminderInterval ?? 15);
   const [periodicContentType, setPeriodicContentType] = useState<'both' | 'quran' | 'hadith'>(settings.periodicReminderContentType || 'both');
+  const [periodicOverlayEnabled, setPeriodicOverlayEnabled] = useState<boolean>(settings.periodicOverlayEnabled ?? true);
+  const [periodicQuietHoursEnabled, setPeriodicQuietHoursEnabled] = useState<boolean>(settings.periodicQuietHoursEnabled ?? true);
+  const [periodicQuietStart, setPeriodicQuietStart] = useState<string>(settings.periodicQuietStart || '23:00');
+  const [periodicQuietEnd, setPeriodicQuietEnd] = useState<string>(settings.periodicQuietEnd || '06:00');
+  const [periodicSoundEnabled, setPeriodicSoundEnabled] = useState<boolean>(Boolean(settings.periodicReminderSoundEnabled));
+  const [overlayGranted, setOverlayGranted] = useState<boolean>(true);
+  const [periodicPreviewFeedback, setPeriodicPreviewFeedback] = useState<string | null>(null);
   const [salawatEnabled, setSalawatEnabled] = useState<boolean>(settings.salawatEnabled ?? true);
   const [salawatInterval, setSalawatInterval] = useState<5 | 10 | 15 | 30 | 60>(settings.salawatIntervalMinutes ?? 10);
   const [salawatVoiceMode, setSalawatVoiceMode] = useState<
@@ -432,6 +447,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setPeriodicEnabled(s.periodicReminderEnabled ?? true);
       setPeriodicInterval(s.periodicReminderInterval ?? 15);
       setPeriodicContentType(s.periodicReminderContentType || 'both');
+      setPeriodicOverlayEnabled(s.periodicOverlayEnabled ?? true);
+      setPeriodicQuietHoursEnabled(s.periodicQuietHoursEnabled ?? true);
+      setPeriodicQuietStart(s.periodicQuietStart || '23:00');
+      setPeriodicQuietEnd(s.periodicQuietEnd || '06:00');
+      setPeriodicSoundEnabled(Boolean(s.periodicReminderSoundEnabled));
+      setPeriodicPreviewFeedback(null);
+      if (isNativeAndroidApp()) {
+        void getNativeBackgroundReliabilityStatus().then((st) => {
+          setOverlayGranted(st.overlayGranted);
+        });
+      }
       setSalawatEnabled(s.salawatEnabled ?? true);
       setSalawatInterval(s.salawatIntervalMinutes ?? 10);
       setSalawatVoiceMode(
@@ -493,6 +519,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setNotificationMosqueTheme(s.notificationMosqueTheme || 'auto');
     }
   }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    if (!isOpen || !isNativeAndroidApp()) return;
+    const refreshOverlayPerm = () => {
+      void getNativeBackgroundReliabilityStatus().then((st) => {
+        setOverlayGranted(st.overlayGranted);
+      });
+    };
+    const unsub = subscribeNativeResume(refreshOverlayPerm);
+    window.addEventListener('focus', refreshOverlayPerm);
+    return () => {
+      unsub();
+      window.removeEventListener('focus', refreshOverlayPerm);
+    };
+  }, [isOpen]);
 
   const tabButtonRefs = useRef<
     Partial<Record<SettingsTabId, HTMLButtonElement | null>>
@@ -748,6 +789,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       periodicReminderEnabled: periodicEnabled,
       periodicReminderInterval: periodicInterval,
       periodicReminderContentType: periodicContentType,
+      periodicOverlayEnabled,
+      periodicQuietHoursEnabled,
+      periodicQuietStart,
+      periodicQuietEnd,
+      periodicReminderSoundEnabled: periodicSoundEnabled,
       salawatEnabled,
       salawatIntervalMinutes: salawatInterval,
       salawatVoiceMode,
@@ -4284,16 +4330,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* 4. Periodic Verse & Hadith Popup */}
           <div className="p-5 rounded-2xl bg-[#03201a]/85 border border-[#e5b869]/35 space-y-4 shadow-lg">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              {onTestPeriodicReminder && (
-                <button
-                  type="button"
-                  onClick={onTestPeriodicReminder}
-                  className="text-xs px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] flex items-center gap-1.5 font-bold transition-all"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>معاينة التذكير الآن</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {onTestPeriodicReminder && (
+                  <button
+                    type="button"
+                    onClick={onTestPeriodicReminder}
+                    className="min-h-[40px] text-xs px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] flex items-center gap-1.5 font-bold transition-all whitespace-nowrap"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>معاينة داخل التطبيق</span>
+                  </button>
+                )}
+                {isNativeAndroidApp() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void testNativeBackgroundAlarm('periodic').then((res) => {
+                        if (res.triggered) {
+                          setPeriodicPreviewFeedback(
+                            overlayGranted && periodicOverlayEnabled
+                              ? 'تم إطلاق بطاقة المحراب العائمة الآن — تظهر أسفل الشاشة حتى خارج التطبيق.'
+                              : 'تم إرسال إشعار التذكير الدوري إلى الشريط العلوي (امنح إذن الظهور فوق التطبيقات لتعمل كبطاقة عائمة).'
+                          );
+                        }
+                      });
+                    }}
+                    className="min-h-[40px] text-xs px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#d4af37] text-slate-950 font-black hover:brightness-105 flex items-center gap-1.5 transition-all whitespace-nowrap"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>معاينة البطاقة خارج التطبيق</span>
+                  </button>
+                )}
+              </div>
 
               <div className="flex items-center gap-2 text-[#fbbf24] font-bold text-base font-amiri">
                 <span className="text-lg">4. التذكير الدوري بالآيات والأحاديث</span>
@@ -4301,9 +4369,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
+            {periodicPreviewFeedback && (
+              <div className="p-3 rounded-xl bg-[#041814] border border-emerald-500/40 text-xs text-emerald-200 text-right leading-relaxed">
+                {periodicPreviewFeedback}
+              </div>
+            )}
+
             {/* Enable/Disable Toggle */}
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#041814] border border-[#e5b869]/25">
-              <label className="relative inline-flex items-center cursor-pointer">
+            <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[#041814] border border-[#e5b869]/25">
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
                 <input
                   type="checkbox"
                   checked={periodicEnabled}
@@ -4321,7 +4395,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   تفعيل البطاقة العائمة الدورية للآيات والأحاديث
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  تظهر تلقائياً أسفل الشاشة بالفاصل الزمني المحدد وتُحفظ إعداداتها محلياً
+                  تظهر تلقائياً بالفاصل الزمني المحدد سواء كنت داخل التطبيق أو خارجه
                 </span>
               </div>
             </div>
@@ -4348,7 +4422,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         setPeriodicInterval(opt.value);
                         onUpdateSettings({ periodicReminderInterval: opt.value });
                       }}
-                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all whitespace-nowrap ${
+                      className={`min-h-[44px] px-3 py-2.5 rounded-xl border text-xs font-bold transition-all whitespace-nowrap ${
                         isSelected
                           ? 'bg-[#073f34] border-[#fbbf24] text-[#fbbf24] ring-1 ring-[#e5b869]/40 shadow-[0_0_12px_rgba(229,184,105,0.2)]'
                           : 'bg-[#041814] border-[#e5b869]/20 text-slate-300 hover:border-[#e5b869]/45'
@@ -4381,7 +4455,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         setPeriodicContentType(filter.id);
                         onUpdateSettings({ periodicReminderContentType: filter.id });
                       }}
-                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-center whitespace-nowrap ${
+                      className={`min-h-[44px] px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-center whitespace-nowrap ${
                         isSelected
                           ? 'bg-[#073f34] border-[#fbbf24] text-[#fbbf24] ring-1 ring-[#e5b869]/40 shadow-[0_0_12px_rgba(229,184,105,0.2)]'
                           : 'bg-[#041814] border-[#e5b869]/20 text-slate-300 hover:border-[#e5b869]/45'
@@ -4391,6 +4465,167 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Out-of-App Floating Overlay Toggle & Permission */}
+            <div className="p-3.5 rounded-xl bg-[#041814] border border-[#e5b869]/25 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={periodicOverlayEnabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setPeriodicOverlayEnabled(checked);
+                      onUpdateSettings({ periodicOverlayEnabled: checked });
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-[#fbbf24] peer-checked:to-emerald-500"></div>
+                </label>
+                <div className="text-right">
+                  <span className="text-xs sm:text-sm text-slate-100 font-bold block">
+                    الظهور كبطاقة محراب عائمة خارج التطبيق
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    تظهر فوق أي تطبيق آخر بنفس تصميم المحراب وأزرار التالي والنسخ والإغلاق (مع إشعار احتياطي عند قفل الشاشة)
+                  </span>
+                </div>
+              </div>
+
+              {isNativeAndroidApp() && periodicOverlayEnabled && (
+                <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-[#e5b869]/15">
+                  {overlayGranted ? (
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
+                      إذن الظهور فوق التطبيقات مفعّل
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void requestNativeOverlayPermission().then(() =>
+                          getNativeBackgroundReliabilityStatus().then((st) =>
+                            setOverlayGranted(st.overlayGranted)
+                          )
+                        );
+                      }}
+                      className="min-h-[44px] px-4 py-2 rounded-xl bg-[#fbbf24] text-slate-950 text-xs font-black whitespace-nowrap"
+                    >
+                      منح إذن الظهور فوق التطبيقات
+                    </button>
+                  )}
+                  <span className="text-[11px] text-slate-400 text-right">
+                    {overlayGranted
+                      ? 'سيتم عرض البطاقة العائمة تلقائياً خارج التطبيق حسب الفاصل المحدد'
+                      : 'مطلوب لتتمكن البطاقة العائمة من الظهور أثناء استخدام تطبيقات أخرى'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Night Quiet Hours (Pause During Sleep) */}
+            <div className="p-3.5 rounded-xl bg-[#041814] border border-[#e5b869]/25 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={periodicQuietHoursEnabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setPeriodicQuietHoursEnabled(checked);
+                      onUpdateSettings({ periodicQuietHoursEnabled: checked });
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-[#fbbf24] peer-checked:to-emerald-500"></div>
+                </label>
+                <div className="text-right">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span className="text-xs sm:text-sm text-slate-100 font-bold">
+                      فترة الهدوء الليلية (توقف تلقائي أثناء النوم)
+                    </span>
+                    <Moon className="w-4 h-4 text-[#fbbf24]" />
+                  </div>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">
+                    تُوقف التذكير الدوري مؤقتاً خلال ساعات النوم وتستأنف تلقائياً عند نهايتها
+                  </span>
+                </div>
+              </div>
+
+              {periodicQuietHoursEnabled && (
+                <div className="space-y-2.5 pt-2 border-t border-[#e5b869]/15">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[#02120e] border border-[#e5b869]/20">
+                      <input
+                        type="time"
+                        dir="ltr"
+                        value={periodicQuietStart}
+                        onChange={(e) => {
+                          const val = e.target.value || '23:00';
+                          setPeriodicQuietStart(val);
+                          onUpdateSettings({ periodicQuietStart: val });
+                        }}
+                        className="bg-[#06261f] border border-[#e5b869]/35 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-[#fbbf24] tabular-nums focus:outline-none focus:border-[#fbbf24]"
+                      />
+                      <span className="text-xs font-bold text-slate-200">تبدأ من الساعة</span>
+                    </label>
+
+                    <label className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[#02120e] border border-[#e5b869]/20">
+                      <input
+                        type="time"
+                        dir="ltr"
+                        value={periodicQuietEnd}
+                        onChange={(e) => {
+                          const val = e.target.value || '06:00';
+                          setPeriodicQuietEnd(val);
+                          onUpdateSettings({ periodicQuietEnd: val });
+                        }}
+                        className="bg-[#06261f] border border-[#e5b869]/35 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-[#fbbf24] tabular-nums focus:outline-none focus:border-[#fbbf24]"
+                      />
+                      <span className="text-xs font-bold text-slate-200">وتنتهي الساعة</span>
+                    </label>
+                  </div>
+
+                  <div className="text-[11px] text-slate-300 flex items-center justify-between flex-wrap gap-2 tabular-nums">
+                    <span className="text-[#e5b869] font-semibold">
+                      {isWithinPeriodicQuietHours(new Date(), periodicQuietStart, periodicQuietEnd)
+                        ? 'فترة الهدوء نشطة الآن — التذكير متوقف مؤقتاً'
+                        : 'الجدول نشط الآن خارج ساعات الهدوء'}
+                    </span>
+                    <span>
+                      من {formatQuietTime12Ar(periodicQuietStart)} إلى{' '}
+                      {formatQuietTime12Ar(periodicQuietEnd)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Optional Soft Notification Chime Toggle */}
+            <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[#041814] border border-[#e5b869]/25">
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={periodicSoundEnabled}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setPeriodicSoundEnabled(checked);
+                    onUpdateSettings({ periodicReminderSoundEnabled: checked });
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-[#fbbf24] peer-checked:to-emerald-500"></div>
+              </label>
+              <div className="text-right">
+                <span className="text-xs sm:text-sm text-slate-100 font-bold block">
+                  نغمة تنبيه لطيفة عند ظهور الآية أو الحديث
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {periodicSoundEnabled
+                    ? 'مفعّلة — تصدر رنّة هادئة قصيرة (وتتوقف تلقائياً في وضع الاجتماعات والهدوء الليلي)'
+                    : 'صامتة — تظهر البطاقة بهدوء تام بدون صوت'}
+                </span>
               </div>
             </div>
           </div>

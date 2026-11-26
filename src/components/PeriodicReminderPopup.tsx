@@ -15,6 +15,7 @@ import { PERIODIC_VERSES_AND_HADITHS } from '../utils/islamicData';
 interface PeriodicReminderPopupProps {
   isOpen: boolean;
   contentType: 'both' | 'quran' | 'hadith';
+  forcedItemId?: string | null;
   onClose: () => void;
 }
 
@@ -233,6 +234,7 @@ async function render9x16CardBlob(item: PeriodicReminderItem): Promise<Blob | nu
 export const PeriodicReminderPopup: React.FC<PeriodicReminderPopupProps> = ({
   isOpen,
   contentType,
+  forcedItemId,
   onClose,
 }) => {
   const [currentItem, setCurrentItem] = useState<PeriodicReminderItem>(() =>
@@ -250,12 +252,15 @@ export const PeriodicReminderPopup: React.FC<PeriodicReminderPopupProps> = ({
   // Reset item and timer whenever popup opens or contentType changes
   useEffect(() => {
     if (isOpen) {
-      setCurrentItem(pickRandomReminder(contentType));
+      const forcedMatch = forcedItemId
+        ? PERIODIC_VERSES_AND_HADITHS.find((item) => item.id === forcedItemId)
+        : undefined;
+      setCurrentItem(forcedMatch || pickRandomReminder(contentType));
       setRemainingMs(DURATION_MS);
       setCopied(false);
       setIsShareOpen(false);
     }
-  }, [isOpen, contentType]);
+  }, [isOpen, contentType, forcedItemId]);
 
   // Smooth 15-second countdown that pauses on hover or while 9:16 share modal is open
   useEffect(() => {
