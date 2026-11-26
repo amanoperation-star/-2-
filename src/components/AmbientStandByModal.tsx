@@ -71,6 +71,7 @@ export function loadSavedDisplayMode(): UnifiedDisplayMode {
 interface AmbientStandByModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onDisableAutoStart?: () => void;
   prayerTimes: PrayerTimeData;
   currentLocation: CityLocation;
   settings: UserSettings;
@@ -110,6 +111,7 @@ function addMinutes12Hour(timeStr: string, addMins: number): string {
 export const AmbientStandByModal: React.FC<AmbientStandByModalProps> = ({
   isOpen,
   onClose,
+  onDisableAutoStart,
   prayerTimes,
   currentLocation,
   settings,
@@ -344,16 +346,28 @@ export const AmbientStandByModal: React.FC<AmbientStandByModalProps> = ({
       {/* Unified Top Control Bar */}
       <header className="relative z-20 shrink-0 w-full px-3 py-2.5 sm:px-6 sm:py-3.5 border-b border-[#D4AF37]/25 bg-[#09120F]/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex flex-wrap md:flex-nowrap items-center justify-between gap-2.5">
-          {/* Far Right (RTL first): Close Button */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="order-1 min-h-[40px] px-3.5 py-2 rounded-xl bg-[#111C18] hover:bg-[#192A24] border border-[#D4AF37]/50 text-[#D4AF37] text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors shrink-0"
-            title="إغلاق وضع العرض والعودة للواجهة الرئيسية"
-          >
-            <X className="w-4 h-4 shrink-0" />
-            <span>إغلاق</span>
-          </button>
+          {/* Far Right (RTL first): Close / Return to Home Button */}
+          <div className="order-1 flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#111C18] hover:bg-[#192A24] border border-[#D4AF37]/50 text-[#D4AF37] text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors shrink-0"
+              title="إغلاق وضع العرض والعودة للصفحة الرئيسية"
+            >
+              <X className="w-4 h-4 shrink-0" />
+              <span>الصفحة الرئيسية</span>
+            </button>
+            {settings.autoEnterTvDisplay && onDisableAutoStart && (
+              <button
+                type="button"
+                onClick={onDisableAutoStart}
+                className="min-h-[40px] px-3 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/45 text-emerald-200 text-xs font-bold whitespace-nowrap transition-colors"
+                title="فتح التطبيق على الصفحة الرئيسية دائماً عند التشغيل"
+              >
+                فتح الرئيسية عند البدء
+              </button>
+            )}
+          </div>
 
           {/* Center: Unified Segmented Pill Mode Switcher */}
           <div className="order-3 md:order-2 w-full md:w-auto flex justify-center">

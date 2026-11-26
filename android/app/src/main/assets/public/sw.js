@@ -91,7 +91,7 @@ define(['./workbox-cca9a3a2'], (function (workbox) { 'use strict';
     "revision": "9ba5067e233a007d8871f01544a99b1e"
   }, {
     "url": "index.html",
-    "revision": "bd97bb9e97bdb0dc42af11af3a5ab17a"
+    "revision": "f545787a0c1103c4d1e0c82980451382"
   }, {
     "url": "icon.svg",
     "revision": "b586a31147768bb55bb790502e24c09d"
@@ -102,16 +102,16 @@ define(['./workbox-cca9a3a2'], (function (workbox) { 'use strict';
     "url": "assets/workbox-window.prod.es5-Bd17z0YL.js",
     "revision": null
   }, {
-    "url": "assets/web-F2bOzsDb.js",
+    "url": "assets/web-iaaKbKMj.js",
     "revision": null
   }, {
-    "url": "assets/web-CPhIC08M.js",
+    "url": "assets/web-CBe2onSY.js",
     "revision": null
   }, {
-    "url": "assets/index-DqD4vYUv.js",
+    "url": "assets/index-Tm_QqtKe.css",
     "revision": null
   }, {
-    "url": "assets/index-7G2nQTJ2.css",
+    "url": "assets/index-CiGFdSng.js",
     "revision": null
   }, {
     "url": "assets/aistudio/index_b284f89d.html",

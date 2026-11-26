@@ -127,32 +127,42 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex flex-wrap items-center justify-between w-full gap-2.5">
           {/* Right Zone: Golden Crescent & 8-Pointed Star Emblem + App Name + Location + Integrated Weather Pill */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0c3b30] to-[#031712] flex items-center justify-center shadow-[0_0_16px_rgba(229,184,105,0.22)] border border-[#e5b869]/55 shrink-0">
-              <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                {/* 8-Pointed Star (Rub el Hizb) frame */}
-                <rect x="6" y="6" width="20" height="20" rx="1.5" stroke="#e5b869" strokeWidth="1.2" strokeOpacity="0.45" />
-                <rect x="6" y="6" width="20" height="20" rx="1.5" stroke="#e5b869" strokeWidth="1.2" strokeOpacity="0.45" transform="rotate(45 16 16)" />
-                {/* Golden Crescent */}
-                <path
-                  d="M17.8 9.2C14.1 9.5 11.2 12.6 11.2 16.4C11.2 20.4 14.4 23.6 18.4 23.6C20.2 23.6 21.8 22.9 23.1 21.8C21.8 22.2 20.3 22.1 19 21.5C16.2 20.2 14.9 16.9 16.2 14C16.9 12.3 18.2 11 19.9 10.3C19.2 9.6 18.5 9.2 17.8 9.2Z"
-                  fill="#fbbf24"
-                />
-                {/* 8-Pointed Inner Star */}
-                <polygon
-                  points="21.5,11.5 22.2,13.1 23.8,13.8 22.2,14.5 21.5,16.1 20.8,14.5 19.2,13.8 20.8,13.1"
-                  fill="#fef08a"
-                />
-              </svg>
-            </div>
-            <div className="leading-tight">
-              <h1 className="text-xl font-bold text-[#fbbf24] tracking-wide font-amiri whitespace-nowrap">
-                مواقيت الصلاة
-              </h1>
-              <p className="text-[11px] text-slate-300 flex items-center gap-1 whitespace-nowrap">
-                <MapPin className="w-3 h-3 text-[#e5b869] shrink-0" />
-                <span>{currentLocation.nameAr}، {currentLocation.countryAr}</span>
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('times');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              title="العودة إلى الصفحة الرئيسية (المواقيت)"
+              className="flex items-center gap-3 text-right rounded-xl focus:outline-none focus:ring-2 focus:ring-[#fbbf24]/60 hover:opacity-95 transition-opacity"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0c3b30] to-[#031712] flex items-center justify-center shadow-[0_0_16px_rgba(229,184,105,0.22)] border border-[#e5b869]/55 shrink-0">
+                <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  {/* 8-Pointed Star (Rub el Hizb) frame */}
+                  <rect x="6" y="6" width="20" height="20" rx="1.5" stroke="#e5b869" strokeWidth="1.2" strokeOpacity="0.45" />
+                  <rect x="6" y="6" width="20" height="20" rx="1.5" stroke="#e5b869" strokeWidth="1.2" strokeOpacity="0.45" transform="rotate(45 16 16)" />
+                  {/* Golden Crescent */}
+                  <path
+                    d="M17.8 9.2C14.1 9.5 11.2 12.6 11.2 16.4C11.2 20.4 14.4 23.6 18.4 23.6C20.2 23.6 21.8 22.9 23.1 21.8C21.8 22.2 20.3 22.1 19 21.5C16.2 20.2 14.9 16.9 16.2 14C16.9 12.3 18.2 11 19.9 10.3C19.2 9.6 18.5 9.2 17.8 9.2Z"
+                    fill="#fbbf24"
+                  />
+                  {/* 8-Pointed Inner Star */}
+                  <polygon
+                    points="21.5,11.5 22.2,13.1 23.8,13.8 22.2,14.5 21.5,16.1 20.8,14.5 19.2,13.8 20.8,13.1"
+                    fill="#fef08a"
+                  />
+                </svg>
+              </div>
+              <div className="leading-tight">
+                <h1 className="text-xl font-bold text-[#fbbf24] tracking-wide font-amiri whitespace-nowrap">
+                  مواقيت الصلاة
+                </h1>
+                <p className="text-[11px] text-slate-300 flex items-center gap-1 whitespace-nowrap">
+                  <MapPin className="w-3 h-3 text-[#e5b869] shrink-0" />
+                  <span>{currentLocation.nameAr}، {currentLocation.countryAr}</span>
+                </p>
+              </div>
+            </button>
 
             {/* Integrated Weather Pill */}
             <div className="hidden sm:block shrink-0 ms-1">

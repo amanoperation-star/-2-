@@ -95,18 +95,31 @@ import {
   saveThemePreference,
 } from './utils/themesData';
 
+const STARTUP_HOME_RESET_KEY = 'mihrab_startup_home_reset_v1';
+
+function ensureDefaultMainPageStartup(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (localStorage.getItem(STARTUP_HOME_RESET_KEY) === 'done') return;
+    localStorage.setItem('auto_enter_tv_display', 'false');
+    localStorage.setItem('ambient_standby_auto_landscape', 'false');
+    localStorage.setItem('last_third_auto_open', 'false');
+    localStorage.setItem('last_third_auto_open_adhkar', 'false');
+    localStorage.setItem(STARTUP_HOME_RESET_KEY, 'done');
+  } catch {
+    // ignore storage access issues
+  }
+}
+
 export default function App() {
+  ensureDefaultMainPageStartup();
+
   const [activeTab, setActiveTab] = useState<'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute' | 'family'>(() => {
     if (typeof window === 'undefined') return 'times';
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
     const valid = ['times', 'tracker', 'qibla', 'adhkar', 'quran', 'ai', 'companion', 'commute', 'family'];
     if (tab && valid.includes(tab)) {
-      try {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } catch {
-        // ignore history errors
-      }
       return tab as any;
     }
     return 'times';
@@ -887,29 +900,49 @@ export default function App() {
     setPrayerTimes(times);
   }, [currentLocation, settings.calculationMethod, settings.asrMethod]);
 
-  // Handle PWA Home Screen shortcut ?shortcut=wird on initial load
+  // Handle PWA Home Screen shortcut ?shortcut=wird on initial load & strip transient launch params
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const shortcut = new URLSearchParams(window.location.search).get('shortcut');
-    if (shortcut !== 'wird') return;
-    const now = new Date();
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-    const prayers: Array<{ key: KhatmaPrayerKey; label: string; time: string }> = [
-      { key: 'fajr', label: 'الفجر', time: prayerTimes.fajr },
-      { key: 'dhuhr', label: now.getDay() === 5 ? 'الجمعة' : 'الظهر', time: prayerTimes.dhuhr },
-      { key: 'asr', label: 'العصر', time: prayerTimes.asr },
-      { key: 'maghrib', label: 'المغرب', time: prayerTimes.maghrib },
-      { key: 'isha', label: 'العشاء', time: prayerTimes.isha },
-    ];
-    let target = prayers[0];
-    for (const p of prayers) {
-      const [h, m] = p.time.split(':').map(Number);
-      if ((h || 0) * 60 + (m || 0) > nowMins) {
-        target = p;
-        break;
+    const params = new URLSearchParams(window.location.search);
+    const shortcut = params.get('shortcut');
+    if (shortcut === 'wird') {
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const prayers: Array<{ key: KhatmaPrayerKey; label: string; time: string }> = [
+        { key: 'fajr', label: 'الفجر', time: prayerTimes.fajr },
+        { key: 'dhuhr', label: now.getDay() === 5 ? 'الجمعة' : 'الظهر', time: prayerTimes.dhuhr },
+        { key: 'asr', label: 'العصر', time: prayerTimes.asr },
+        { key: 'maghrib', label: 'المغرب', time: prayerTimes.maghrib },
+        { key: 'isha', label: 'العشاء', time: prayerTimes.isha },
+      ];
+      let target = prayers[0];
+      for (const p of prayers) {
+        const [h, m] = p.time.split(':').map(Number);
+        if ((h || 0) * 60 + (m || 0) > nowMins) {
+          target = p;
+          break;
+        }
+      }
+      setSelectedWirdModal({ prayerKey: target.key, prayerNameAr: target.label });
+    }
+
+    const transientKeys = ['tab', 'mode', 'shortcut'];
+    let mutated = false;
+    transientKeys.forEach((k) => {
+      if (params.has(k)) {
+        params.delete(k);
+        mutated = true;
+      }
+    });
+    if (mutated) {
+      try {
+        const nextSearch = params.toString();
+        const cleanUrl = window.location.pathname + (nextSearch ? `?${nextSearch}` : '') + window.location.hash;
+        window.history.replaceState({}, document.title, cleanUrl);
+      } catch {
+        // ignore history errors
       }
     }
-    setSelectedWirdModal({ prayerKey: target.key, prayerNameAr: target.label });
   }, []);
 
   // Widget Data Bridge: syncs unified JSON in localStorage & dispatches 'mihrabWidgetSync'
@@ -1894,6 +1927,10 @@ export default function App() {
             if (window.innerWidth > window.innerHeight) {
               standbyDismissedInLandscapeRef.current = true;
             }
+            setIsStandbyModeOpen(false);
+          }}
+          onDisableAutoStart={() => {
+            handleUpdateSettings({ autoEnterTvDisplay: false });
             setIsStandbyModeOpen(false);
           }}
           prayerTimes={prayerTimes}
