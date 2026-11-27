@@ -45,7 +45,8 @@ interface PrayerTimesControlPageProps {
   currentLocation: CityLocation;
   settings: UserSettings;
   onUpdateSettings: (newSettings: Partial<UserSettings>) => void;
-  onNavigateHome: () => void;
+  onNavigateHome?: () => void;
+  embeddedInSettings?: boolean;
 }
 
 export const PrayerTimesControlPage: React.FC<PrayerTimesControlPageProps> = ({
@@ -54,6 +55,7 @@ export const PrayerTimesControlPage: React.FC<PrayerTimesControlPageProps> = ({
   settings,
   onUpdateSettings,
   onNavigateHome,
+  embeddedInSettings = false,
 }) => {
   const [sheikhsRegistry, setSheikhsRegistry] = useState<AppSheikhsRegistry>(() => {
     syncAppSheikhsToWindow();
@@ -296,10 +298,14 @@ export const PrayerTimesControlPage: React.FC<PrayerTimesControlPageProps> = ({
       id="prayer-times-page"
       dir="rtl"
       aria-label="صفحة المواقيت والتحكم بالأذان والشيوخ"
-      className="max-w-3xl mx-auto space-y-4 pb-8 text-right animate-fadeIn"
+      className={
+        embeddedInSettings
+          ? 'w-full space-y-4 pb-2 text-right'
+          : 'max-w-3xl mx-auto space-y-4 pb-8 text-right animate-fadeIn'
+      }
       style={{ fontFamily: "'Cairo', sans-serif" }}
     >
-      {/* Top Navigation Bar with Clear Back-to-Home Button */}
+      {/* Top Header */}
       <div className="rounded-3xl bg-gradient-to-br from-[#08241B] via-[#061A13] to-[#05140F] border border-[#CFA632]/55 p-4 shadow-[0_14px_38px_rgba(0,0,0,0.5)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -308,7 +314,7 @@ export const PrayerTimesControlPage: React.FC<PrayerTimesControlPageProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="font-amiri text-xl sm:text-2xl font-bold text-[#F6D884] leading-tight truncate">
-                صفحة المواقيت والأذان
+                ضبط المواقيت والأذان والشيوخ
               </h2>
               <p className="text-xs text-slate-300 truncate mt-0.5">
                 {currentLocation.nameAr}، {currentLocation.countryAr} · تحكم بالأذان، الشيوخ، وضبط الدقائق
@@ -316,14 +322,28 @@ export const PrayerTimesControlPage: React.FC<PrayerTimesControlPageProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onNavigateHome}
-            className="min-h-[44px] px-4 py-2 rounded-xl bg-gradient-to-r from-[#F6D884] via-[#E5BE53] to-[#CFA632] text-[#05140F] text-xs sm:text-sm font-black shadow-[0_6px_18px_rgba(207,166,50,0.3)] hover:brightness-105 active:scale-[0.98] transition-all flex items-center gap-1.5 shrink-0"
-          >
-            <span aria-hidden="true">🏠</span>
-            <span>الرئيسية</span>
-          </button>
+          {!embeddedInSettings && onNavigateHome ? (
+            <button
+              type="button"
+              onClick={onNavigateHome}
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-gradient-to-r from-[#F6D884] via-[#E5BE53] to-[#CFA632] text-[#05140F] text-xs sm:text-sm font-black shadow-[0_6px_18px_rgba(207,166,50,0.3)] hover:brightness-105 active:scale-[0.98] transition-all flex items-center gap-1.5 shrink-0"
+            >
+              <span aria-hidden="true">🏠</span>
+              <span>الرئيسية</span>
+            </button>
+          ) : embeddedInSettings ? (
+            <button
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById('duha-sunrise-section')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#0A2B20] hover:bg-[#0D382A] border border-[#CFA632]/45 text-[#F6D884] text-xs font-bold transition-all shrink-0"
+            >
+              قسم الضحى والشروق ↓
+            </button>
+          ) : null}
         </div>
 
         {/* Live Counter + Bulk Mute/Enable Controls */}

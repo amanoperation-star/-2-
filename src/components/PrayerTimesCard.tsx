@@ -23,7 +23,6 @@ import {
   Vibrate,
   X,
   Plane,
-  Sliders,
 } from 'lucide-react';
 import { PrayerTimeData, CityLocation, UserSettings, PrayerName } from '../types';
 import {
@@ -63,6 +62,16 @@ import {
 } from '../utils/sunnahRawatibData';
 import { evaluateFastingCalculator, loadFastingIntent, saveFastingIntent } from '../utils/fastingCalculator';
 import { SunnahRadarCard } from './SunnahRadarCard';
+import { QuietModeModal } from './QuietModeModal';
+import {
+  QUIET_MODE_UPDATED_EVENT,
+  QuietModeState,
+  evaluateQuietMode,
+  loadQuietModeState,
+  saveQuietModeState,
+  shouldSuppressGeneralNotification,
+  shouldSuppressPrayerAudioOrAlert,
+} from '../utils/quietModeData';
 import { LastThirdQiyamToast, QiyamToastPlaybackState } from './LastThirdQiyamToast';
 import {
   QIYAM_RECITERS,
@@ -90,7 +99,6 @@ interface PrayerTimesCardProps {
   onOpenTravelTab?: () => void;
   onOpenFullScreenAdhan?: (prayerKey: PrayerName, prayerNameAr?: string) => void;
   isGlobalFullScreenAdhanOpen?: boolean;
-  onOpenPrayerTimesPage?: () => void;
 }
 
 interface PrayerInfo {
@@ -178,7 +186,6 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   onOpenTravelTab,
   onOpenFullScreenAdhan,
   isGlobalFullScreenAdhanOpen = false,
-  onOpenPrayerTimesPage,
 }) => {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [nextPrayerKey, setNextPrayerKey] = useState<PrayerName>('fajr');
@@ -194,7 +201,8 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
   const [errorMessage, setErrorMessage] = useState<{ text: string; isFatal: boolean } | null>(null);
   const [isActivatingAudio, setIsActivatingAudio] = useState<boolean>(false);
-  const [wakeLockActive, setWakeLockActive] = useState<boolean>(false);
+  const [quietModeState, setQuietModeState] = useState<QuietModeState>(() => loadQuietModeState());
+  const [isQuietModeOpen, setIsQuietModeOpen] = useState<boolean>(false);
 
   // New features:
   const [isFullScreenAdhanOpen, setIsFullScreenAdhanOpen] = useState<boolean>(false);
@@ -502,11 +510,16 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
     );
 
+    const latestQuietState = loadQuietModeState();
+
     // 1. Pre-Adhan Reminder (10 or 15 mins before adhan)
     const reminderWindow = settings.preAdhanReminderMinutes || 10;
     if (reminderWindow > 0 && Math.abs(diffMinutes - reminderWindow) < 0.05 && now.getSeconds() === 0) {
       const reminderKey = `${now.toDateString()}-${next.key}-pre`;
-      if (!preAdhanAlertSent.has(reminderKey)) {
+      if (
+        !preAdhanAlertSent.has(reminderKey) &&
+        !shouldSuppressPrayerAudioOrAlert(latestQuietState, next.key, now)
+      ) {
         setPreAdhanAlertSent((prev) => new Set(prev).add(reminderKey));
         let spokenProfile: PreAdhanVoiceProfile | null = null;
         if (meetingModeEnabled) {
@@ -543,8 +556,11 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
             ? 'الجمعة'
             : matchingPrayer.nameAr;
 
-        if (!isPrayerAdhanActive) {
-          // Prayer is set to silent in Prayer Times Control Page
+        if (
+          !isPrayerAdhanActive ||
+          shouldSuppressPrayerAudioOrAlert(latestQuietState, matchingPrayer.key, now)
+        ) {
+          // Prayer is set to silent or muted by Quiet Mode exception policy
           return;
         }
 
@@ -588,22 +604,24 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         const iqamaKey = `${now.toDateString()}-${p.key}-iqama`;
         if (!iqamaAlertSentRef.current.has(iqamaKey)) {
           iqamaAlertSentRef.current.add(iqamaKey);
-          if (meetingModeEnabled) {
-            if ('vibrate' in navigator) {
-              navigator.vibrate([300, 150, 300]);
+          if (!shouldSuppressPrayerAudioOrAlert(latestQuietState, p.key, now)) {
+            if (meetingModeEnabled) {
+              if ('vibrate' in navigator) {
+                navigator.vibrate([300, 150, 300]);
+              }
+            } else if (settings.iqamaAutoPlayEnabled !== false) {
+              if (onTestIqama) {
+                onTestIqama(displayName, true);
+              } else {
+                adhanPlayer.playIqamaSound(settings.iqamaVoiceMode || 'rotate', { isAutoTrigger: true });
+              }
             }
-          } else if (settings.iqamaAutoPlayEnabled !== false) {
-            if (onTestIqama) {
-              onTestIqama(displayName, true);
-            } else {
-              adhanPlayer.playIqamaSound(settings.iqamaVoiceMode || 'rotate', { isAutoTrigger: true });
+            if (!notificationsMuted) {
+              backgroundService.sendPrayerNotification(
+                `قد قامت الصلاة · إقامة صلاة ${displayName}`,
+                `${currentLocation.nameAr} • حان وقت إقامة الصلاة الآن`
+              );
             }
-          }
-          if (!notificationsMuted) {
-            backgroundService.sendPrayerNotification(
-              `قد قامت الصلاة · إقامة صلاة ${displayName}`,
-              `${currentLocation.nameAr} • حان وقت إقامة الصلاة الآن`
-            );
           }
         }
       }
@@ -619,9 +637,11 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         const postKey = `${now.toDateString()}-${p.key}-post10`;
         if (!postPrayerAlertSent.has(postKey)) {
           setPostPrayerAlertSent((prev) => new Set(prev).add(postKey));
-          setPostPrayerNameAr(p.nameAr);
-          setIsPostPrayerSimulated(false);
-          setIsPostPrayerModalOpen(true);
+          if (!shouldSuppressGeneralNotification(latestQuietState, now)) {
+            setPostPrayerNameAr(p.nameAr);
+            setIsPostPrayerSimulated(false);
+            setIsPostPrayerModalOpen(true);
+          }
         }
       }
     }
@@ -655,21 +675,35 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   };
 
   useEffect(() => {
-    const syncWakeLock = () => {
-      setWakeLockActive(backgroundService.getIsWakeLockActive());
+    const syncQuiet = () => {
+      setQuietModeState(loadQuietModeState());
     };
-    window.addEventListener('wake_lock_state_changed', syncWakeLock);
-    return () => window.removeEventListener('wake_lock_state_changed', syncWakeLock);
+    window.addEventListener(QUIET_MODE_UPDATED_EVENT, syncQuiet);
+    return () => window.removeEventListener(QUIET_MODE_UPDATED_EVENT, syncQuiet);
   }, []);
 
-  const handleToggleWakeLock = async () => {
-    if (wakeLockActive) {
-      await backgroundService.releaseWakeLock();
-      setWakeLockActive(false);
-    } else {
-      const success = await backgroundService.requestWakeLock();
-      setWakeLockActive(success);
+  const quietEvaluation = useMemo(
+    () => evaluateQuietMode(quietModeState, currentTime),
+    [quietModeState, currentTime]
+  );
+
+  // Auto-clear expired quick-pause timestamp cleanly
+  useEffect(() => {
+    if (quietModeState.pauseUntilMs !== null && quietModeState.pauseUntilMs <= currentTime.getTime()) {
+      const cleared = saveQuietModeState({
+        ...quietModeState,
+        pauseUntilMs: null,
+        pauseLabelAr: null,
+      });
+      setQuietModeState(cleared);
     }
+  }, [quietModeState, currentTime]);
+
+  const handleUpdateQuietState = (updater: (prev: QuietModeState) => QuietModeState) => {
+    setQuietModeState((prev) => {
+      const next = saveQuietModeState(updater(prev));
+      return next;
+    });
   };
 
   const triggerSilentMeetingAdhan = (prayerNameAr: string, timeStr: string) => {
@@ -920,6 +954,8 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   useEffect(() => {
     const nightCycleKey = `${todayDateKey}-${nextNightFajrStr}`;
 
+    const isGeneralQuietNow = shouldSuppressGeneralNotification(quietModeState, currentTime);
+
     if (isLastThirdActive && lastThirdAutoOpenedRef.current !== nightCycleKey) {
       const shouldAutoAct =
         settings.lastThirdAutoOpen ||
@@ -928,24 +964,26 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
 
       if (shouldAutoAct && (settings.lastThirdAutoOpen || settings.lastThirdAutoOpenAdhkar || settings.lastThirdFadeInAlarm)) {
         lastThirdAutoOpenedRef.current = nightCycleKey;
-        const tonight = pickTonightQiyamSelection(nightCycleKey);
-        const reciterInfo = QIYAM_RECITERS[tonight.reciterId];
+        if (!isGeneralQuietNow) {
+          const tonight = pickTonightQiyamSelection(nightCycleKey);
+          const reciterInfo = QIYAM_RECITERS[tonight.reciterId];
 
-        if (nightThirds.isLastThirdNow && settings.lastThirdNightEnabled !== false) {
-          void startQiyamVersePlayback(tonight.verse, tonight.reciterId, true);
-          if (!notificationsMuted) {
-            backgroundService.sendPrayerNotification(
-              `دخول الثلث الأخير · ${reciterInfo.shortNameAr}`,
-              `${tonight.verse.verse} (${tonight.verse.surah}) · متبقي حتى الفجر ${nightThirds.formattedRemainingToFajr}`
-            );
+          if (nightThirds.isLastThirdNow && settings.lastThirdNightEnabled !== false) {
+            void startQiyamVersePlayback(tonight.verse, tonight.reciterId, true);
+            if (!notificationsMuted) {
+              backgroundService.sendPrayerNotification(
+                `دخول الثلث الأخير · ${reciterInfo.shortNameAr}`,
+                `${tonight.verse.verse} (${tonight.verse.surah}) · متبقي حتى الفجر ${nightThirds.formattedRemainingToFajr}`
+              );
+            }
           }
-        }
 
-        if (settings.lastThirdAutoOpenAdhkar && onNavigateToAdhkar) {
-          onNavigateToAdhkar();
-        }
-        if (settings.lastThirdAutoOpen) {
-          setIsLastThirdModalOpen(true);
+          if (settings.lastThirdAutoOpenAdhkar && onNavigateToAdhkar) {
+            onNavigateToAdhkar();
+          }
+          if (settings.lastThirdAutoOpen) {
+            setIsLastThirdModalOpen(true);
+          }
         }
       }
     }
@@ -962,14 +1000,16 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
           witrAlertSentRef.current !== nightCycleKey
         ) {
           witrAlertSentRef.current = nightCycleKey;
-          if (settings.lastThirdFadeInAlarm !== false) {
-            adhanPlayer.playGentleFadeInAlarm();
-          }
-          if (!notificationsMuted) {
-            backgroundService.sendPrayerNotification(
-              'منبّه صلاة الوتر',
-              `متبقي ${witrTarget} دقيقة على أذان الفجر — اجعلوا آخر صلاتكم بالليل وتراً`
-            );
+          if (!isGeneralQuietNow) {
+            if (settings.lastThirdFadeInAlarm !== false) {
+              adhanPlayer.playGentleFadeInAlarm();
+            }
+            if (!notificationsMuted) {
+              backgroundService.sendPrayerNotification(
+                'منبّه صلاة الوتر',
+                `متبقي ${witrTarget} دقيقة على أذان الفجر — اجعلوا آخر صلاتكم بالليل وتراً`
+              );
+            }
           }
         }
       }
@@ -982,14 +1022,16 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
           suhoorAlertSentRef.current !== nightCycleKey
         ) {
           suhoorAlertSentRef.current = nightCycleKey;
-          if (settings.lastThirdFadeInAlarm !== false) {
-            adhanPlayer.playGentleFadeInAlarm();
-          }
-          if (!notificationsMuted) {
-            backgroundService.sendPrayerNotification(
-              'منبّه السحور المبارك',
-              `متبقي ${suhoorTarget} دقيقة على أذان الفجر — تسحروا فإن في السحور بركة`
-            );
+          if (!isGeneralQuietNow) {
+            if (settings.lastThirdFadeInAlarm !== false) {
+              adhanPlayer.playGentleFadeInAlarm();
+            }
+            if (!notificationsMuted) {
+              backgroundService.sendPrayerNotification(
+                'منبّه السحور المبارك',
+                `متبقي ${suhoorTarget} دقيقة على أذان الفجر — تسحروا فإن في السحور بركة`
+              );
+            }
           }
         }
       }
@@ -1125,6 +1167,18 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         onClose={() => setMihrabSelectedSurah(null)}
       />
 
+      {/* Quiet Mode & Scheduled Notification Control Modal */}
+      <QuietModeModal
+        isOpen={isQuietModeOpen}
+        onClose={() => setIsQuietModeOpen(false)}
+        quietState={quietModeState}
+        evaluation={quietEvaluation}
+        onUpdateQuietState={handleUpdateQuietState}
+        fajrTimeStr={prayerTimes.fajr}
+        settings={settings}
+        onUpdateSettings={onUpdateSettings}
+      />
+
       {/* Alert / Error Message Banner if any */}
       {errorMessage && (
         <div
@@ -1185,47 +1239,6 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
           </div>
         </button>
       )}
-
-      {/* Quick Action Bar to Open Prayer Times Control Page */}
-      {onOpenPrayerTimesPage && (() => {
-        const activeAdhanCount = (['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).filter(
-          (k) => settings.prayerAdhanEnabled?.[k] !== false
-        ).length;
-        return (
-          <div
-            dir="rtl"
-            className="rounded-2xl border border-[#CFA632]/45 bg-gradient-to-l from-[#0B261C]/95 via-[#071D15]/95 to-[#05140F]/95 px-4 py-3 shadow-[0_10px_28px_rgba(0,0,0,0.4)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-[#04130E] border border-[#F6D884]/45 flex items-center justify-center text-[#F6D884] shrink-0">
-                <Sliders className="w-4 h-4" />
-              </div>
-              <div className="min-w-0 text-right">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-amiri text-base font-bold text-[#F6D884]">
-                    ضبط المواقيت وشيوخ الأذان
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-[#34D399]/15 border border-[#34D399]/40 text-[#34D399] text-[11px] font-bold tabular-nums">
-                    {toArabicDigits(activeAdhanCount)} من {toArabicDigits(5)} يؤذّن
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-300 truncate">
-                  تشغيل/كتم الأذان لكل صلاة، ربط شيوخ التطبيق، وتعديل الوقت بالدقيقة
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onOpenPrayerTimesPage}
-              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#F6D884] via-[#CFA632] to-[#B8891E] text-[#05140F] font-black text-xs sm:text-sm shadow-[0_6px_18px_rgba(207,166,50,0.3)] hover:brightness-105 active:scale-[0.98] transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Clock className="w-4 h-4 shrink-0" />
-              <span>فتح صفحة المواقيت</span>
-            </button>
-          </div>
-        );
-      })()}
 
       {/* Hero Banner / Next Prayer Architectural Sanctuary Frame */}
       <div
@@ -1723,11 +1736,13 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         )}
       </div>
 
-      {/* Unified Ultra-Compact Islamic Mihrab Box: Forgotten Sunnah + Sujud Sahw + Screen Lamp */}
+      {/* Unified Ultra-Compact Islamic Mihrab Box: Forgotten Sunnah + Sujud Sahw + Quiet Mode */}
       <SunnahRadarCard
         onOpenSujudSahw={() => setIsSujudSahwModalOpen(true)}
-        wakeLockActive={wakeLockActive}
-        onToggleWakeLock={handleToggleWakeLock}
+        quietModeActive={quietEvaluation.isQuietNow}
+        quietModeScheduled={!quietEvaluation.isQuietNow && quietEvaluation.enabledSchedulesCount > 0}
+        quietModeStatusLabel={quietEvaluation.tileSubLabelAr}
+        onOpenQuietMode={() => setIsQuietModeOpen(true)}
       />
 
       {/* Smart Office & Meeting Mode: Silent Alert Card & Post-Meeting Reminder */}

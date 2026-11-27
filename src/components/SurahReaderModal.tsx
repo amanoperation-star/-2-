@@ -34,7 +34,7 @@ export const SurahReaderModal: React.FC<SurahReaderModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md"
+      className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md"
       onClick={onClose}
     >
       <div

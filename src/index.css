@@ -157,7 +157,7 @@
   .rounded-3xl,
   .rounded-2xl,
   .rounded-xl
-):not(.theme-swatch):not(.last-third-isolated):not(.last-third-isolated *) {
+):not(.theme-swatch):not(.last-third-isolated):not(.last-third-isolated *):not(.mushaf-reader-isolated):not(.mushaf-reader-isolated *) {
   transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
 }
 
@@ -528,4 +528,16 @@ html.tv-remote-focus-enabled.tv-remote-active :is(button, a, input, select, text
     animation: none !important;
   }
 }
+
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 

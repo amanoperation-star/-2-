@@ -7,7 +7,7 @@ import {
   ChevronLeft,
   ChevronUp,
   HelpCircle,
-  Lightbulb,
+  Moon,
   RotateCw,
   Sparkles,
   Trophy,
@@ -32,14 +32,18 @@ import { adhanPlayer } from '../utils/audioAdhan';
 
 export interface SunnahRadarCardProps {
   onOpenSujudSahw?: () => void;
-  wakeLockActive?: boolean;
-  onToggleWakeLock?: () => void;
+  quietModeActive?: boolean;
+  quietModeScheduled?: boolean;
+  quietModeStatusLabel?: string;
+  onOpenQuietMode?: () => void;
 }
 
 export const SunnahRadarCard: React.FC<SunnahRadarCardProps> = ({
   onOpenSujudSahw,
-  wakeLockActive = false,
-  onToggleWakeLock,
+  quietModeActive = false,
+  quietModeScheduled = false,
+  quietModeStatusLabel = 'متاح',
+  onOpenQuietMode,
 }) => {
   const [radarState, setRadarState] = useState<SunnahRadarState>(() => loadSunnahRadarState());
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -138,7 +142,7 @@ export const SunnahRadarCard: React.FC<SunnahRadarCardProps> = ({
       {/* Unified Ultra-Compact Islamic Mihrab Box: 3 Side-by-Side Mini-Tiles */}
       <section
         dir="rtl"
-        aria-label="أدوات المحراب السريعة: سُنة الأسبوع ودليل السهو وإبقاء الشاشة"
+        aria-label="أدوات المحراب السريعة: سُنة الأسبوع ودليل السهو ووضع السكون"
         className="theme-keep-light relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#13221D] via-[#111C18] to-[#0D1613] border border-[#D4AF37]/60 shadow-[0_14px_36px_rgba(0,0,0,0.45),0_0_24px_rgba(212,175,55,0.1)] pt-3.5 pb-2 px-2 sm:px-3 text-right"
       >
         {/* Subtle Andalusian Geometric Texture */}
@@ -232,45 +236,57 @@ export const SunnahRadarCard: React.FC<SunnahRadarCardProps> = ({
             </div>
           </button>
 
-          {/* Tile 3: إبقاء الشاشة نشطة + اللمبة */}
+          {/* Tile 3: وضع السكون وإدارة الإشعارات */}
           <button
             type="button"
-            onClick={() => onToggleWakeLock?.()}
-            aria-pressed={wakeLockActive}
+            onClick={() => onOpenQuietMode?.()}
+            aria-pressed={quietModeActive}
             className={`group min-h-[78px] px-1.5 sm:px-3 py-2 flex flex-col items-center justify-center text-center gap-1 rounded-2xl transition-colors active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] ${
-              wakeLockActive ? 'bg-amber-400/10' : 'hover:bg-[#172822]/75'
+              quietModeActive
+                ? 'bg-[#10B981]/12'
+                : quietModeScheduled
+                ? 'bg-[#D4AF37]/8 hover:bg-[#172822]/75'
+                : 'hover:bg-[#172822]/75'
             }`}
-            title="منع انطفاء الشاشة أثناء تشغيل التطبيق"
+            title="فتح صفحة وضع السكون لإيقاف الإشعارات في أوقات محددة والتحكم بالتذكيرات"
           >
             <div
               className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-all duration-200 ${
-                wakeLockActive
-                  ? 'bg-amber-400/20 border-amber-300 text-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.55)]'
-                  : 'bg-[#09120F] border-slate-700 text-slate-500'
+                quietModeActive
+                  ? 'bg-[#0C3325] border-[#34D399] text-[#34D399] shadow-[0_0_16px_rgba(16,185,129,0.4)]'
+                  : quietModeScheduled
+                  ? 'bg-[#08241C] border-[#D4AF37]/70 text-[#F3CA63]'
+                  : 'bg-[#08241C] border-[#D4AF37]/50 group-hover:border-[#D4AF37] text-[#F3CA63]'
               }`}
               aria-hidden="true"
             >
-              <Lightbulb
+              <Moon
                 className={`w-4.5 h-4.5 transition-all duration-200 ${
-                  wakeLockActive ? 'text-amber-300 fill-amber-300/45' : 'text-slate-500'
+                  quietModeActive
+                    ? 'text-[#34D399] fill-[#34D399]/25'
+                    : 'text-[#F3CA63]'
                 }`}
               />
             </div>
 
             <div
               className={`text-[11px] sm:text-sm font-bold font-amiri leading-tight whitespace-nowrap truncate max-w-full ${
-                wakeLockActive ? 'text-amber-200' : 'text-white'
+                quietModeActive ? 'text-[#34D399]' : 'text-white group-hover:text-[#F3CA63]'
               }`}
             >
-              إبقاء الشاشة
+              وضع السكون
             </div>
 
             <div
               className={`text-[10px] sm:text-[11px] font-bold leading-tight whitespace-nowrap ${
-                wakeLockActive ? 'text-[#10B981]' : 'text-slate-400'
+                quietModeActive
+                  ? 'text-[#34D399]'
+                  : quietModeScheduled
+                  ? 'text-[#F3CA63]'
+                  : 'text-slate-300'
               }`}
             >
-              {wakeLockActive ? 'مضاءة' : 'مطفأة'}
+              {quietModeStatusLabel}
             </div>
           </button>
         </div>

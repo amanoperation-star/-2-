@@ -39,6 +39,9 @@ import {
 } from 'lucide-react';
 import { ApkGuideCard } from './ApkGuideCard';
 import { NotificationShadeSettingsCard } from './NotificationShadeSettingsCard';
+import { PrayerTimesControlPage } from './PrayerTimesControlPage';
+import { DuhaSunriseSection } from './DuhaSunriseSection';
+import { SelectedSurahModalData, SurahReaderModal } from './SurahReaderModal';
 import {
   CityLocation,
   CalculationMethodId,
@@ -48,7 +51,7 @@ import {
   AppThemeId,
   AutoThemeTriggerMode,
 } from '../types';
-import { CITIES, CALCULATION_METHODS_LIST } from '../utils/prayerCalculator';
+import { CITIES, CALCULATION_METHODS_LIST, calculatePrayerTimes } from '../utils/prayerCalculator';
 import {
   adhanPlayer,
   AdhanAudioSource,
@@ -108,7 +111,7 @@ import {
   DEFAULT_ENABLED_ADHAN_MOSQUES,
 } from '../utils/adhanScenesData';
 
-export type SettingsTabId = 'general' | 'iqama' | 'adhkar' | 'themes' | 'simulations' | 'fasting' | 'widgets' | 'android';
+export type SettingsTabId = 'general' | 'prayer_times' | 'iqama' | 'adhkar' | 'themes' | 'simulations' | 'fasting' | 'widgets' | 'android';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -121,6 +124,7 @@ interface SettingsModalProps {
   onReEnableAutoTheme?: () => void;
   currentLocation: CityLocation;
   prayerTimes?: PrayerTimeData;
+  basePrayerTimes?: PrayerTimeData;
   onSelectCity: (city: CityLocation) => void;
   onOpenBackgroundPicker?: () => void;
   onTestPeriodicReminder?: () => void;
@@ -145,6 +149,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onReEnableAutoTheme,
   currentLocation,
   prayerTimes,
+  basePrayerTimes,
   onSelectCity,
   onOpenBackgroundPicker,
   onTestPeriodicReminder,
@@ -355,6 +360,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [notificationMosqueTheme, setNotificationMosqueTheme] = useState<NotificationMosqueTheme>(
     settings.notificationMosqueTheme || 'auto'
   );
+  const [duhaSelectedSurah, setDuhaSelectedSurah] = useState<SelectedSurahModalData | null>(null);
 
   useEffect(() => {
     setIsAudioUnlocked(adhanPlayer.getIsUnlocked());
@@ -1984,6 +1990,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
             <button
               ref={(el) => {
+                tabButtonRefs.current.prayer_times = el;
+              }}
+              type="button"
+              onClick={(e) => handleSelectSettingsTab('prayer_times', e.currentTarget)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                activeSettingsTab === 'prayer_times'
+                  ? 'bg-gradient-to-r from-[#fbbf24] via-[#e5b869] to-emerald-400 text-slate-950 shadow'
+                  : 'bg-[#041d17]/70 border border-[#e5b869]/20 text-slate-300 hover:text-[#fbbf24]'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>المواقيت والأذان</span>
+            </button>
+            <button
+              ref={(el) => {
                 tabButtonRefs.current.iqama = el;
               }}
               type="button"
@@ -2092,7 +2113,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Scrollable Modal Body */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-3 md:px-6 md:py-5 space-y-6 relative z-10 w-full max-w-full">
 
-          {activeSettingsTab === 'adhkar' ? (
+          {activeSettingsTab === 'prayer_times' ? (
+            (() => {
+              const resolvedBaseTimes =
+                basePrayerTimes ||
+                prayerTimes ||
+                calculatePrayerTimes(
+                  new Date(),
+                  currentLocation.lat,
+                  currentLocation.lng,
+                  currentLocation.timezone,
+                  settings.calculationMethod,
+                  settings.asrMethod
+                );
+              const resolvedEffectiveTimes = prayerTimes || resolvedBaseTimes;
+
+              return (
+                <div className="space-y-6 w-full">
+                  <PrayerTimesControlPage
+                    embeddedInSettings={true}
+                    basePrayerTimes={resolvedBaseTimes}
+                    currentLocation={currentLocation}
+                    settings={settings}
+                    onUpdateSettings={(partial) => {
+                      if (partial.adhanReciter) setSelectedAdhanReciter(partial.adhanReciter);
+                      if (partial.fajrAdhanReciter) setSelectedFajrReciter(partial.fajrAdhanReciter);
+                      onUpdateSettings(partial);
+                    }}
+                  />
+
+                  <DuhaSunriseSection
+                    sunriseTime={resolvedEffectiveTimes.sunrise}
+                    dhuhrTime={resolvedEffectiveTimes.dhuhr}
+                    settings={settings}
+                    onUpdateSettings={onUpdateSettings}
+                    onOpenSurah={(surah, contextLabel) =>
+                      setDuhaSelectedSurah({ surah, prayerNameAr: contextLabel })
+                    }
+                  />
+                </div>
+              );
+            })()
+          ) : activeSettingsTab === 'adhkar' ? (
             renderAdhkarSettingsSection()
           ) : activeSettingsTab === 'iqama' ? (
             <div className="space-y-6 w-full max-w-full overflow-x-hidden">
@@ -5131,6 +5193,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
       </div>
+
+      <SurahReaderModal
+        selectedSurah={duhaSelectedSurah}
+        onClose={() => setDuhaSelectedSurah(null)}
+      />
     </div>
   );
 };

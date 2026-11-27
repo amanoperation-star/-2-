@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Clock,
   Compass,
@@ -20,6 +20,8 @@ import {
   TrainFront,
   Home,
   Palette,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { CityLocation, UserSettings } from '../types';
 import { adhanPlayer, AudioPlayerState } from '../utils/audioAdhan';
@@ -56,8 +58,6 @@ interface NavbarProps {
   onTogglePrayerWird: (prayerKey: KhatmaPrayerKey) => void;
   onStartNewKhatma: () => void;
   onOpenWirdModal: (prayerKey: KhatmaPrayerKey, prayerNameAr: string) => void;
-  isPrayerTimesPageOpen?: boolean;
-  onOpenPrayerTimesPage?: () => void;
   onNavigateHome?: () => void;
 }
 
@@ -90,15 +90,61 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTogglePrayerWird,
   onStartNewKhatma,
   onOpenWirdModal,
-  isPrayerTimesPageOpen = false,
-  onOpenPrayerTimesPage,
   onNavigateHome,
 }) => {
   const [playerState, setPlayerState] = useState<AudioPlayerState>('idle');
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [kaabaOpen, setKaabaOpen] = useState<boolean>(false);
   const [khatmaOpen, setKhatmaOpen] = useState<boolean>(false);
+  const toolsScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollToolsStart, setCanScrollToolsStart] = useState<boolean>(false);
+  const [canScrollToolsEnd, setCanScrollToolsEnd] = useState<boolean>(false);
   const activeThemeDef = getThemeDefinition(normalizeThemeId(settings.theme));
+
+  const updateToolsScrollEdges = useCallback(() => {
+    const el = toolsScrollRef.current;
+    if (!el) return;
+    if (el.scrollWidth <= el.clientWidth + 2) {
+      setCanScrollToolsStart(false);
+      setCanScrollToolsEnd(false);
+      return;
+    }
+    const containerRect = el.getBoundingClientRect();
+    const visibleItems = Array.from(el.children).filter(
+      (child) => child.getBoundingClientRect().width > 0
+    );
+    if (visibleItems.length === 0) {
+      setCanScrollToolsStart(false);
+      setCanScrollToolsEnd(false);
+      return;
+    }
+    const firstRect = visibleItems[0].getBoundingClientRect();
+    const lastRect = visibleItems[visibleItems.length - 1].getBoundingClientRect();
+    setCanScrollToolsStart(firstRect.right > containerRect.right + 4);
+    setCanScrollToolsEnd(lastRect.left < containerRect.left - 4);
+  }, []);
+
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(updateToolsScrollEdges);
+    const el = toolsScrollRef.current;
+    let observer: ResizeObserver | null = null;
+    if (el && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => updateToolsScrollEdges());
+      observer.observe(el);
+    }
+    window.addEventListener('resize', updateToolsScrollEdges);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      observer?.disconnect();
+      window.removeEventListener('resize', updateToolsScrollEdges);
+    };
+  }, [updateToolsScrollEdges, playerState, isUnlocked, activeThemeDef.nameAr]);
+
+  const scrollToolsBy = (deltaX: number) => {
+    const el = toolsScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: deltaX, behavior: 'smooth' });
+  };
 
   const isFriday = new Date().getDay() === 5;
   const getPrayerLabel = (key: KhatmaPrayerKey) =>
@@ -218,7 +264,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={handleGoHome}
               title="العودة إلى الصفحة الرئيسية"
               className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1 shadow-sm transition-all ${
-                activeTab === 'times' && !isPrayerTimesPageOpen
+                activeTab === 'times'
                   ? 'bg-[#0A241C] border-[#F6D884] text-[#F6D884] shadow-[0_0_12px_rgba(246,216,132,0.22)]'
                   : 'bg-[#071E17] border-[#D4AF37]/45 text-[#F3D078] hover:bg-[#0A241C]'
               }`}
@@ -242,126 +288,192 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* 1B. Full Weather Strip */}
         <WeatherWidget currentLocation={currentLocation} showFullStripOnMobile={true} />
 
-        {/* 1C. Complete Tools Strip (Background, Audio, Display Mode, Duas, Achievements, Widgets, Theme) */}
-        <div className="rounded-2xl bg-[#071E17] border border-[#D4AF37]/30 p-2">
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-            <button
-              type="button"
-              onClick={onOpenBackgroundPicker}
-              title="تغيير خلفية المساجد"
-              className="min-h-[42px] px-2 py-1.5 rounded-xl bg-[#0A241C] border border-[#D4AF37]/30 hover:border-[#F3D078] text-[#F3D078] text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">تغيير الخلفية</span>
-            </button>
-
+        {/* 1C. Quick Horizontal Scrollable Emerald-Brass Pill Control Bar with Smart Edge Arrows */}
+        <div className="relative">
+          <div
+            ref={toolsScrollRef}
+            onScroll={updateToolsScrollEdges}
+            role="toolbar"
+            aria-label="شريط التحكم السريع"
+            className="flex flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar py-0.5 touch-pan-x scroll-smooth"
+          >
+            {/* 1. الصوت */}
             <button
               type="button"
               onClick={handleToggleAdhan}
+              aria-pressed={playerState === 'playing'}
               title={playerState === 'playing' ? 'إيقاف صوت الأذان' : 'تشغيل صوت الأذان'}
-              className={`min-h-[42px] px-2 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${
+              className={`min-h-[40px] px-3.5 py-2 rounded-full border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)] ${
                 playerState === 'playing'
-                  ? 'bg-rose-900/70 border-rose-500/60 text-rose-100'
-                  : 'bg-[#0A241C] border-[#34D399]/35 text-[#34D399] hover:border-[#34D399]'
+                  ? 'bg-gradient-to-b from-rose-900/90 to-rose-950 border-rose-400/75 text-rose-100 shadow-[0_0_14px_rgba(244,63,94,0.28)]'
+                  : 'bg-gradient-to-b from-[#0C281F] to-[#05140F] border-[#34D399]/50 hover:border-[#34D399] hover:bg-[#0E3126] text-[#34D399]'
               }`}
             >
               {playerState === 'playing' ? (
                 <>
                   <Square className="w-3.5 h-3.5 fill-current shrink-0" />
-                  <span className="truncate">إيقاف الصوت</span>
+                  <span>إيقاف الصوت</span>
                 </>
               ) : (
                 <>
                   <Volume2 className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">الصوت</span>
+                  <span>الصوت</span>
                 </>
               )}
             </button>
 
-            {(onOpenStandbyMode || onToggleTvMode) && (
-              <button
-                type="button"
-                onClick={onOpenStandbyMode ?? onToggleTvMode}
-                title="وضع العرض الموحّد (وضع المنضدة وشاشة البيت والمصلى)"
-                className="min-h-[42px] px-2 py-1.5 rounded-xl bg-[#0A241C] border border-[#D4AF37]/50 hover:border-[#F3D078] text-[#F3D078] text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <span aria-hidden="true" className="leading-none">🖥️</span>
-                <span className="truncate">وضع العرض</span>
-              </button>
-            )}
-
-            {onOpenIstikharaHajah && (
-              <button
-                type="button"
-                onClick={onOpenIstikharaHajah}
-                title="الأدعية ومساعد صلاة الاستخارة والحاجة"
-                className="min-h-[42px] px-2 py-1.5 rounded-xl bg-[#0A241C] border border-[#D4AF37]/35 hover:border-[#F3D078] text-[#F3D078] text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <span aria-hidden="true" className="leading-none">🤲</span>
-                <span className="truncate">الأدعية</span>
-              </button>
-            )}
-
-            {onOpenSteadfastness && (
-              <button
-                type="button"
-                onClick={onOpenSteadfastness}
-                title="الإنجازات وسجل استقامة القلب"
-                className="min-h-[42px] px-2 py-1.5 rounded-xl bg-[#0A241C] border border-[#D4AF37]/45 hover:border-[#F3D078] text-[#F3D078] text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <Award className="w-3.5 h-3.5 text-[#34D399] shrink-0" />
-                <span className="truncate">الإنجازات</span>
-              </button>
-            )}
-
-            {onOpenWidgetsStudio && (
-              <button
-                type="button"
-                onClick={onOpenWidgetsStudio}
-                title="الودجات واختصارات الشاشة"
-                className="min-h-[42px] px-2 py-1.5 rounded-xl bg-[#0A241C] border border-[#D4AF37]/30 hover:border-[#F3D078] text-slate-100 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <span aria-hidden="true" className="leading-none">📱</span>
-                <span className="truncate">الودجات</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={onCycleTheme}
-              title={`تبديل المظهر الحالي (${activeThemeDef.nameAr})`}
-              className="min-h-[42px] px-2 py-1.5 rounded-xl bg-[#0A241C] border border-[#D4AF37]/25 hover:border-[#F3D078] text-slate-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <Palette className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-              <span className="truncate">{activeThemeDef.nameAr}</span>
-            </button>
-
+            {/* 2. تفعيل الصوت */}
             <button
               type="button"
               onClick={handleUnlockAudio}
+              aria-pressed={isUnlocked}
               title="تفعيل إذن الصوت في المتصفح"
-              className={`min-h-[42px] px-2 py-1.5 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-colors ${
+              className={`min-h-[40px] px-3.5 py-2 rounded-full border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)] ${
                 isUnlocked
-                  ? 'bg-[#06291E] border-[#34D399]/50 text-[#34D399]'
-                  : 'bg-[#0A241C] border-[#D4AF37]/25 text-slate-200'
+                  ? 'bg-gradient-to-b from-[#093628] to-[#051F16] border-[#34D399]/65 text-[#34D399] shadow-[0_0_12px_rgba(52,211,153,0.18)]'
+                  : 'bg-gradient-to-b from-[#0C281F] to-[#05140F] border-[#CFA632]/45 hover:border-[#F6D884] text-[#F6D884]'
               }`}
             >
               {isUnlocked ? (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">الصوت مفعّل</span>
+                  <span>الصوت مفعّل</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#F3D078] shrink-0" />
-                  <span className="truncate">تفعيل الصوت</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#F6D884] shrink-0" />
+                  <span>تفعيل الصوت</span>
                 </>
               )}
             </button>
 
-            <div className="empty:hidden flex items-stretch justify-center [&>button]:w-full [&>button]:justify-center [&>button]:min-h-[42px]">
+            {/* 3. تغيير الخلفية */}
+            <button
+              type="button"
+              onClick={onOpenBackgroundPicker}
+              title="تغيير خلفية المساجد"
+              className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/45 hover:border-[#F6D884] hover:from-[#0F3327] text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-[#F6D884] shrink-0" />
+              <span>تغيير الخلفية</span>
+            </button>
+
+            {/* 4. الثيم الزمردي */}
+            <button
+              type="button"
+              onClick={onCycleTheme}
+              title={`تبديل المظهر الحالي (${activeThemeDef.nameAr})`}
+              className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/45 hover:border-[#F6D884] hover:from-[#0F3327] text-slate-100 hover:text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+            >
+              <Palette className="w-3.5 h-3.5 text-[#34D399] shrink-0" />
+              <span>{activeThemeDef.nameAr}</span>
+            </button>
+
+            {/* 5. وضع العرض */}
+            {(onOpenStandbyMode || onToggleTvMode) && (
+              <button
+                type="button"
+                onClick={onOpenStandbyMode ?? onToggleTvMode}
+                title="وضع العرض الموحّد (وضع المنضدة وشاشة البيت والمصلى)"
+                className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/50 hover:border-[#F6D884] hover:from-[#0F3327] text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+              >
+                <span aria-hidden="true" className="leading-none text-sm">🖥️</span>
+                <span>وضع العرض</span>
+              </button>
+            )}
+
+            {/* 6. الودجات */}
+            {onOpenWidgetsStudio && (
+              <button
+                type="button"
+                onClick={onOpenWidgetsStudio}
+                title="الودجات واختصارات الشاشة"
+                className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/45 hover:border-[#F6D884] hover:from-[#0F3327] text-slate-100 hover:text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+              >
+                <span aria-hidden="true" className="leading-none text-sm">📱</span>
+                <span>الودجات</span>
+              </button>
+            )}
+
+            {/* 7. الأدعية */}
+            {onOpenIstikharaHajah && (
+              <button
+                type="button"
+                onClick={onOpenIstikharaHajah}
+                title="الأدعية ومساعد صلاة الاستخارة والحاجة"
+                className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/45 hover:border-[#F6D884] hover:from-[#0F3327] text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+              >
+                <span aria-hidden="true" className="leading-none text-sm">🤲</span>
+                <span>الأدعية</span>
+              </button>
+            )}
+
+            {/* 8. الإنجازات */}
+            {onOpenSteadfastness && (
+              <button
+                type="button"
+                onClick={onOpenSteadfastness}
+                title="الإنجازات وسجل استقامة القلب"
+                className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/50 hover:border-[#F6D884] hover:from-[#0F3327] text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
+              >
+                <Award className="w-3.5 h-3.5 text-[#34D399] shrink-0" />
+                <span>الإنجازات</span>
+              </button>
+            )}
+
+            <div className="empty:hidden shrink-0 [&>button]:rounded-full [&>button]:min-h-[40px] [&>button]:px-3.5 [&>button]:py-2 [&>button]:whitespace-nowrap">
               <PWAInstallButton />
             </div>
+          </div>
+
+          {/* Right/Start Edge Fade + Smart Scroll Arrow (RTL Start) */}
+          <div
+            aria-hidden={!canScrollToolsStart}
+            className={`absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-[#04130E] via-[#04130E]/90 to-transparent flex items-center justify-start pointer-events-none transition-opacity duration-200 ${
+              canScrollToolsStart ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => scrollToolsBy(180)}
+              tabIndex={canScrollToolsStart ? 0 : -1}
+              aria-label="التمرير لليمين في شريط التحكم"
+              title="التمرير لليمين"
+              className={`min-w-[44px] min-h-[40px] flex items-center justify-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F6D884] rounded-full transition-transform duration-200 ${
+                canScrollToolsStart
+                  ? 'pointer-events-auto translate-x-0'
+                  : 'pointer-events-none translate-x-1'
+              }`}
+            >
+              <span className="w-8 h-8 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/75 hover:border-[#F6D884] text-[#F6D884] shadow-[0_4px_14px_rgba(0,0,0,0.55)] flex items-center justify-center active:scale-95 transition-transform duration-150">
+                <ChevronRight className="w-4 h-4 shrink-0" />
+              </span>
+            </button>
+          </div>
+
+          {/* Left/End Edge Fade + Smart Scroll Arrow (RTL End) */}
+          <div
+            aria-hidden={!canScrollToolsEnd}
+            className={`absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-[#04130E] via-[#04130E]/90 to-transparent flex items-center justify-end pointer-events-none transition-opacity duration-200 ${
+              canScrollToolsEnd ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => scrollToolsBy(-180)}
+              tabIndex={canScrollToolsEnd ? 0 : -1}
+              aria-label="التمرير لليسار في شريط التحكم"
+              title="التمرير لليسار"
+              className={`min-w-[44px] min-h-[40px] flex items-center justify-end focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F6D884] rounded-full transition-transform duration-200 ${
+                canScrollToolsEnd
+                  ? 'pointer-events-auto translate-x-0'
+                  : 'pointer-events-none -translate-x-1'
+              }`}
+            >
+              <span className="w-8 h-8 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/75 hover:border-[#F6D884] text-[#F6D884] shadow-[0_4px_14px_rgba(0,0,0,0.55)] flex items-center justify-center active:scale-95 transition-transform duration-150">
+                <ChevronLeft className="w-4 h-4 shrink-0" />
+              </span>
+            </button>
           </div>
         </div>
 
@@ -854,7 +966,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="button"
               onClick={handleGoHome}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
-                activeTab === 'times' && !isPrayerTimesPageOpen
+                activeTab === 'times'
                   ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
                   : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
               }`}
@@ -863,25 +975,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>الرئيسية</span>
             </button>
 
-            {onOpenPrayerTimesPage && (
-              <button
-                type="button"
-                onClick={onOpenPrayerTimesPage}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
-                  isPrayerTimesPageOpen
-                    ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
-                    : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5 text-[#e5b869]" />
-                <span>فتح صفحة المواقيت</span>
-              </button>
-            )}
-
             <button
               onClick={() => navigateToSection('times')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
-                activeTab === 'times' && !isPrayerTimesPageOpen
+                activeTab === 'times'
                   ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
                   : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
               }`}

@@ -20,7 +20,6 @@ import { IstikharaHajahModal } from './components/IstikharaHajahModal';
 import { WidgetStudioModal } from './components/WidgetStudioModal';
 import { SpiritualSplashOverlay } from './components/SpiritualSplashOverlay';
 import { PrayerWidgetPreview } from './components/PrayerWidgetPreview';
-import { PrayerTimesControlPage } from './components/PrayerTimesControlPage';
 import {
   WIDGET_SIZES,
   WIDGET_THEMES,
@@ -84,6 +83,12 @@ import {
 } from './utils/sunnahRawatibData';
 import { CityLocation, UserSettings, PrayerTimeData, AppThemeId, PrayerName } from './types';
 import { CITIES, applyPrayerTimeOffsets, calculatePrayerTimes } from './utils/prayerCalculator';
+import { calculateDuhaSchedule, formatTime12Ar } from './utils/duhaSunriseData';
+import {
+  loadQuietModeState,
+  shouldSuppressGeneralNotification,
+  shouldSuppressPrayerAudioOrAlert,
+} from './utils/quietModeData';
 import { adhanPlayer, getDuaSource, SalawatVoiceProfile, PreAdhanVoiceProfile, IqamaVoiceProfile } from './utils/audioAdhan';
 import { LIVE_BACKGROUNDS, getSmartBackground, isCurrentTimeDay } from './utils/backgroundsData';
 import {
@@ -496,9 +501,24 @@ export default function App() {
       }
       return {};
     })(),
+    sunriseReminderEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('mihrab_sunrise_reminder_enabled') !== null
+        ? localStorage.getItem('mihrab_sunrise_reminder_enabled') === 'true'
+        : false,
+    duhaReminderEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('mihrab_duha_reminder_enabled') !== null
+        ? localStorage.getItem('mihrab_duha_reminder_enabled') === 'true'
+        : false,
+    duhaReminderTiming: (() => {
+      if (typeof window === 'undefined') return 'ishraq';
+      const saved = localStorage.getItem('mihrab_duha_reminder_timing');
+      return saved === 'peak' || saved === 'both' ? saved : 'ishraq';
+    })(),
+    duhaReminderSoundEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('mihrab_duha_reminder_sound') !== null
+        ? localStorage.getItem('mihrab_duha_reminder_sound') === 'true'
+        : true,
   });
-
-  const [isPrayerTimesPageOpen, setIsPrayerTimesPageOpen] = useState(false);
 
   const [autoThemeManualPause, setAutoThemeManualPause] = useState<boolean>(false);
   const [autoThemeOverrideNotice, setAutoThemeOverrideNotice] = useState<{
@@ -627,10 +647,16 @@ export default function App() {
   } | null>(null);
   const lastMorningAdhkarTriggerRef = React.useRef<string>('');
   const lastEveningAdhkarTriggerRef = React.useRef<string>('');
+  const [duhaSunriseBanner, setDuhaSunriseBanner] = useState<{
+    title: string;
+    subtitle: string;
+  } | null>(null);
+  const lastDuhaTriggerRef = React.useRef<string>('');
 
   useEffect(() => {
     const checkAdhkarSchedule = () => {
       const now = new Date();
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) return;
       const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const todayKey = now.toDateString();
 
@@ -682,6 +708,71 @@ export default function App() {
     settings.eveningAdhkarTime,
     settings.adhkarReciter,
     settings.adhkarAutoPlayAudio,
+    settings.meetingModeEnabled,
+    settings.notificationsEnabled,
+  ]);
+
+  // Scheduled Sunrise & Duha Prayer Reminders
+  useEffect(() => {
+    if (!settings.sunriseReminderEnabled && !settings.duhaReminderEnabled) return;
+
+    const checkDuhaSunriseReminders = () => {
+      const now = new Date();
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) return;
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const todayKey = now.toDateString();
+      const schedule = calculateDuhaSchedule(prayerTimes.sunrise, prayerTimes.dhuhr, now);
+
+      const triggerAlert = (id: string, title: string, subtitle: string) => {
+        const trigKey = `${todayKey}-${id}-${timeStr}`;
+        if (lastDuhaTriggerRef.current === trigKey) return;
+        lastDuhaTriggerRef.current = trigKey;
+
+        if (settings.duhaReminderSoundEnabled !== false && !settings.meetingModeEnabled) {
+          adhanPlayer.playChime();
+        }
+        if (settings.notificationsEnabled) {
+          backgroundService.sendPrayerNotification(title, subtitle);
+        }
+        setDuhaSunriseBanner({ title, subtitle });
+      };
+
+      if (settings.sunriseReminderEnabled && timeStr === schedule.sunriseStr) {
+        triggerAlert(
+          'sunrise',
+          'حان الآن وقت شروق الشمس ☀️',
+          `تُفتح نافذة صلاة الإشراق والضحى الساعة ${formatTime12Ar(schedule.ishraqStartStr)}`
+        );
+      }
+
+      if (settings.duhaReminderEnabled) {
+        const timing = settings.duhaReminderTiming || 'ishraq';
+        if ((timing === 'ishraq' || timing === 'both') && timeStr === schedule.ishraqStartStr) {
+          triggerAlert(
+            'duha_ishraq',
+            'حان الآن وقت صلاة الإشراق والضحى ✨',
+            `ابدأ بركعتي الإشراق (ينتهي وقت الضحى الساعة ${formatTime12Ar(schedule.duhaEndStr)})`
+          );
+        } else if ((timing === 'peak' || timing === 'both') && timeStr === schedule.bestDuhaStr) {
+          triggerAlert(
+            'duha_peak',
+            'أفضل وقت لصلاة الضحى الآن ☀️',
+            `صلاة الأوّابين حين ترمض الفصال — متاحة حتى ${formatTime12Ar(schedule.duhaEndStr)}`
+          );
+        }
+      }
+    };
+
+    checkDuhaSunriseReminders();
+    const timer = window.setInterval(checkDuhaSunriseReminders, 10000);
+    return () => window.clearInterval(timer);
+  }, [
+    prayerTimes.sunrise,
+    prayerTimes.dhuhr,
+    settings.sunriseReminderEnabled,
+    settings.duhaReminderEnabled,
+    settings.duhaReminderTiming,
+    settings.duhaReminderSoundEnabled,
     settings.meetingModeEnabled,
     settings.notificationsEnabled,
   ]);
@@ -875,6 +966,9 @@ export default function App() {
       const fallback = getNextPrayerInfo(prayerTimes);
       const targetKey = prayerKey || fallback.key;
       if (!isSimulation) {
+        if (shouldSuppressPrayerAudioOrAlert(loadQuietModeState(), targetKey, new Date())) {
+          return;
+        }
         const nowTs = Date.now();
         if (
           lastAdhanTriggerRef.current &&
@@ -1012,10 +1106,6 @@ export default function App() {
       setIsStandbyModeOpen(false);
       return true;
     }
-    if (isPrayerTimesPageOpen) {
-      setIsPrayerTimesPageOpen(false);
-      return true;
-    }
     return false;
   }, [
     fullScreenAdhanState.isOpen,
@@ -1029,7 +1119,6 @@ export default function App() {
     forcedCheckinPrayer,
     isPeriodicPopupOpen,
     isStandbyModeOpen,
-    isPrayerTimesPageOpen,
   ]);
 
   useTvRemoteNavigation({
@@ -1303,9 +1392,11 @@ export default function App() {
     if (settings.postPrayerCheckinEnabled === false) return;
 
     const checkDueCheckin = () => {
+      const now = new Date();
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) return;
       const currentCheckin = loadTodayCheckinState();
       const delayMins = settings.postPrayerCheckinMinutes ?? 20;
-      const due = getDuePostPrayerNotification(prayerTimes, delayMins, currentCheckin, new Date());
+      const due = getDuePostPrayerNotification(prayerTimes, delayMins, currentCheckin, now);
       if (due) {
         const updated = markPostPrayerNotified(due.prayerKey, due.dateKey);
         setCheckinState(updated);
@@ -1356,6 +1447,7 @@ export default function App() {
   useEffect(() => {
     const checkCompanionReminders = () => {
       const now = new Date();
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) return;
       const qState = loadQadaState();
       if (isQadaReminderDue(qState, now)) {
         const analytics = computeQadaAnalytics(qState, now);
@@ -1466,7 +1558,10 @@ export default function App() {
       timeoutId = window.setTimeout(() => {
         if (cancelled) return;
         const fireNow = new Date();
-        if (quietEnabled && isWithinPeriodicQuietHours(fireNow, quietStart, quietEnd)) {
+        if (
+          (quietEnabled && isWithinPeriodicQuietHours(fireNow, quietStart, quietEnd)) ||
+          shouldSuppressGeneralNotification(loadQuietModeState(), fireNow)
+        ) {
           scheduleNext();
           return;
         }
@@ -1532,6 +1627,7 @@ export default function App() {
     if (!settings.salawatEnabled || settings.meetingModeEnabled) return;
     const intervalMinutes = settings.salawatIntervalMinutes ?? 10;
     const timer = window.setInterval(() => {
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), new Date())) return;
       const spokenProfile = adhanPlayer.playSalawat(settings.salawatVoiceMode || 'rotate', {
         isAutoTrigger: true,
       });
@@ -1870,6 +1966,31 @@ export default function App() {
       if (newSettings.prayerReciters) {
         localStorage.setItem('mihrab_prayer_reciters', JSON.stringify(newSettings.prayerReciters));
       }
+      if (typeof newSettings.sunriseReminderEnabled === 'boolean') {
+        localStorage.setItem(
+          'mihrab_sunrise_reminder_enabled',
+          String(newSettings.sunriseReminderEnabled)
+        );
+      }
+      if (typeof newSettings.duhaReminderEnabled === 'boolean') {
+        localStorage.setItem(
+          'mihrab_duha_reminder_enabled',
+          String(newSettings.duhaReminderEnabled)
+        );
+      }
+      if (
+        newSettings.duhaReminderTiming === 'ishraq' ||
+        newSettings.duhaReminderTiming === 'peak' ||
+        newSettings.duhaReminderTiming === 'both'
+      ) {
+        localStorage.setItem('mihrab_duha_reminder_timing', newSettings.duhaReminderTiming);
+      }
+      if (typeof newSettings.duhaReminderSoundEnabled === 'boolean') {
+        localStorage.setItem(
+          'mihrab_duha_reminder_sound',
+          String(newSettings.duhaReminderSoundEnabled)
+        );
+      }
       return updated;
     });
   };
@@ -2096,10 +2217,7 @@ export default function App() {
         {/* Navbar */}
         <Navbar
           activeTab={activeTab}
-          setActiveTab={(tab) => {
-            setIsPrayerTimesPageOpen(false);
-            setActiveTab(tab);
-          }}
+          setActiveTab={setActiveTab}
           currentLocation={currentLocation}
           settings={settings}
           autoThemeStatusBadge={
@@ -2124,14 +2242,7 @@ export default function App() {
           }}
           onOpenIstikharaHajah={() => setIsIstikharaHajahOpen(true)}
           onOpenWidgetsStudio={() => setIsWidgetStudioOpen(true)}
-          isPrayerTimesPageOpen={isPrayerTimesPageOpen}
-          onOpenPrayerTimesPage={() => {
-            setActiveTab('times');
-            setIsPrayerTimesPageOpen(true);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
           onNavigateHome={() => {
-            setIsPrayerTimesPageOpen(false);
             setActiveTab('times');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
@@ -2156,21 +2267,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'times' && isPrayerTimesPageOpen && (
-            <PrayerTimesControlPage
-              basePrayerTimes={basePrayerTimes}
-              currentLocation={currentLocation}
-              settings={settings}
-              onUpdateSettings={handleUpdateSettings}
-              onNavigateHome={() => {
-                setIsPrayerTimesPageOpen(false);
-                setActiveTab('times');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-            />
-          )}
-
-          {activeTab === 'times' && !isPrayerTimesPageOpen && (
+          {activeTab === 'times' && (
             <PrayerTimesCard
               prayerTimes={prayerTimes}
               currentLocation={currentLocation}
@@ -2194,10 +2291,6 @@ export default function App() {
                 handleOpenFullScreenAdhanModal(prayerKey, prayerNameAr, false)
               }
               isGlobalFullScreenAdhanOpen={fullScreenAdhanState.isOpen}
-              onOpenPrayerTimesPage={() => {
-                setIsPrayerTimesPageOpen(true);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
             />
           )}
 
@@ -2244,6 +2337,28 @@ export default function App() {
                   <X className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+          )}
+
+          {duhaSunriseBanner && (
+            <div
+              dir="rtl"
+              className="mb-6 rounded-3xl border-2 border-[#D4AF37]/80 bg-gradient-to-r from-[#08261C] via-[#061D15] to-[#04130E] p-4 sm:p-5 shadow-[0_12px_36px_rgba(0,0,0,0.5)] flex items-center justify-between gap-4 text-right"
+            >
+              <div className="space-y-0.5 min-w-0">
+                <h4 className="font-bold text-base sm:text-lg font-amiri text-[#F6D884]">
+                  {duhaSunriseBanner.title}
+                </h4>
+                <p className="text-xs text-slate-200">{duhaSunriseBanner.subtitle}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDuhaSunriseBanner(null)}
+                aria-label="إغلاق تنبيه الشروق والضحى"
+                className="min-w-[44px] min-h-[44px] rounded-xl bg-[#031713] border border-[#D4AF37]/40 text-slate-200 hover:text-[#F6D884] flex items-center justify-center shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 
@@ -2315,6 +2430,7 @@ export default function App() {
           onReEnableAutoTheme={handleReEnableAutoTheme}
           currentLocation={currentLocation}
           prayerTimes={prayerTimes}
+          basePrayerTimes={basePrayerTimes}
           onSelectCity={handleSelectCity}
           onOpenBackgroundPicker={() => {
             setIsSettingsOpen(false);

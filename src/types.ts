@@ -162,6 +162,11 @@ export interface UserSettings {
   prayerOffsets?: Record<string, number>;
   prayerAdhanEnabled?: Record<string, boolean>;
   prayerReciters?: Record<string, string>;
+  // تنبيهات صلاة الضحى والشروق
+  sunriseReminderEnabled?: boolean;
+  duhaReminderEnabled?: boolean;
+  duhaReminderTiming?: 'ishraq' | 'peak' | 'both';
+  duhaReminderSoundEnabled?: boolean;
 }
 
 export type AppThemeId = 'emerald' | 'indigo' | 'obsidian' | 'parchment';
