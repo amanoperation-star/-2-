@@ -139,6 +139,26 @@
                 android:resource="@xml/prayer_widget_large_info" />
         </receiver>
 
+        <!-- Home Screen Widget: Arched Mihrab Sanctuary (4x4 Resizable) -->
+        <receiver
+            android:name=".PrayerWidgetArchProvider"
+            android:exported="true"
+            android:label="@string/widget_arch_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_WIDGET_REFRESH" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_WIDGET_TASBIH_INCREMENT" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_WIDGET_TOGGLE_QUIET" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_WIDGET_NEXT_WISDOM" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/prayer_widget_arch_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

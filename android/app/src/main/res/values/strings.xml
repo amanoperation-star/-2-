@@ -12,6 +12,8 @@
     <string name="widget_medium_desc">بطاقة محراب تعرض الصلاة القادمة والعد التنازلي والمدينة والتاريخ الهجري</string>
     <string name="widget_large_name">محراب · كبير (4×2)</string>
     <string name="widget_large_desc">لوحة المحراب والعد التنازلي مع جدول الصلوات الخمس كاملة</string>
+    <string name="widget_arch_name">محراب · البطاقة المقوّسة الكاملة (4×4)</string>
+    <string name="widget_arch_desc">بطاقة محراب المقوّسة بخلفية المسجد والعد التنازلي والإقامة والإنجاز اليومي والحكمة والأزرار السريعة</string>
 
     <!-- App Icon Long-Press Shortcuts -->
     <string name="shortcut_times_short">المواقيت</string>

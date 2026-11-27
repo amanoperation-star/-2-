@@ -1,0 +1,635 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_arch_bg_emerald"
+    android:clipToOutline="true"
+    android:layoutDirection="rtl">
+
+    <!-- Masked Mosque Backdrop Image (Pre-clipped to Mihrab arch & dimmed with theme scrim) -->
+    <ImageView
+        android:id="@+id/widget_arch_mosque_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
+    <!-- Delicate Inner Gold Arch Hairline Frame -->
+    <View
+        android:id="@+id/widget_arch_inner_frame"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="5dp"
+        android:background="@drawable/widget_arch_inner_frame_gold" />
+
+    <!-- Foreground Vertical Mihrab Sanctuary Stack -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="13dp"
+        android:paddingTop="13dp"
+        android:paddingEnd="13dp"
+        android:paddingBottom="10dp">
+
+        <!-- 1. City & Pin -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/widget_arch_pin_icon"
+                android:layout_width="11dp"
+                android:layout_height="11dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_pin" />
+
+            <TextView
+                android:id="@+id/widget_city"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="القاهرة"
+                android:textColor="#F6D884"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 2. Prayer Icon inside Mini Arch Badge -->
+        <FrameLayout
+            android:id="@+id/widget_arch_icon_box"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginTop="5dp"
+            android:background="@drawable/widget_arch_icon_box">
+
+            <ImageView
+                android:id="@+id/widget_arch_prayer_icon"
+                android:layout_width="17dp"
+                android:layout_height="17dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_prayer_fajr" />
+        </FrameLayout>
+
+        <!-- 3. Next Prayer Title -->
+        <TextView
+            android:id="@+id/widget_next_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:ellipsize="end"
+            android:fontFamily="serif"
+            android:maxLines="1"
+            android:text="الفجر"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- 4. Adhan · Iqama Row -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_next_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:text="04:59 ص"
+                android:textColor="#F6D884"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_arch_iqama_sep"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="·"
+                android:textColor="#94A3B8"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_arch_iqama_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:text="إقامة 05:24 ص"
+                android:textColor="#34D399"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 5. Live Tabular Countdown -->
+        <Chronometer
+            android:id="@+id/widget_countdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:countDown="true"
+            android:fontFamily="monospace"
+            android:fontFeatureSettings="tnum"
+            android:gravity="center"
+            android:textColor="#34D399"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <!-- 6. Elapsed Time Progress Bar -->
+        <ProgressBar
+            android:id="@+id/widget_arch_elapsed_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="5dp"
+            android:layout_marginTop="4dp"
+            android:max="100"
+            android:progress="45"
+            android:progressDrawable="@drawable/widget_arch_progress_dark" />
+
+        <!-- 7. Hijri Date + Sunnah/Wird Summary Row -->
+        <LinearLayout
+            android:id="@+id/widget_arch_meta_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/widget_hijri"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:fontFamily="serif"
+                android:gravity="start"
+                android:maxLines="1"
+                android:text="١٨ جمادى الآخرة ١٤٤٨ هـ"
+                android:textColor="#CBD5E1"
+                android:textSize="9.5sp" />
+
+            <TextView
+                android:id="@+id/widget_arch_sunnah_wird"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:text="الرواتب ٠/١٢ · الوِرد ٠%"
+                android:textColor="#34D399"
+                android:textSize="9.5sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 7b. Optional Fasting Alert Strip -->
+        <TextView
+            android:id="@+id/widget_arch_fasting_strip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="@drawable/widget_arch_subcard_dark"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="3dp"
+            android:text="🌙 صيام الإثنين والخميس"
+            android:textColor="#F6D884"
+            android:textSize="9.5sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!-- 8. Daily Achievement Ring + Day Progress Card -->
+        <LinearLayout
+            android:id="@+id/widget_arch_day_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:background="@drawable/widget_arch_subcard_dark"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="6dp">
+
+            <FrameLayout
+                android:layout_width="34dp"
+                android:layout_height="34dp">
+
+                <ImageView
+                    android:id="@+id/widget_arch_achievement_ring"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null" />
+
+                <TextView
+                    android:id="@+id/widget_arch_achievement_pct"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:fontFamily="monospace"
+                    android:fontFeatureSettings="tnum"
+                    android:gravity="center"
+                    android:text="٠%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="8sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/widget_arch_achievement_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="إنجاز اليوم"
+                    android:textColor="#CBD5E1"
+                    android:textSize="8.5sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_arch_achievement_detail"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:text="٠/١٢ · ٠%"
+                    android:textColor="#F6D884"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/widget_arch_day_label"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="سير اليوم (فجر → عشاء)"
+                        android:textColor="#CBD5E1"
+                        android:textSize="8.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/widget_arch_day_pct"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:fontFamily="monospace"
+                        android:fontFeatureSettings="tnum"
+                        android:maxLines="1"
+                        android:text="٠%"
+                        android:textColor="#F6D884"
+                        android:textSize="8.5sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <ProgressBar
+                    android:id="@+id/widget_arch_day_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="4dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/widget_arch_progress_dark" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 9. Ishraq & Duha Strip -->
+        <LinearLayout
+            android:id="@+id/widget_arch_duha_strip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4.5dp"
+            android:background="@drawable/widget_arch_subcard_dark"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="9dp"
+            android:paddingVertical="5dp">
+
+            <ImageView
+                android:id="@+id/widget_arch_duha_icon"
+                android:layout_width="13dp"
+                android:layout_height="13dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_prayer_sun" />
+
+            <TextView
+                android:id="@+id/widget_arch_duha_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="الإشراق 06:46 ص"
+                android:textColor="#FFFFFF"
+                android:textSize="9.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_arch_duha_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:maxLines="1"
+                android:text="قبل شروق الشمس"
+                android:textColor="#34D399"
+                android:textSize="9.5sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 10. Quiet Mode & Last Third of Night Strip -->
+        <LinearLayout
+            android:id="@+id/widget_arch_quiet_strip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4.5dp"
+            android:background="@drawable/widget_arch_subcard_dark"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="9dp"
+            android:paddingVertical="5dp">
+
+            <ImageView
+                android:id="@+id/widget_arch_quiet_icon"
+                android:layout_width="13dp"
+                android:layout_height="13dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_widget_bell" />
+
+            <TextView
+                android:id="@+id/widget_arch_quiet_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="السكون: متاح"
+                android:textColor="#FFFFFF"
+                android:textSize="9.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_arch_last_third_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:text="الثلث الأخير 12:58 ص"
+                android:textColor="#F6D884"
+                android:textSize="9.5sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 11. Rotating Daily Ayah / Hadith / Wisdom Box -->
+        <LinearLayout
+            android:id="@+id/widget_arch_wisdom_box"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4.5dp"
+            android:background="@drawable/widget_arch_subcard_dark"
+            android:orientation="vertical"
+            android:paddingHorizontal="9dp"
+            android:paddingVertical="6dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_arch_wisdom_text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:fontFamily="serif"
+                    android:gravity="start"
+                    android:lineSpacingMultiplier="1.2"
+                    android:maxLines="2"
+                    android:text="«من أكثر من ذكر الله في الرخاء، آنسه الله بلطفه في ساعات البلاء.»"
+                    android:textColor="#FFFFFF"
+                    android:textSize="10.5sp"
+                    android:textStyle="bold" />
+
+                <FrameLayout
+                    android:id="@+id/widget_arch_wisdom_refresh_btn"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/widget_arch_action_dark"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <ImageView
+                        android:id="@+id/widget_arch_wisdom_refresh_icon"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="تحديث الحكمة"
+                        android:src="@drawable/ic_widget_refresh" />
+                </FrameLayout>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_arch_wisdom_source"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:gravity="start"
+                android:maxLines="1"
+                android:text="حكمة إيمانية مأثورة"
+                android:textColor="#F6D884"
+                android:textSize="8.5sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Flexible Spacer to anchor bottom action bar -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- 12. Interactive 4-Button Quick Action Bar -->
+        <LinearLayout
+            android:id="@+id/widget_arch_quick_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <!-- Tasbih (+1) -->
+            <LinearLayout
+                android:id="@+id/widget_btn_tasbih"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_arch_action_dark"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp">
+
+                <ImageView
+                    android:id="@+id/widget_btn_tasbih_icon"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_sparkles" />
+
+                <TextView
+                    android:id="@+id/widget_btn_tasbih_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:ellipsize="end"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:text="سبحة (٠)"
+                    android:textColor="#F6D884"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Adhkar -->
+            <LinearLayout
+                android:id="@+id/widget_btn_adhkar"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_arch_action_dark"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp">
+
+                <ImageView
+                    android:id="@+id/widget_btn_adhkar_icon"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_book" />
+
+                <TextView
+                    android:id="@+id/widget_btn_adhkar_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="الأذكار"
+                    android:textColor="#F6D884"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Qibla -->
+            <LinearLayout
+                android:id="@+id/widget_btn_qibla"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_arch_action_dark"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp">
+
+                <ImageView
+                    android:id="@+id/widget_btn_qibla_icon"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_compass" />
+
+                <TextView
+                    android:id="@+id/widget_btn_qibla_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="القبلة"
+                    android:textColor="#F6D884"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Quiet Mode Toggle -->
+            <LinearLayout
+                android:id="@+id/widget_btn_quiet"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_arch_action_dark"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="4dp">
+
+                <ImageView
+                    android:id="@+id/widget_btn_quiet_icon"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_prayer_moon" />
+
+                <TextView
+                    android:id="@+id/widget_btn_quiet_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="السكون"
+                    android:textColor="#F6D884"
+                    android:textSize="9.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

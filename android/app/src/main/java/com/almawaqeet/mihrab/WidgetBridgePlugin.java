@@ -374,12 +374,37 @@ public class WidgetBridgePlugin extends Plugin {
             providerClass = PrayerWidgetSmallProvider.class;
         } else if ("large".equals(size)) {
             providerClass = PrayerWidgetLargeProvider.class;
+        } else if ("arch".equals(size) || "spiritual_card".equals(size)) {
+            providerClass = PrayerWidgetArchProvider.class;
         }
 
         ComponentName provider = new ComponentName(context, providerClass);
         boolean requested = manager.requestPinAppWidget(provider, null, null);
         res.put("supported", true);
         res.put("requested", requested);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void getNativeInteractiveState(PluginCall call) {
+        Context context = getContext();
+        android.content.SharedPreferences prefs = context.getSharedPreferences(
+            PrayerWidgetHelper.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        JSObject res = new JSObject();
+        res.put("tasbihDateKey", prefs.getString(PrayerWidgetHelper.KEY_TASBIH_DATE, ""));
+        res.put("tasbihCount", Math.max(0, prefs.getInt(PrayerWidgetHelper.KEY_TASBIH_COUNT, 0)));
+        res.put("tasbihUpdatedAtMs", prefs.getLong(PrayerWidgetHelper.KEY_TASBIH_UPDATED_MS, 0L));
+        res.put(
+            "quietOverrideSet",
+            prefs.getBoolean(PrayerWidgetHelper.KEY_QUIET_OVERRIDE_SET, false)
+        );
+        res.put(
+            "quietOverrideActive",
+            prefs.getBoolean(PrayerWidgetHelper.KEY_QUIET_OVERRIDE_ACTIVE, false)
+        );
+        res.put("quietUpdatedAtMs", prefs.getLong(PrayerWidgetHelper.KEY_QUIET_UPDATED_MS, 0L));
         call.resolve(res);
     }
 

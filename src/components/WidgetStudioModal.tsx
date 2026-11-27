@@ -181,7 +181,12 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
       now,
     });
     await syncNativeAndroidWidgetData(payload);
-    const pinSize = config.size === 'spiritual_card' ? 'large' : config.size;
+    const pinSize =
+      config.size === 'medium' || config.size === 'spiritual_card'
+        ? 'arch'
+        : config.size === 'lock_pill'
+          ? 'small'
+          : 'large';
     const res = await requestPinNativeAndroidWidget(pinSize);
     const updatedStatus = await getNativeAndroidWidgetStatus();
     setNativePinStatus({
@@ -189,8 +194,8 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
       pinSupported: updatedStatus.pinSupported,
       activeCount: updatedStatus.activeCount,
       feedback: res.requested
-        ? 'تم إرسال طلب إضافة الويدجت لشاشة الهاتف، وافق من نافذة النظام لإتمام التثبيت.'
-        : 'اضغط مطولاً على مساحة فارغة في شاشة الهاتف ← الأدوات (Widgets) ← اختر «مواقيت الصلاة - محراب».',
+        ? 'تم إرسال طلب إضافة البطاقة المقوّسة لشاشة الهاتف، اضغط «إضافة تلقائياً / Add» من نافذة النظام لإتمام التثبيت.'
+        : 'اضغط مطولاً على مساحة فارغة في شاشة الهاتف ← الأدوات (Widgets) ← ابحث عن «مواقيت الصلاة - محراب» واختر «البطاقة المقوّسة الكاملة (4×4)».',
     });
   };
 
@@ -681,7 +686,9 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                       <Smartphone className="w-4 h-4" />
                       <span>
                         {nativePinStatus.pinSupported
-                          ? 'تثبيت هذا المقاس على شاشة الموبايل'
+                          ? config.size === 'medium' || config.size === 'spiritual_card'
+                            ? 'تثبيت البطاقة المقوّسة على شاشة الهاتف'
+                            : 'تثبيت هذا المقاس على شاشة الموبايل'
                           : 'إضافة ويدجت الشاشة الرئيسية'}
                       </span>
                     </button>
@@ -968,20 +975,20 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                   ١. ويدجات شاشة الموبايل (APK أندرويد)
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  بعد تثبيت التطبيق، اضغط مطولاً على مساحة فارغة في شاشة الموبايل ← اختر{' '}
-                  <strong>الأدوات (Widgets)</strong> ← ستظهر ٣ مقاسات باسم{' '}
-                  <strong>مواقيت الصلاة - محراب</strong>: مصغّر (2×1)، متوسط (2×2)، وكبير (4×2).
+                  اضغط زر التثبيت أعلاه أو اضغط مطوّلاً على شاشة الهاتف ←{' '}
+                  <strong>الأدوات (Widgets)</strong> ← <strong>مواقيت الصلاة - محراب</strong> ← اختر{' '}
+                  <strong>البطاقة المقوّسة الكاملة (4×4)</strong> أو أحد المقاسات (2×1 · 2×2 · 4×2).
                 </p>
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#111C18] border border-[#D4AF37]/25 space-y-1.5">
                 <div className="text-xs font-bold text-emerald-300">
-                  ٢. اختصارات الضغط المطوّل للأيقونة
+                  ٢. التفاعل المباشر من الشاشة الرئيسية
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  اضغط مطوّلاً على أيقونة التطبيق للوصول السريع إلى:{' '}
-                  <strong>المواقيت</strong> · <strong>الأذكار</strong> · <strong>القبلة</strong> ·{' '}
-                  <strong>وِرد القرآن</strong>، بينما الضغط على الويدجت يفتح الرئيسية مباشرة.
+                  في البطاقة المقوّسة يمكنك التسبيح (<strong>سبحة</strong>)، وتفعيل{' '}
+                  <strong>السكون</strong>، وتبديل الآية/الحكمة مباشرة دون فتح التطبيق، مع انتقال فوري لـ{' '}
+                  <strong>الأذكار</strong> و<strong>القبلة</strong>.
                 </p>
               </div>
 
@@ -990,7 +997,7 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                   ٣. المزامنة والتحديث التلقائي
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  تُحدَّث المدينة والتاريخ الهجري ومظهر الويدجت تلقائياً بمجرد تغيير الإعدادات، مع عدّ تنازلي حي وانتقال تلقائي عند كل صلاة.
+                  تُحدَّث المدينة والتاريخ الهجري وخلفية المسجد والمؤشرات تلقائياً بمجرد تغيير الإعدادات، مع عدّ تنازلي حي وانتقال تلقائي عند كل صلاة.
                 </p>
               </div>
             </div>

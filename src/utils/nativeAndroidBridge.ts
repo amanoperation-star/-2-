@@ -55,10 +55,13 @@ interface WidgetBridgePluginInterface {
   testBackgroundAlarmNow(options: { type: 'adhan' | 'salawat' | 'periodic' }): Promise<{
     triggered: boolean;
   }>;
-  requestPinWidget(options: { size: 'small' | 'medium' | 'large' | 'lock_pill' }): Promise<{
+  requestPinWidget(options: {
+    size: 'small' | 'medium' | 'large' | 'lock_pill' | 'arch';
+  }): Promise<{
     supported: boolean;
     requested: boolean;
   }>;
+  getNativeInteractiveState(): Promise<NativeWidgetInteractiveState>;
   getWidgetStatus(): Promise<{
     isSupported: boolean;
     pinSupported: boolean;
@@ -66,6 +69,15 @@ interface WidgetBridgePluginInterface {
   }>;
   consumeLaunchShortcut(): Promise<{ route: string | null }>;
   consumeLaunchAction(): Promise<NativeLaunchAction>;
+}
+
+export interface NativeWidgetInteractiveState {
+  tasbihDateKey: string;
+  tasbihCount: number;
+  tasbihUpdatedAtMs: number;
+  quietOverrideSet: boolean;
+  quietOverrideActive: boolean;
+  quietUpdatedAtMs: number;
 }
 
 const WidgetBridge = registerPlugin<WidgetBridgePluginInterface>('WidgetBridge');
@@ -220,7 +232,7 @@ export async function sendNativePreAdhanNotification(params: {
 }
 
 export async function requestPinNativeAndroidWidget(
-  size: 'lock_pill' | 'small' | 'medium' | 'large'
+  size: 'lock_pill' | 'small' | 'medium' | 'large' | 'arch'
 ): Promise<{ supported: boolean; requested: boolean }> {
   if (!isNativeAndroidApp()) {
     return { supported: false, requested: false };
@@ -229,6 +241,17 @@ export async function requestPinNativeAndroidWidget(
     return await WidgetBridge.requestPinWidget({ size });
   } catch {
     return { supported: false, requested: false };
+  }
+}
+
+export async function getNativeWidgetInteractiveState(): Promise<NativeWidgetInteractiveState | null> {
+  if (!isNativeAndroidApp()) {
+    return null;
+  }
+  try {
+    return await WidgetBridge.getNativeInteractiveState();
+  } catch {
+    return null;
   }
 }
 

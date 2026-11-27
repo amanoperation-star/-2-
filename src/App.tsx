@@ -32,10 +32,13 @@ import {
 } from './utils/prayerScheduler';
 import {
   WIDGET_SIZES,
+  WIDGET_TASBIH_EVENT,
   WIDGET_THEMES,
   WidgetStudioConfig,
   loadWidgetConfig,
+  loadWidgetTasbihState,
   saveWidgetConfig,
+  saveWidgetTasbihState,
   syncWidgetDataBridge,
 } from './utils/widgetStudioData';
 import { CompanionHubSection, HubSectionTab } from './components/CompanionHubSection';
@@ -64,6 +67,7 @@ import {
 import { useTvRemoteNavigation } from './hooks/useTvRemoteNavigation';
 import {
   consumeNativeLaunchAction,
+  getNativeWidgetInteractiveState,
   isLikelyAndroidTvDevice,
   isNativeAndroidApp,
   subscribeNativeBackButton,
@@ -97,6 +101,7 @@ import { calculateDuhaSchedule, formatTime12Ar } from './utils/duhaSunriseData';
 import {
   QUIET_MODE_UPDATED_EVENT,
   loadQuietModeState,
+  saveQuietModeState,
   shouldSuppressGeneralNotification,
   shouldSuppressPrayerAudioOrAlert,
 } from './utils/quietModeData';
@@ -1407,12 +1412,44 @@ export default function App() {
       }
     };
 
+    const reconcileNativeInteractiveState = async () => {
+      const nativeState = await getNativeWidgetInteractiveState();
+      if (!nativeState) return;
+      const webTasbih = loadWidgetTasbihState();
+      if (
+        nativeState.tasbihDateKey &&
+        nativeState.tasbihDateKey === webTasbih.dateKey &&
+        nativeState.tasbihUpdatedAtMs > (webTasbih.updatedAtMs ?? 0)
+      ) {
+        saveWidgetTasbihState({
+          ...webTasbih,
+          count: Math.max(0, nativeState.tasbihCount),
+          updatedAtMs: nativeState.tasbihUpdatedAtMs,
+        });
+      }
+      if (nativeState.quietOverrideSet) {
+        const webQuiet = loadQuietModeState();
+        if (nativeState.quietUpdatedAtMs > (webQuiet.updatedAtMs ?? 0)) {
+          saveQuietModeState({
+            ...webQuiet,
+            manualActive: nativeState.quietOverrideActive,
+            pauseUntilMs: nativeState.quietOverrideActive ? webQuiet.pauseUntilMs : null,
+            pauseLabelAr: nativeState.quietOverrideActive ? webQuiet.pauseLabelAr : null,
+            updatedAtMs: nativeState.quietUpdatedAtMs,
+          });
+        }
+      }
+    };
+
     void handleNativeShortcut();
+    void reconcileNativeInteractiveState();
     const unsubResume = subscribeNativeResume(() => {
       void handleNativeShortcut();
+      void reconcileNativeInteractiveState();
     });
     const onShortcutEvent = () => {
       void handleNativeShortcut();
+      void reconcileNativeInteractiveState();
     };
     window.addEventListener('mihrabNativeShortcutCheck', onShortcutEvent);
     window.addEventListener('mihrabNativeAdhanTriggered', onNativeAdhanTriggered);
@@ -1439,11 +1476,13 @@ export default function App() {
     window.addEventListener('fasting_intent_changed', runBridgeSync);
     window.addEventListener('post_prayer_checkin_changed', runBridgeSync);
     window.addEventListener(QUIET_MODE_UPDATED_EVENT, runBridgeSync);
+    window.addEventListener(WIDGET_TASBIH_EVENT, runBridgeSync);
     return () => {
       window.removeEventListener('sunnah_rawatib_changed', runBridgeSync);
       window.removeEventListener('fasting_intent_changed', runBridgeSync);
       window.removeEventListener('post_prayer_checkin_changed', runBridgeSync);
       window.removeEventListener(QUIET_MODE_UPDATED_EVENT, runBridgeSync);
+      window.removeEventListener(WIDGET_TASBIH_EVENT, runBridgeSync);
     };
   }, [prayerTimes, currentLocation, settings, khatmaState, widgetConfig]);
 

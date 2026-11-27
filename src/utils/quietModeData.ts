@@ -17,6 +17,7 @@ export interface QuietModeState {
   pauseLabelAr: string | null;
   exceptionPolicy: QuietExceptionPolicy;
   schedules: QuietSchedulePeriod[];
+  updatedAtMs?: number;
 }
 
 export interface QuietModeEvaluation {
@@ -96,6 +97,10 @@ export function normalizeQuietModeState(raw: Partial<QuietModeState> | null | un
     pauseLabelAr: pauseUntilMs && typeof raw?.pauseLabelAr === 'string' ? raw.pauseLabelAr : null,
     exceptionPolicy,
     schedules,
+    updatedAtMs:
+      typeof raw?.updatedAtMs === 'number' && Number.isFinite(raw.updatedAtMs)
+        ? raw.updatedAtMs
+        : undefined,
   };
 }
 
@@ -116,7 +121,10 @@ export function loadQuietModeState(): QuietModeState {
 }
 
 export function saveQuietModeState(state: QuietModeState): QuietModeState {
-  const normalized = normalizeQuietModeState(state);
+  const normalized = normalizeQuietModeState({
+    ...state,
+    updatedAtMs: typeof state.updatedAtMs === 'number' ? state.updatedAtMs : Date.now(),
+  });
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(QUIET_MODE_STORAGE_KEY, JSON.stringify(normalized));

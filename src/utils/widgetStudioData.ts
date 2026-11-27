@@ -113,7 +113,9 @@ export interface WidgetBridgePayload {
     pauseUntilMs: number | null;
     exceptionPolicy: QuietModeState['exceptionPolicy'];
     schedules: QuietModeState['schedules'];
+    updatedAtMs?: number;
   };
+  tasbihState?: WidgetTasbihState;
   widgetSettings: WidgetStudioConfig;
   notificationSettings: {
     stickyEnabled: boolean;
@@ -190,6 +192,7 @@ export interface WidgetTasbihState {
   dateKey: string;
   count: number;
   phraseIndex: number;
+  updatedAtMs?: number;
 }
 
 export function loadWidgetTasbihState(now: Date = new Date()): WidgetTasbihState {
@@ -211,22 +214,32 @@ export function loadWidgetTasbihState(now: Date = new Date()): WidgetTasbihState
       parsed.dateKey === today && typeof parsed.count === 'number' && parsed.count >= 0
         ? parsed.count
         : 0;
-    return { dateKey: today, count, phraseIndex };
+    const updatedAtMs =
+      parsed.dateKey === today &&
+      typeof parsed.updatedAtMs === 'number' &&
+      Number.isFinite(parsed.updatedAtMs)
+        ? parsed.updatedAtMs
+        : 0;
+    return { dateKey: today, count, phraseIndex, updatedAtMs };
   } catch {
     return { dateKey: today, count: 0, phraseIndex: 0 };
   }
 }
 
 export function saveWidgetTasbihState(next: WidgetTasbihState): WidgetTasbihState {
+  const stamped: WidgetTasbihState = {
+    ...next,
+    updatedAtMs: typeof next.updatedAtMs === 'number' ? next.updatedAtMs : Date.now(),
+  };
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(WIDGET_TASBIH_STORAGE_KEY, JSON.stringify(next));
-      window.dispatchEvent(new CustomEvent(WIDGET_TASBIH_EVENT, { detail: next }));
+      localStorage.setItem(WIDGET_TASBIH_STORAGE_KEY, JSON.stringify(stamped));
+      window.dispatchEvent(new CustomEvent(WIDGET_TASBIH_EVENT, { detail: stamped }));
     } catch {
       // ignore storage errors
     }
   }
-  return next;
+  return stamped;
 }
 
 export const DEFAULT_WIDGET_CONFIG: WidgetStudioConfig = {
@@ -301,9 +314,9 @@ export const WIDGET_SIZES: Array<{
   },
   {
     id: 'medium',
-    nameAr: 'محراب متوسط',
-    badgeAr: '2×2 Mihrab Arch',
-    descAr: 'تصميم مقوّس على هيئة محراب مصغّر يعرض الصلاة القادمة والإقامة والعناصر المختارة',
+    nameAr: 'بطاقة محراب المقوّسة',
+    badgeAr: '4×4 Arched Mihrab',
+    descAr: 'تصميم مقوّس على هيئة محراب يعرض الصلاة القادمة والإقامة والإنجاز اليومي والحكمة والأزرار التفاعلية',
   },
   {
     id: 'large',
@@ -629,7 +642,9 @@ export function buildWidgetBridgePayload(params: {
       pauseUntilMs: quietState.pauseUntilMs,
       exceptionPolicy: quietState.exceptionPolicy,
       schedules: quietState.schedules,
+      updatedAtMs: quietState.updatedAtMs ?? 0,
     },
+    tasbihState: loadWidgetTasbihState(now),
     widgetSettings: widgetConfig,
     notificationSettings: {
       stickyEnabled: settings.stickyNotificationEnabled ?? true,
