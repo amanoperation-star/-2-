@@ -313,6 +313,42 @@ public class WidgetBridgePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void showSalawatNotificationNow(PluginCall call) {
+        Context context = getContext();
+        String sheikhNameAr = call.getString("sheikhNameAr", "");
+        String formulaAr = call.getString("formulaAr", "");
+        PrayerNotificationHelper.showSalawatNotification(context, sheikhNameAr, formulaAr);
+
+        boolean granted = PrayerNotificationHelper.hasNotificationPermission(context);
+        JSObject res = new JSObject();
+        res.put("shown", granted);
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void showPreAdhanNotificationNow(PluginCall call) {
+        Context context = getContext();
+        String prayerNameAr = call.getString("prayerNameAr", "الصلاة");
+        int reminderMinutes = call.getInt("reminderMinutes", 10);
+        String cityNameAr = call.getString("cityNameAr", "مواقيت الصلاة");
+        String sheikhNameAr = call.getString("sheikhNameAr", "");
+        PrayerNotificationHelper.showPreAdhanNotification(
+            context,
+            prayerNameAr,
+            reminderMinutes,
+            cityNameAr,
+            sheikhNameAr
+        );
+
+        boolean granted = PrayerNotificationHelper.hasNotificationPermission(context);
+        JSObject res = new JSObject();
+        res.put("shown", granted);
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
     public void requestPinWidget(PluginCall call) {
         String size = call.getString("size", "medium");
         Context context = getContext();

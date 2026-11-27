@@ -12,10 +12,19 @@ import {
   Shield,
   Home,
   Settings,
+  Sunrise,
+  Moon,
 } from 'lucide-react';
 import { DAILY_ADHIKAR } from '../utils/islamicData';
 import { DhikrItem, UserSettings } from '../types';
-import { adhanPlayer, ADHKAR_SOURCES, AudioPlayerState, ActiveAudioType } from '../utils/audioAdhan';
+import {
+  adhanPlayer,
+  getAdhkarSourcesForPeriod,
+  getAdhkarSourceLabel,
+  resolveValidAdhkarReciterForPeriod,
+  AudioPlayerState,
+  ActiveAudioType,
+} from '../utils/audioAdhan';
 import {
   SHORT_ADHKAR_SHEIKHS,
   ShortAdhkarSheikhId,
@@ -45,12 +54,19 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [activeTabMode, setActiveTabMode] = useState<'daily' | 'hisn'>('daily');
   const [activeCategory, setActiveCategory] = useState<'all' | 'morning' | 'evening'>('morning');
-  const [selectedReciter, setSelectedReciter] = useState<string>(
-    settings?.adhkarReciter &&
-      ADHKAR_SOURCES[settings.adhkarReciter] &&
-      settings.adhkarReciter !== 'speech_synth'
-      ? settings.adhkarReciter
-      : 'alafasy_adhkar'
+  const [selectedMorningReciter, setSelectedMorningReciter] = useState<string>(() =>
+    resolveValidAdhkarReciterForPeriod(
+      settings?.morningAdhkarReciter || settings?.adhkarReciter,
+      'morning',
+      false
+    )
+  );
+  const [selectedEveningReciter, setSelectedEveningReciter] = useState<string>(() =>
+    resolveValidAdhkarReciterForPeriod(
+      settings?.eveningAdhkarReciter || settings?.adhkarReciter,
+      'evening',
+      false
+    )
   );
   const [audioMode, setAudioMode] = useState<'short' | 'full'>('short');
   const [selectedShortSheikh, setSelectedShortSheikh] = useState<ShortAdhkarSheikhId>(() => {
@@ -149,14 +165,24 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
   }, []);
 
   useEffect(() => {
-    if (
-      settings?.adhkarReciter &&
-      ADHKAR_SOURCES[settings.adhkarReciter] &&
-      settings.adhkarReciter !== 'speech_synth'
-    ) {
-      setSelectedReciter(settings.adhkarReciter);
-    }
-  }, [settings?.adhkarReciter]);
+    setSelectedMorningReciter(
+      resolveValidAdhkarReciterForPeriod(
+        settings?.morningAdhkarReciter || settings?.adhkarReciter,
+        'morning',
+        false
+      )
+    );
+  }, [settings?.morningAdhkarReciter, settings?.adhkarReciter]);
+
+  useEffect(() => {
+    setSelectedEveningReciter(
+      resolveValidAdhkarReciterForPeriod(
+        settings?.eveningAdhkarReciter || settings?.adhkarReciter,
+        'evening',
+        false
+      )
+    );
+  }, [settings?.eveningAdhkarReciter, settings?.adhkarReciter]);
 
   useEffect(() => {
     if (
@@ -167,10 +193,43 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
     }
   }, [settings?.adhkarShortSheikh]);
 
-  const handleReciterChange = (reciterId: string) => {
-    setSelectedReciter(reciterId);
+  const getEffectiveFullPeriod = (): 'morning' | 'evening' => {
+    if (activeCategory === 'evening') return 'evening';
+    if (activeCategory === 'morning') return 'morning';
+    return new Date().getHours() >= 15 ? 'evening' : 'morning';
+  };
+
+  const handleMorningReciterChange = (reciterId: string) => {
+    const validId = resolveValidAdhkarReciterForPeriod(reciterId, 'morning', false);
+    setSelectedMorningReciter(validId);
     if (onUpdateSettings) {
-      onUpdateSettings({ adhkarReciter: reciterId });
+      onUpdateSettings({ morningAdhkarReciter: validId });
+    }
+    if (
+      !currentlyPlayingDhikrId &&
+      activeAudioType === 'adhkar' &&
+      (playerState === 'playing' || playerState === 'loading') &&
+      getEffectiveFullPeriod() === 'morning'
+    ) {
+      setPlayingSheikhName(getAdhkarSourceLabel(validId, 'morning'));
+      adhanPlayer.playAdhkar(validId, 'أذكار الصباح المباركة', 'morning');
+    }
+  };
+
+  const handleEveningReciterChange = (reciterId: string) => {
+    const validId = resolveValidAdhkarReciterForPeriod(reciterId, 'evening', false);
+    setSelectedEveningReciter(validId);
+    if (onUpdateSettings) {
+      onUpdateSettings({ eveningAdhkarReciter: validId });
+    }
+    if (
+      !currentlyPlayingDhikrId &&
+      activeAudioType === 'adhkar' &&
+      (playerState === 'playing' || playerState === 'loading') &&
+      getEffectiveFullPeriod() === 'evening'
+    ) {
+      setPlayingSheikhName(getAdhkarSourceLabel(validId, 'evening'));
+      adhanPlayer.playAdhkar(validId, 'أذكار المساء المباركة', 'evening');
     }
   };
 
@@ -242,11 +301,13 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
       adhanPlayer.stop();
       setPlayingSheikhName(null);
     } else {
-      const period = activeCategory === 'evening' ? 'evening' : 'morning';
-      const sampleText = activeCategory === 'evening' ? 'أذكار المساء المباركة' : 'أذكار الصباح المباركة';
-      const info = ADHKAR_SOURCES[selectedReciter] || ADHKAR_SOURCES.alafasy_adhkar;
-      setPlayingSheikhName(info.nameAr);
-      adhanPlayer.playAdhkar(selectedReciter, sampleText, period);
+      const period = getEffectiveFullPeriod();
+      const targetReciter =
+        period === 'evening' ? selectedEveningReciter : selectedMorningReciter;
+      const sampleText =
+        period === 'evening' ? 'أذكار المساء المباركة' : 'أذكار الصباح المباركة';
+      setPlayingSheikhName(getAdhkarSourceLabel(targetReciter, period));
+      adhanPlayer.playAdhkar(targetReciter, sampleText, period);
     }
   };
 
@@ -310,7 +371,10 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
     });
   };
 
-  const currentReciterInfo = ADHKAR_SOURCES[selectedReciter] || ADHKAR_SOURCES.alafasy_adhkar;
+  const morningSources = getAdhkarSourcesForPeriod('morning', false);
+  const eveningSources = getAdhkarSourcesForPeriod('evening', false);
+  const currentMorningReciterLabel = getAdhkarSourceLabel(selectedMorningReciter, 'morning');
+  const currentEveningReciterLabel = getAdhkarSourceLabel(selectedEveningReciter, 'evening');
   const currentShortSheikhInfo =
     SHORT_ADHKAR_SHEIKHS.find((s) => s.id === selectedShortSheikh) || SHORT_ADHKAR_SHEIKHS[0];
 
@@ -634,68 +698,211 @@ export const AdhkarSection: React.FC<AdhkarSectionProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-[#040D0A] border border-[#D4AF37]/30 flex items-center justify-center shrink-0">
-                        <Mic className="w-4 h-4 text-[#F3D06B]" />
+                <div className="space-y-2.5">
+                  {activeCategory === 'all' ? (
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className="w-10 h-10 rounded-xl bg-[#040D0A] border border-amber-400/35 flex items-center justify-center shrink-0"
+                            title="قارئ أذكار الصباح"
+                          >
+                            <Sunrise className="w-4 h-4 text-[#F3D06B]" />
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <span className="block text-[10px] font-bold text-[#F3D06B] text-right">
+                              قارئ أذكار الصباح
+                            </span>
+                            <select
+                              value={selectedMorningReciter}
+                              onChange={(e) => handleMorningReciterChange(e.target.value)}
+                              aria-label="اختيار قارئ أذكار الصباح"
+                              className="w-full min-w-0 min-h-[44px] bg-[#040D0A] border border-[#D4AF37]/30 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-100 font-semibold focus:outline-none focus:border-[#F3D06B] text-right cursor-pointer"
+                            >
+                              {morningSources.map((src) => (
+                                <option key={src.id} value={src.id}>
+                                  {src.morningLabelAr || src.nameAr}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className="w-10 h-10 rounded-xl bg-[#040D0A] border border-sky-400/35 flex items-center justify-center shrink-0"
+                            title="قارئ أذكار المساء"
+                          >
+                            <Moon className="w-4 h-4 text-sky-300" />
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <span className="block text-[10px] font-bold text-sky-300 text-right">
+                              قارئ أذكار المساء
+                            </span>
+                            <select
+                              value={selectedEveningReciter}
+                              onChange={(e) => handleEveningReciterChange(e.target.value)}
+                              aria-label="اختيار قارئ أذكار المساء"
+                              className="w-full min-w-0 min-h-[44px] bg-[#040D0A] border border-[#D4AF37]/30 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-100 font-semibold focus:outline-none focus:border-[#F3D06B] text-right cursor-pointer"
+                            >
+                              {eveningSources.map((src) => (
+                                <option key={src.id} value={src.id}>
+                                  {src.eveningLabelAr || src.nameAr}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                       </div>
-                      <select
-                        value={selectedReciter}
-                        onChange={(e) => handleReciterChange(e.target.value)}
-                        aria-label="اختيار القارئ للأذكار الكاملة"
-                        className="flex-1 min-w-0 min-h-[44px] bg-[#040D0A] border border-[#D4AF37]/30 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-100 font-semibold focus:outline-none focus:border-[#F3D06B] text-right cursor-pointer"
-                      >
-                        {Object.values(ADHKAR_SOURCES)
-                          .filter((src) => src.id !== 'speech_synth')
-                          .map((src) => (
-                            <option key={src.id} value={src.id}>
-                              {src.nameAr}
-                            </option>
-                          ))}
-                      </select>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="text-[11px] text-slate-400 text-right flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-0.5">
+                          <span>
+                            الصباح: <strong className="text-[#F3D06B]">{currentMorningReciterLabel}</strong>
+                          </span>
+                          <span aria-hidden="true" className="text-[#D4AF37]/50">
+                            ·
+                          </span>
+                          <span>
+                            المساء: <strong className="text-sky-300">{currentEveningReciterLabel}</strong>
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleToggleFullAdhkarAudio}
+                          style={
+                            !currentlyPlayingDhikrId &&
+                            (playerState === 'playing' || playerState === 'loading') &&
+                            activeAudioType === 'adhkar'
+                              ? undefined
+                              : {
+                                  background:
+                                    'linear-gradient(135deg, #F3D06B 0%, #D4AF37 55%, #B89124 100%)',
+                                }
+                          }
+                          className={`min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
+                            !currentlyPlayingDhikrId &&
+                            (playerState === 'playing' || playerState === 'loading') &&
+                            activeAudioType === 'adhkar'
+                              ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md ring-2 ring-rose-400/35'
+                              : 'text-[#060B09] shadow-[0_6px_18px_rgba(212,175,55,0.22)] hover:brightness-105'
+                          }`}
+                        >
+                          {!currentlyPlayingDhikrId &&
+                          (playerState === 'playing' || playerState === 'loading') &&
+                          activeAudioType === 'adhkar' ? (
+                            <>
+                              <Square className="w-3.5 h-3.5 fill-current shrink-0" />
+                              <span>إيقاف التلاوة</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                              <span>تشغيل الوِرد الكامل</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={handleToggleFullAdhkarAudio}
-                      style={
-                        !currentlyPlayingDhikrId &&
-                        (playerState === 'playing' || playerState === 'loading') &&
-                        activeAudioType === 'adhkar'
-                          ? undefined
-                          : {
-                              background:
-                                'linear-gradient(135deg, #F3D06B 0%, #D4AF37 55%, #B89124 100%)',
+                  ) : (
+                    <>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div
+                            className={`w-10 h-10 rounded-xl bg-[#040D0A] border flex items-center justify-center shrink-0 ${
+                              activeCategory === 'evening'
+                                ? 'border-sky-400/35'
+                                : 'border-[#D4AF37]/30'
+                            }`}
+                          >
+                            {activeCategory === 'evening' ? (
+                              <Moon className="w-4 h-4 text-sky-300" />
+                            ) : (
+                              <Sunrise className="w-4 h-4 text-[#F3D06B]" />
+                            )}
+                          </div>
+                          <select
+                            value={
+                              activeCategory === 'evening'
+                                ? selectedEveningReciter
+                                : selectedMorningReciter
                             }
-                      }
-                      className={`min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
-                        !currentlyPlayingDhikrId &&
-                        (playerState === 'playing' || playerState === 'loading') &&
-                        activeAudioType === 'adhkar'
-                          ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md ring-2 ring-rose-400/35'
-                          : 'text-[#060B09] shadow-[0_6px_18px_rgba(212,175,55,0.22)] hover:brightness-105'
-                      }`}
-                    >
-                      {!currentlyPlayingDhikrId &&
-                      (playerState === 'playing' || playerState === 'loading') &&
-                      activeAudioType === 'adhkar' ? (
-                        <>
-                          <Square className="w-3.5 h-3.5 fill-current shrink-0" />
-                          <span>إيقاف التلاوة</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-current shrink-0" />
-                          <span>تشغيل الوِرد الكامل</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                            onChange={(e) =>
+                              activeCategory === 'evening'
+                                ? handleEveningReciterChange(e.target.value)
+                                : handleMorningReciterChange(e.target.value)
+                            }
+                            aria-label={
+                              activeCategory === 'evening'
+                                ? 'اختيار قارئ أذكار المساء الكاملة'
+                                : 'اختيار قارئ أذكار الصباح الكاملة'
+                            }
+                            className="flex-1 min-w-0 min-h-[44px] bg-[#040D0A] border border-[#D4AF37]/30 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-100 font-semibold focus:outline-none focus:border-[#F3D06B] text-right cursor-pointer"
+                          >
+                            {(activeCategory === 'evening' ? eveningSources : morningSources).map(
+                              (src) => (
+                                <option key={src.id} value={src.id}>
+                                  {activeCategory === 'evening'
+                                    ? src.eveningLabelAr || src.nameAr
+                                    : src.morningLabelAr || src.nameAr}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </div>
 
-                  <div className="text-[11px] text-slate-400 text-right truncate px-0.5">
-                    القارئ المختار · <span className="text-[#F3D06B]">{currentReciterInfo.nameAr}</span>
-                  </div>
+                        <button
+                          type="button"
+                          onClick={handleToggleFullAdhkarAudio}
+                          style={
+                            !currentlyPlayingDhikrId &&
+                            (playerState === 'playing' || playerState === 'loading') &&
+                            activeAudioType === 'adhkar'
+                              ? undefined
+                              : {
+                                  background:
+                                    'linear-gradient(135deg, #F3D06B 0%, #D4AF37 55%, #B89124 100%)',
+                                }
+                          }
+                          className={`min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shrink-0 whitespace-nowrap cursor-pointer active:scale-[0.98] ${
+                            !currentlyPlayingDhikrId &&
+                            (playerState === 'playing' || playerState === 'loading') &&
+                            activeAudioType === 'adhkar'
+                              ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-md ring-2 ring-rose-400/35'
+                              : 'text-[#060B09] shadow-[0_6px_18px_rgba(212,175,55,0.22)] hover:brightness-105'
+                          }`}
+                        >
+                          {!currentlyPlayingDhikrId &&
+                          (playerState === 'playing' || playerState === 'loading') &&
+                          activeAudioType === 'adhkar' ? (
+                            <>
+                              <Square className="w-3.5 h-3.5 fill-current shrink-0" />
+                              <span>إيقاف التلاوة</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                              <span>
+                                {activeCategory === 'evening'
+                                  ? 'تشغيل أذكار المساء'
+                                  : 'تشغيل أذكار الصباح'}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="text-[11px] text-slate-400 text-right truncate px-0.5">
+                        {activeCategory === 'evening' ? 'قارئ أذكار المساء' : 'قارئ أذكار الصباح'} ·{' '}
+                        <span className={activeCategory === 'evening' ? 'text-sky-300' : 'text-[#F3D06B]'}>
+                          {activeCategory === 'evening'
+                            ? currentEveningReciterLabel
+                            : currentMorningReciterLabel}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

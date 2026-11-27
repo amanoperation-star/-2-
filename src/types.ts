@@ -92,7 +92,9 @@ export interface UserSettings {
   morningAdhkarEnabled?: boolean; // تفعيل تنبيه أذكار الصباح
   eveningAdhkarEnabled?: boolean; // تفعيل تنبيه أذكار المساء
   adhkarAutoPlayAudio?: boolean; // تشغيل الصوت تلقائياً عند حلول وقت الأذكار
-  adhkarReciter?: string; // الشيخ القارئ المفضل لأذكار الصباح والمساء
+  adhkarReciter?: string; // الشيخ القارئ المفضل (الافتراضي العام للتوافق السابق)
+  morningAdhkarReciter?: string; // الشيخ القارئ المفضل لأذكار الصباح الكاملة
+  eveningAdhkarReciter?: string; // الشيخ القارئ المفضل لأذكار المساء الكاملة
   adhkarShortSheikh?: string; // الشيخ القارئ المفضل لمقاطع الأذكار القصيرة
   iqamaStyle?: 'ring' | 'split' | 'pill'; // مظهر عدّاد الإقامة
   adhanModalLayout?: 'editorial-horizon' | 'architectural-sanctuary' | 'ambient-aura'; // تصميم شاشة الأذان الكاملة

@@ -23,12 +23,16 @@ import {
 } from 'lucide-react';
 import { CityLocation, PrayerName, PrayerTimeData, UserSettings } from '../types';
 import {
+  WIDGET_MOSQUE_BACKGROUNDS,
   WIDGET_SIZES,
+  WIDGET_TASBIH_PHRASES,
   WIDGET_THEMES,
+  WidgetFontScale,
   WidgetStudioConfig,
   buildWidgetBridgeCopySnippet,
   buildWidgetBridgePayload,
   loadWidgetConfig,
+  loadWidgetTasbihState,
   saveWidgetConfig,
 } from '../utils/widgetStudioData';
 import { PrayerWidgetPreview } from './PrayerWidgetPreview';
@@ -144,6 +148,14 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
       hijri: config.showHijriDate ? '1' : '0',
       wird: config.showSunnahWird ? '1' : '0',
       fasting: config.showFastingAlert ? '1' : '0',
+      insp: config.showDailyInspiration ? '1' : '0',
+      duha: config.showDuhaSunrise ? '1' : '0',
+      quiet: config.showQuietAndLastThird ? '1' : '0',
+      actions: config.showQuickActions ? '1' : '0',
+      rings: config.showDayProgressRings ? '1' : '0',
+      bg: config.mosqueBackgroundId,
+      bgop: String(config.mosqueBgOpacity),
+      fscale: config.fontScale,
       rate: config.refreshInterval,
     });
     return `${window.location.origin}/?${params.toString()}`;
@@ -169,7 +181,8 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
       now,
     });
     await syncNativeAndroidWidgetData(payload);
-    const res = await requestPinNativeAndroidWidget(config.size);
+    const pinSize = config.size === 'spiritual_card' ? 'large' : config.size;
+    const res = await requestPinNativeAndroidWidget(pinSize);
     const updatedStatus = await getNativeAndroidWidgetStatus();
     setNativePinStatus({
       isAndroid: true,
@@ -206,6 +219,7 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const isParchment = config.theme === 'parchment';
     const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
     if (config.theme === 'oled') {
       grad.addColorStop(0, '#050807');
@@ -213,6 +227,12 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
     } else if (config.theme === 'glass') {
       grad.addColorStop(0, '#0b2b23');
       grad.addColorStop(1, '#051914');
+    } else if (isParchment) {
+      grad.addColorStop(0, '#FCF7E8');
+      grad.addColorStop(1, '#F3E5C2');
+    } else if (config.theme === 'royal_gold') {
+      grad.addColorStop(0, '#2B1F09');
+      grad.addColorStop(1, '#0D0903');
     } else {
       grad.addColorStop(0, '#111C18');
       grad.addColorStop(1, '#071410');
@@ -221,7 +241,11 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.strokeStyle = '#D4AF37';
+    ctx.strokeStyle = isParchment
+      ? '#C49A3A'
+      : config.theme === 'royal_gold'
+        ? '#F6D884'
+        : '#D4AF37';
     ctx.lineWidth = 6;
     ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
 
@@ -246,11 +270,11 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
 
     ctx.direction = 'rtl';
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#D4AF37';
+    ctx.fillStyle = isParchment ? '#9A6B11' : config.theme === 'royal_gold' ? '#F6D884' : '#D4AF37';
     ctx.font = 'bold 34px Cairo, Amiri, sans-serif';
     ctx.fillText(`مواقيت الصلاة · ${currentLocation.nameAr}`, canvas.width / 2, 86);
 
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = isParchment ? '#0F3D2E' : '#FFFFFF';
     ctx.font = 'bold 64px Amiri, Cairo, sans-serif';
     ctx.fillText(
       `الصلاة القادمة: ${namesAr[nextKey]} (${prayerTimes[nextKey]})`,
@@ -259,7 +283,7 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
     );
 
     if (config.showHijriDate && canvas.height >= 500) {
-      ctx.fillStyle = '#10B981';
+      ctx.fillStyle = isParchment ? '#0D7A56' : '#10B981';
       ctx.font = 'bold 32px Amiri, Cairo, sans-serif';
       ctx.fillText(prayerTimes.hijriDate, canvas.width / 2, 270);
     }
@@ -269,16 +293,32 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
       let yPos = 390;
       ctx.font = 'bold 36px Cairo, sans-serif';
       dailyKeys.forEach((k) => {
-        ctx.fillStyle = k === nextKey ? '#D4AF37' : '#E2E8F0';
+        ctx.fillStyle =
+          k === nextKey
+            ? isParchment
+              ? '#9A6B11'
+              : '#D4AF37'
+            : isParchment
+              ? '#0F3D2E'
+              : '#E2E8F0';
         ctx.fillText(`${namesAr[k]}  —  ${prayerTimes[k]}`, canvas.width / 2, yPos);
         yPos += 74;
       });
+    } else if (config.size === 'spiritual_card') {
+      const tasbih = loadWidgetTasbihState(now);
+      const phrase = WIDGET_TASBIH_PHRASES[tasbih.phraseIndex] || WIDGET_TASBIH_PHRASES[0];
+      ctx.fillStyle = isParchment ? '#0F3D2E' : '#FFF7E2';
+      ctx.font = 'bold 48px Amiri, Cairo, sans-serif';
+      ctx.fillText(`${phrase}`, canvas.width / 2, 410);
+      ctx.fillStyle = isParchment ? '#0D7A56' : '#10B981';
+      ctx.font = 'bold 54px Cairo, sans-serif';
+      ctx.fillText(`السبحة اليومية: ${toArabicDigits(tasbih.count)} تسبيحة`, canvas.width / 2, 510);
     }
 
     if (config.showSunnahWird && canvas.height >= 500) {
       const rawatib = countCompletedRawatibRakats(loadSunnahRawatibState());
       const wird = getDailyWirdSchedule(loadKhatmaState());
-      ctx.fillStyle = '#F3CA63';
+      ctx.fillStyle = isParchment ? '#9A6B11' : '#F3CA63';
       ctx.font = 'bold 28px Cairo, sans-serif';
       ctx.fillText(
         `السنن الرواتب: ${toArabicDigits(rawatib)}/${toArabicDigits(RAWATIB_TOTAL_TARGET)} ركعة · الوِرد اليومي: ${toArabicDigits(wird.dailyPercent)}%`,
@@ -333,12 +373,12 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* RIGHT COLUMN: Customization Controls (7 cols) */}
             <div className="lg:col-span-7 space-y-5">
-              {/* 1. Theme Picker (3 Themes) */}
+              {/* 1. Theme Picker (5 Themes) */}
               <div className="rounded-2xl bg-[#09120F] border border-[#D4AF37]/30 p-4 space-y-3">
                 <h3 className="text-sm font-bold text-[#F3CA63] flex items-center gap-2">
-                  <span>١. مظهر وثيم الودجت (٣ ثيمات)</span>
+                  <span>١. مظهر وثيم الودجت (٥ ثيمات)</span>
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                   {WIDGET_THEMES.map((t) => {
                     const active = config.theme === t.id;
                     return (
@@ -368,12 +408,12 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                 </div>
               </div>
 
-              {/* 2. Size Selector (3 Sizes) */}
+              {/* 2. Size Selector (4 Sizes) */}
               <div className="rounded-2xl bg-[#09120F] border border-[#D4AF37]/30 p-4 space-y-3">
                 <h3 className="text-sm font-bold text-[#F3CA63]">
-                  ٢. حجم الودجت وتخطيطه (٣ أحجام)
+                  ٢. حجم الودجت وتخطيطه (٤ أحجام)
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {WIDGET_SIZES.map((s) => {
                     const active = config.size === s.id;
                     return (
@@ -401,11 +441,100 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                 </div>
               </div>
 
-              {/* 3. Quick Display Toggles & Refresh Rate */}
+              {/* 2.5 Mosque Background, Opacity & Font Scale */}
+              <div className="rounded-2xl bg-[#09120F] border border-[#D4AF37]/30 p-4 space-y-3.5">
+                <h3 className="text-sm font-bold text-[#F3CA63]">
+                  ٣. خلفية المسجد والشفافية وحجم الخط
+                </h3>
+
+                <div className="space-y-2">
+                  <div className="text-[11px] font-bold text-slate-300">خلفية مسجد إسلامية هادئة:</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {WIDGET_MOSQUE_BACKGROUNDS.map((bg) => {
+                      const active = config.mosqueBackgroundId === bg.id;
+                      return (
+                        <button
+                          key={bg.id}
+                          type="button"
+                          onClick={() => updateConfig({ mosqueBackgroundId: bg.id })}
+                          className={`rounded-xl border p-2 text-center transition-all flex flex-col items-center gap-1.5 ${
+                            active
+                              ? 'bg-[#08241C] border-[#10B981] text-emerald-300 shadow-[0_0_14px_rgba(16,185,129,0.18)]'
+                              : 'bg-[#111C18] border-[#D4AF37]/25 text-slate-300 hover:border-[#D4AF37]/60'
+                          }`}
+                        >
+                          {bg.imageUrl ? (
+                            <img
+                              src={bg.imageUrl}
+                              alt={bg.titleAr}
+                              className="w-full h-9 rounded-lg object-cover border border-white/10"
+                            />
+                          ) : (
+                            <div className="w-full h-9 rounded-lg bg-[#050C0A] border border-dashed border-[#D4AF37]/35 flex items-center justify-center text-[10px] text-slate-400">
+                              لون صافي
+                            </div>
+                          )}
+                          <span className="text-[10px] font-bold truncate max-w-full">{bg.titleAr}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {config.mosqueBackgroundId !== 'none' && (
+                  <div className="p-3 rounded-xl bg-[#111C18] border border-[#D4AF37]/20 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-200">وضوح وشفافية صورة المسجد</span>
+                      <span className="text-[#F3CA63] tabular-nums">
+                        {toArabicDigits(config.mosqueBgOpacity)}٪
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={15}
+                      max={80}
+                      step={5}
+                      value={config.mosqueBgOpacity}
+                      onChange={(e) =>
+                        updateConfig({ mosqueBgOpacity: Number(e.target.value) })
+                      }
+                      className="w-full accent-[#10B981] cursor-pointer"
+                    />
+                  </div>
+                )}
+
+                <div className="pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-200">حجم الخط داخل الودجت:</span>
+                  <div className="grid grid-cols-3 gap-1.5 bg-[#111C18] p-1 rounded-xl border border-[#D4AF37]/25">
+                    {(
+                      [
+                        { id: 'sm', label: 'صغير' },
+                        { id: 'md', label: 'متوسط' },
+                        { id: 'lg', label: 'كبير' },
+                      ] as Array<{ id: WidgetFontScale; label: string }>
+                    ).map((fs) => (
+                      <button
+                        key={fs.id}
+                        type="button"
+                        onClick={() => updateConfig({ fontScale: fs.id })}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                          config.fontScale === fs.id
+                            ? 'bg-[#D4AF37] text-slate-950 shadow'
+                            : 'text-slate-300 hover:text-[#F3CA63]'
+                        }`}
+                      >
+                        {fs.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Quick Display Toggles & Refresh Rate */}
               <div className="rounded-2xl bg-[#09120F] border border-[#D4AF37]/30 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="text-sm font-bold text-[#F3CA63]">
-                    ٣. البيانات المعروضة وتكرار التحديث
+                    ٤. البيانات المعروضة وتكرار التحديث
                   </h3>
                   <button
                     type="button"
@@ -437,6 +566,31 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                       key: 'showSunnahWird' as const,
                       label: 'إظهار مؤشر إنجاز السنن الرواتب والوِرد اليومي',
                       sub: 'متابعة ركعات السنن ونسبة ورد الختمة من الشاشة',
+                    },
+                    {
+                      key: 'showDayProgressRings' as const,
+                      label: 'إظهار شريط تقدم اليوم وحلقات الإنجاز الدائرية',
+                      sub: 'مؤشر اليوم من الفجر إلى العشاء وحلقات السنن والوِرد',
+                    },
+                    {
+                      key: 'showDuhaSunrise' as const,
+                      label: 'إظهار أوقات الشروق وصلاة الضحى ونهايتها',
+                      sub: 'عرض الشروق والإشراق ونهاية وقت الضحى وحالته',
+                    },
+                    {
+                      key: 'showQuietAndLastThird' as const,
+                      label: 'إظهار مؤشر وضع السكون والثلث الأخير من الليل',
+                      sub: 'متابعة حالة السكون الليلي وموعد الثلث الأخير مباشرة',
+                    },
+                    {
+                      key: 'showDailyInspiration' as const,
+                      label: 'إظهار آية أو حديث متجدد وذكر قصير',
+                      sub: 'مقتطف إيماني متجدد داخل الودجت مع زر تبديل فوري',
+                    },
+                    {
+                      key: 'showQuickActions' as const,
+                      label: 'إظهار أزرار السبحة والأذكار والقبلة والسكون التفاعلية',
+                      sub: 'أزرار تسبيح حيّ وانتقال سريع للأذكار والقبلة ووضع السكون',
                     },
                     {
                       key: 'showFastingAlert' as const,
@@ -508,7 +662,7 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
               <div className="rounded-2xl bg-[#09120F] border border-[#10B981]/35 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="text-sm font-bold text-emerald-300">
-                    ٤. إضافة الويدجت على شاشة الهاتف والتصدير
+                    ٥. إضافة الويدجت على شاشة الهاتف والتصدير
                   </h3>
                   {nativePinStatus.isAndroid && nativePinStatus.activeCount > 0 && (
                     <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-[#08241C] border border-[#10B981]/50 text-emerald-300">
@@ -664,6 +818,10 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                             currentLocation={currentLocation}
                             settings={settings}
                             compactScale={true}
+                            onNavigateShortcut={(target) => {
+                              onClose();
+                              onNavigateShortcut(target);
+                            }}
                           />
                         </div>
                       </div>
@@ -690,6 +848,10 @@ export const WidgetStudioModal: React.FC<WidgetStudioModalProps> = ({
                           currentLocation={currentLocation}
                           settings={settings}
                           compactScale={true}
+                          onNavigateShortcut={(target) => {
+                            onClose();
+                            onNavigateShortcut(target);
+                          }}
                         />
 
                         <div className="space-y-2">

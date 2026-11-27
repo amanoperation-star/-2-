@@ -87,7 +87,16 @@ export const SurahKahfCompanion: React.FC<SurahKahfCompanionProps> = ({
   }, [progress]);
 
   useEffect(() => {
+    const stopKahfAudio = () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      setAudioStatus('idle');
+    };
+    window.addEventListener('mihrab_stop_background_media', stopKahfAudio);
     return () => {
+      window.removeEventListener('mihrab_stop_background_media', stopKahfAudio);
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';

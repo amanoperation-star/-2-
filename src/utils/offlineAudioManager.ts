@@ -188,15 +188,28 @@ export function getEssentialStartupAudioUrls(settings?: Partial<UserSettings>): 
     if (settings.duaAudioReciter === 'ghamdi_dua') urls.push('/audio/dua-ghamdi.mp3');
     if (settings.duaAudioReciter === 'durayhim_dua') urls.push('/audio/dua-durayhim.mp3');
   }
-  if (settings?.adhkarReciter) {
-    if (settings.adhkarReciter === 'alafasy_adhkar') {
-      urls.push('/audio/adhkar-sabah-alafasy.mp3', '/audio/adhkar-masaa-alafasy.mp3');
-    } else if (settings.adhkarReciter === 'abbad_adhkar') {
-      urls.push('/audio/adhkar-sabah-abbad.mp3', '/audio/adhkar-masaa-abbad.mp3');
-    } else if (settings.adhkarReciter === 'qatami_adhkar') {
+  const morningReciter = settings?.morningAdhkarReciter || settings?.adhkarReciter;
+  const eveningReciter = settings?.eveningAdhkarReciter || settings?.adhkarReciter;
+  if (morningReciter) {
+    if (morningReciter === 'alafasy_adhkar') {
+      urls.push('/audio/adhkar-sabah-alafasy.mp3');
+    } else if (morningReciter === 'abbad_adhkar') {
+      urls.push('/audio/adhkar-sabah-abbad.mp3');
+    } else if (morningReciter === 'qatami_adhkar') {
       urls.push('/audio/adhkar-qatami.mp3');
     } else {
-      urls.push('/audio/adhkar-sabah-alafasy.mp3', '/audio/adhkar-masaa-alafasy.mp3');
+      urls.push('/audio/adhkar-sabah.mp3');
+    }
+  }
+  if (eveningReciter) {
+    if (eveningReciter === 'alafasy_adhkar') {
+      urls.push('/audio/adhkar-masaa-alafasy.mp3');
+    } else if (eveningReciter === 'abbad_adhkar') {
+      urls.push('/audio/adhkar-masaa-abbad.mp3');
+    } else if (eveningReciter === 'qatami_adhkar') {
+      urls.push('/audio/adhkar-qatami.mp3');
+    } else {
+      urls.push('/audio/adhkar-masaa.mp3');
     }
   }
 

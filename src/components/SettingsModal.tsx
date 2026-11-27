@@ -59,7 +59,9 @@ import {
   FAJR_ADHAN_SOURCES,
   DUA_SOURCES,
   getDuaSource,
-  ADHKAR_SOURCES,
+  getAdhkarSourcesForPeriod,
+  getAdhkarSourceLabel,
+  resolveValidAdhkarReciterForPeriod,
   SALAWAT_SHEIKH_VOICES,
   SalawatVoiceProfile,
   PRE_ADHAN_SHEIKH_VOICES,
@@ -224,7 +226,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [morningAdhkarEnabled, setMorningAdhkarEnabled] = useState<boolean>(settings.morningAdhkarEnabled ?? true);
   const [eveningAdhkarEnabled, setEveningAdhkarEnabled] = useState<boolean>(settings.eveningAdhkarEnabled ?? true);
   const [adhkarAutoPlayAudio, setAdhkarAutoPlayAudio] = useState<boolean>(settings.adhkarAutoPlayAudio ?? true);
-  const [selectedAdhkarReciter, setSelectedAdhkarReciter] = useState<string>(settings.adhkarReciter || 'alafasy_adhkar');
+  const [selectedMorningAdhkarReciter, setSelectedMorningAdhkarReciter] = useState<string>(() =>
+    resolveValidAdhkarReciterForPeriod(
+      settings.morningAdhkarReciter || settings.adhkarReciter,
+      'morning',
+      true
+    )
+  );
+  const [selectedEveningAdhkarReciter, setSelectedEveningAdhkarReciter] = useState<string>(() =>
+    resolveValidAdhkarReciterForPeriod(
+      settings.eveningAdhkarReciter || settings.adhkarReciter,
+      'evening',
+      true
+    )
+  );
+  const [adhkarGalleryPeriodTab, setAdhkarGalleryPeriodTab] = useState<'morning' | 'evening'>('morning');
   const [selectedShortAdhkarSheikh, setSelectedShortAdhkarSheikh] = useState<ShortAdhkarSheikhId>(
     (settings.adhkarShortSheikh as ShortAdhkarSheikhId) || 'rotate'
   );
@@ -450,7 +466,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setMorningAdhkarEnabled(s.morningAdhkarEnabled ?? true);
       setEveningAdhkarEnabled(s.eveningAdhkarEnabled ?? true);
       setAdhkarAutoPlayAudio(s.adhkarAutoPlayAudio ?? true);
-      setSelectedAdhkarReciter(s.adhkarReciter || 'alafasy_adhkar');
+      setSelectedMorningAdhkarReciter(
+        resolveValidAdhkarReciterForPeriod(
+          s.morningAdhkarReciter || s.adhkarReciter,
+          'morning',
+          true
+        )
+      );
+      setSelectedEveningAdhkarReciter(
+        resolveValidAdhkarReciterForPeriod(
+          s.eveningAdhkarReciter || s.adhkarReciter,
+          'evening',
+          true
+        )
+      );
       const savedShortSheikh =
         s.adhkarShortSheikh ||
         (typeof window !== 'undefined' ? localStorage.getItem('adhkar_short_sheikh') : null) ||
@@ -602,9 +631,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleToggleAdhkarPreview = (
-    period: 'morning' | 'evening' | 'general' = 'general',
-    reciterId: string = selectedAdhkarReciter
+    period: 'morning' | 'evening' | 'general' = 'morning',
+    reciterId?: string
   ) => {
+    const resolvedReciterId =
+      reciterId ||
+      (period === 'evening' ? selectedEveningAdhkarReciter : selectedMorningAdhkarReciter);
+
     if (
       (playerState === 'playing' || playerState === 'loading') &&
       activeAudioType === 'adhkar' &&
@@ -620,7 +653,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           : period === 'evening'
             ? 'أذكار المساء المباركة'
             : 'أذكار الصباح والمساء المكتوبة';
-      adhanPlayer.playAdhkar(reciterId, label, period);
+      adhanPlayer.playAdhkar(resolvedReciterId, label, period);
     }
   };
 
@@ -807,7 +840,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       morningAdhkarEnabled,
       eveningAdhkarEnabled,
       adhkarAutoPlayAudio,
-      adhkarReciter: selectedAdhkarReciter,
+      adhkarReciter: selectedMorningAdhkarReciter,
+      morningAdhkarReciter: selectedMorningAdhkarReciter,
+      eveningAdhkarReciter: selectedEveningAdhkarReciter,
       adhkarShortSheikh: selectedShortAdhkarSheikh,
       iqamaStyle: selectedIqamaStyle,
       adhanModalLayout: selectedAdhanLayout,
@@ -1072,7 +1107,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="text-xs font-bold text-[#D4AF37]">
           الحجم الافتراضي للودجت (Default Widget Size):
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {WIDGET_SIZES.map((s) => {
             const isSelected = activeWidgetConfig.size === s.id;
             return (
@@ -1104,7 +1139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="text-xs font-bold text-[#D4AF37]">
           مظهر وثيم الودجت (Widget Theme):
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {WIDGET_THEMES.map((t) => {
             const isSelected = activeWidgetConfig.theme === t.id;
             return (
@@ -1147,6 +1182,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {
               key: 'showSunnahWird' as const,
               label: 'إظهار مؤشر إنجاز السنن الرواتب والوِرد اليومي',
+            },
+            {
+              key: 'showDayProgressRings' as const,
+              label: 'إظهار شريط تقدم اليوم وحلقات الإنجاز الدائرية',
+            },
+            {
+              key: 'showDuhaSunrise' as const,
+              label: 'إظهار أوقات الشروق وصلاة الضحى ونهايتها',
+            },
+            {
+              key: 'showQuietAndLastThird' as const,
+              label: 'إظهار مؤشر وضع السكون والثلث الأخير من الليل',
+            },
+            {
+              key: 'showDailyInspiration' as const,
+              label: 'إظهار آية أو حديث متجدد وذكر قصير',
+            },
+            {
+              key: 'showQuickActions' as const,
+              label: 'إظهار أزرار السبحة والأذكار والقبلة والسكون التفاعلية',
             },
             {
               key: 'showFastingAlert' as const,
@@ -1479,7 +1534,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       },
     ];
 
-    const currentReciterObj = ADHKAR_SOURCES[selectedAdhkarReciter] || ADHKAR_SOURCES.alafasy_adhkar;
+    const morningSources = getAdhkarSourcesForPeriod('morning', true);
+    const eveningSources = getAdhkarSourcesForPeriod('evening', true);
+    const currentMorningReciterLabel = getAdhkarSourceLabel(selectedMorningAdhkarReciter, 'morning');
+    const currentEveningReciterLabel = getAdhkarSourceLabel(selectedEveningAdhkarReciter, 'evening');
+    const gallerySources = adhkarGalleryPeriodTab === 'evening' ? eveningSources : morningSources;
+    const activeGalleryReciter =
+      adhkarGalleryPeriodTab === 'evening'
+        ? selectedEveningAdhkarReciter
+        : selectedMorningAdhkarReciter;
     const isMorningPlaying =
       (playerState === 'playing' || playerState === 'loading') &&
       activeAudioType === 'adhkar' &&
@@ -1503,7 +1566,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   ❖ مواعيد وإعدادات أذكار الصباح والمساء ❖
                 </h4>
                 <p className="text-xs text-slate-300">
-                  اضبط توقيت التذكير اليومي لأذكار الصباح والمساء واختر القارئ المفضل وسلوك التشغيل التلقائي
+                  اضبط توقيت أذكار الصباح والمساء واختر قارئاً مستقلاً لكل وقت وسلوك التشغيل التلقائي
                 </p>
               </div>
             </div>
@@ -1516,7 +1579,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 setMorningTime('06:00');
                 setEveningTime('17:00');
                 setAdhkarAutoPlayAudio(true);
-                setSelectedAdhkarReciter('alafasy_adhkar');
+                setSelectedMorningAdhkarReciter('alafasy_adhkar');
+                setSelectedEveningAdhkarReciter('alafasy_adhkar');
                 setSelectedShortAdhkarSheikh('rotate');
                 onUpdateSettings({
                   morningAdhkarEnabled: true,
@@ -1525,6 +1589,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   eveningAdhkarTime: '17:00',
                   adhkarAutoPlayAudio: true,
                   adhkarReciter: 'alafasy_adhkar',
+                  morningAdhkarReciter: 'alafasy_adhkar',
+                  eveningAdhkarReciter: 'alafasy_adhkar',
                   adhkarShortSheikh: 'rotate',
                 });
               }}
@@ -1622,10 +1688,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
+                {/* Morning Sheikh Selector */}
+                <label className="block space-y-1.5">
+                  <span className="text-[11px] font-bold text-[#e5b869] block">
+                    الشيخ القارئ لأذكار الصباح:
+                  </span>
+                  <select
+                    value={selectedMorningAdhkarReciter}
+                    onChange={(e) => {
+                      const val = resolveValidAdhkarReciterForPeriod(e.target.value, 'morning', true);
+                      setSelectedMorningAdhkarReciter(val);
+                      onUpdateSettings({ morningAdhkarReciter: val });
+                    }}
+                    className="w-full min-h-[44px] bg-[#02100d] border border-[#e5b869]/35 rounded-xl px-3 py-2 text-xs text-slate-100 font-semibold focus:outline-none focus:border-[#fbbf24] text-right cursor-pointer"
+                  >
+                    {morningSources.map((src) => (
+                      <option key={src.id} value={src.id}>
+                        {src.morningLabelAr || src.nameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <button
                   type="button"
-                  onClick={() => handleToggleAdhkarPreview('morning', selectedAdhkarReciter)}
-                  className={`w-full min-h-[40px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                  onClick={() => handleToggleAdhkarPreview('morning', selectedMorningAdhkarReciter)}
+                  className={`w-full min-h-[44px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                     isMorningPlaying
                       ? 'bg-rose-600 border-rose-500 text-white'
                       : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
@@ -1731,10 +1819,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
+                {/* Evening Sheikh Selector */}
+                <label className="block space-y-1.5">
+                  <span className="text-[11px] font-bold text-sky-300 block">
+                    الشيخ القارئ لأذكار المساء:
+                  </span>
+                  <select
+                    value={selectedEveningAdhkarReciter}
+                    onChange={(e) => {
+                      const val = resolveValidAdhkarReciterForPeriod(e.target.value, 'evening', true);
+                      setSelectedEveningAdhkarReciter(val);
+                      onUpdateSettings({ eveningAdhkarReciter: val });
+                    }}
+                    className="w-full min-h-[44px] bg-[#02100d] border border-[#e5b869]/35 rounded-xl px-3 py-2 text-xs text-slate-100 font-semibold focus:outline-none focus:border-[#fbbf24] text-right cursor-pointer"
+                  >
+                    {eveningSources.map((src) => (
+                      <option key={src.id} value={src.id}>
+                        {src.eveningLabelAr || src.nameAr}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
                 <button
                   type="button"
-                  onClick={() => handleToggleAdhkarPreview('evening', selectedAdhkarReciter)}
-                  className={`w-full min-h-[40px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                  onClick={() => handleToggleAdhkarPreview('evening', selectedEveningAdhkarReciter)}
+                  className={`w-full min-h-[44px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                     isEveningPlaying
                       ? 'bg-rose-600 border-rose-500 text-white'
                       : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
@@ -1789,62 +1899,112 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
 
-          {/* Full Wird Reciter Selection */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/35 space-y-3">
+          {/* Full Wird Reciter Selection — Dedicated Morning & Evening Sheikh Catalogs */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#031713]/90 border border-[#e5b869]/35 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
+              <div className="space-y-1">
                 <h5 className="text-sm sm:text-base font-bold text-[#fbbf24] font-amiri">
-                  القارئ المفضل لوِرد أذكار الصباح والمساء
+                  شيوخ وِرد أذكار الصباح والمساء (اختيار مستقل لكل وقت)
                 </h5>
-                <p className="text-[11px] text-slate-400">
-                  القارئ المختار حالياً: <strong className="text-emerald-300">{currentReciterObj.nameAr}</strong>
-                </p>
+                <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span>
+                    الصباح: <strong className="text-emerald-300">{currentMorningReciterLabel}</strong>
+                  </span>
+                  <span aria-hidden="true" className="text-[#e5b869]/50">
+                    ·
+                  </span>
+                  <span>
+                    المساء: <strong className="text-sky-300">{currentEveningReciterLabel}</strong>
+                  </span>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => handleToggleAdhkarPreview('general', selectedAdhkarReciter)}
-                className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                onClick={() => handleToggleAdhkarPreview(adhkarGalleryPeriodTab, activeGalleryReciter)}
+                className={`min-h-[44px] px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 ${
                   (playerState === 'playing' || playerState === 'loading') &&
                   activeAudioType === 'adhkar' &&
-                  previewingAdhkarPeriod === 'general'
+                  previewingAdhkarPeriod === adhkarGalleryPeriodTab
                     ? 'bg-rose-600 border-rose-500 text-white'
                     : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
                 }`}
               >
                 {(playerState === 'playing' || playerState === 'loading') &&
                 activeAudioType === 'adhkar' &&
-                previewingAdhkarPeriod === 'general' ? (
+                previewingAdhkarPeriod === adhkarGalleryPeriodTab ? (
                   <>
-                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <Square className="w-3.5 h-3.5 fill-current shrink-0" />
                     <span>إيقاف المعاينة</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>معاينة القارئ المختار</span>
+                    <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                    <span>
+                      {adhkarGalleryPeriodTab === 'evening'
+                        ? 'معاينة شيخ المساء'
+                        : 'معاينة شيخ الصباح'}
+                    </span>
                   </>
                 )}
               </button>
             </div>
 
+            {/* Dedicated 2-Tab Switcher: Morning vs Evening Sheikhs */}
+            <div className="grid grid-cols-2 gap-1.5 bg-[#02100d] p-1.5 rounded-2xl border border-[#e5b869]/25">
+              <button
+                type="button"
+                onClick={() => setAdhkarGalleryPeriodTab('morning')}
+                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+                  adhkarGalleryPeriodTab === 'morning'
+                    ? 'bg-gradient-to-l from-[#fbbf24] to-[#d97706] text-slate-950 font-extrabold shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Sunrise className="w-4 h-4 shrink-0" />
+                <span>شيوخ أذكار الصباح</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAdhkarGalleryPeriodTab('evening')}
+                className={`min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer ${
+                  adhkarGalleryPeriodTab === 'evening'
+                    ? 'bg-gradient-to-l from-[#10B981] to-[#059669] text-slate-950 font-extrabold shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Moon className="w-4 h-4 shrink-0" />
+                <span>شيوخ أذكار المساء</span>
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {Object.values(ADHKAR_SOURCES).map((reciter) => {
-                const isSelected = selectedAdhkarReciter === reciter.id;
+              {gallerySources.map((reciter) => {
+                const isSelected = activeGalleryReciter === reciter.id;
+                const displayName =
+                  adhkarGalleryPeriodTab === 'evening'
+                    ? reciter.eveningLabelAr || reciter.nameAr
+                    : reciter.morningLabelAr || reciter.nameAr;
                 return (
                   <button
-                    key={reciter.id}
+                    key={`${adhkarGalleryPeriodTab}-${reciter.id}`}
                     type="button"
                     onClick={() => {
-                      setSelectedAdhkarReciter(reciter.id);
-                      onUpdateSettings({ adhkarReciter: reciter.id });
+                      if (adhkarGalleryPeriodTab === 'evening') {
+                        setSelectedEveningAdhkarReciter(reciter.id);
+                        onUpdateSettings({ eveningAdhkarReciter: reciter.id });
+                      } else {
+                        setSelectedMorningAdhkarReciter(reciter.id);
+                        onUpdateSettings({ morningAdhkarReciter: reciter.id });
+                      }
                     }}
-                    className={`p-3 rounded-xl border text-right transition-all flex items-center justify-between gap-2.5 ${
+                    className={`min-h-[48px] p-3 rounded-xl border text-right transition-all flex items-center justify-between gap-2.5 ${
                       isSelected
                         ? 'bg-gradient-to-br from-[#073f34] to-[#03221c] border-[#fbbf24] ring-1 ring-[#e5b869]/40'
                         : 'bg-[#02100d] border-[#e5b869]/20 hover:border-[#e5b869]/55'
                     }`}
                   >
-                    <span className="text-xs font-bold text-slate-100 leading-snug">{reciter.nameAr}</span>
+                    <span className="text-xs font-bold text-slate-100 leading-snug">{displayName}</span>
                     <span
                       className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                         isSelected ? 'border-[#fbbf24] bg-[#fbbf24]/25' : 'border-slate-600'
@@ -3299,14 +3459,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <BookOpen className="w-4 h-4 text-emerald-400" />
                       </h5>
                       <p className="text-xs text-slate-300 leading-relaxed mt-1">
-                        الاستماع لتلاوة أذكار الصباح والمساء بصوت القارئ المختار (
-                        {ADHKAR_SOURCES[selectedAdhkarReciter]?.nameAr || 'الشيخ مشاري راشد العفاسي'}).
+                        الصباح: {getAdhkarSourceLabel(selectedMorningAdhkarReciter, 'morning')} · المساء:{' '}
+                        {getAdhkarSourceLabel(selectedEveningAdhkarReciter, 'evening')}.
                       </p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => handleToggleAdhkarPreview('morning', selectedAdhkarReciter)}
+                        onClick={() => handleToggleAdhkarPreview('morning', selectedMorningAdhkarReciter)}
                         className={`px-3 py-2.5 rounded-xl border font-bold text-xs shadow transition-all flex items-center justify-center gap-1.5 ${
                           (playerState === 'playing' || playerState === 'loading') &&
                           activeAudioType === 'adhkar' &&
@@ -3331,7 +3491,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleToggleAdhkarPreview('evening', selectedAdhkarReciter)}
+                        onClick={() => handleToggleAdhkarPreview('evening', selectedEveningAdhkarReciter)}
                         className={`px-3 py-2.5 rounded-xl border font-bold text-xs shadow transition-all flex items-center justify-center gap-1.5 ${
                           (playerState === 'playing' || playerState === 'loading') &&
                           activeAudioType === 'adhkar' &&
@@ -4321,7 +4481,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 max="30"
                 step="5"
                 value={preReminder}
-                onChange={(e) => setPreReminder(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setPreReminder(val);
+                  onUpdateSettings({ preAdhanReminderMinutes: val });
+                }}
                 className="w-full h-2 bg-[#021410] rounded-lg appearance-none cursor-pointer accent-[#fbbf24] border border-[#e5b869]/35"
               />
               <div className="flex justify-between text-[10px] text-[#e5b869]/75 font-mono px-1 tabular-nums">
@@ -4342,7 +4506,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <input
                     type="checkbox"
                     checked={preSound}
-                    onChange={(e) => setPreSound(e.target.checked)}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setPreSound(next);
+                      onUpdateSettings({ preAdhanSoundEnabled: next });
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-[#fbbf24] peer-checked:to-emerald-500"></div>

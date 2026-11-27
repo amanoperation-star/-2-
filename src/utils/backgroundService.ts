@@ -1,5 +1,10 @@
 // Service for Screen Wake Lock API and Browser Web Notifications
-import { setNativeKeepAwake } from './nativeAndroidBridge';
+import {
+  isNativeAndroidApp,
+  sendNativePreAdhanNotification,
+  sendNativeSalawatNotification,
+  setNativeKeepAwake,
+} from './nativeAndroidBridge';
 
 class BackgroundService {
   private wakeLockSentinel: any = null;
@@ -148,21 +153,51 @@ class BackgroundService {
     }
 
     const mosque = this.getMosqueNotificationAsset(mosqueTheme, prayerKey);
+    const title = forceTest
+      ? `معاينة إشعار الصلاة: ${prayerNameAr}`
+      : prayerNameAr.startsWith('حان') ||
+          prayerNameAr.startsWith('اقتراب') ||
+          prayerNameAr.startsWith('قد قامت') ||
+          prayerNameAr.startsWith('تنبيه') ||
+          prayerNameAr.startsWith('تذكير') ||
+          prayerNameAr.startsWith('موعد')
+        ? prayerNameAr
+        : `حان الآن موعد أذان ${prayerNameAr}`;
+    const tag = forceTest ? `adhan-test-${Date.now()}` : `adhan-${prayerKey}-${prayerNameAr}`;
+    const options: NotificationOptions & { image?: string; renotify?: boolean } = {
+      body: `${cityName} · ${mosque.titleAr}`,
+      icon: mosque.imageUrl,
+      image: mosque.imageUrl,
+      badge: '/pwa-192x192.png',
+      tag,
+      renotify: true,
+      dir: 'rtl',
+      lang: 'ar',
+      requireInteraction: true,
+    };
 
     try {
-      new Notification(
-        forceTest ? `معاينة إشعار الصلاة: ${prayerNameAr}` : `حان الآن موعد أذان ${prayerNameAr}`,
-        {
-          body: `${cityName} · ${mosque.titleAr}`,
-          icon: mosque.imageUrl,
-          image: mosque.imageUrl,
-          badge: '/pwa-192x192.png',
-          tag: forceTest ? `adhan-test-${Date.now()}` : `adhan-${prayerNameAr}`,
-          dir: 'rtl',
-          lang: 'ar',
-          requireInteraction: true,
-        } as NotificationOptions & { image?: string }
-      );
+      if ('serviceWorker' in navigator) {
+        void navigator.serviceWorker
+          .getRegistration()
+          .then((reg) => {
+            if (reg && typeof reg.showNotification === 'function') {
+              return reg.showNotification(title, options);
+            }
+            new Notification(title, options);
+            return undefined;
+          })
+          .catch(() => {
+            try {
+              new Notification(title, options);
+            } catch {
+              // ignore browser notification restriction
+            }
+          });
+        return;
+      }
+
+      new Notification(title, options);
     } catch (err) {
       console.warn('Failed to display Notification:', err);
     }
@@ -234,6 +269,144 @@ class BackgroundService {
       return true;
     } catch (err) {
       console.warn('Failed to display interactive post-prayer notification:', err);
+      return false;
+    }
+  }
+
+  // Send Salawat upon the Prophet (ﷺ) notification across Native Android, PWA SW, and Desktop browsers
+  public async sendSalawatNotification(
+    sheikhNameAr: string,
+    formulaAr: string,
+    options?: { isTest?: boolean; requestPermissionOnTest?: boolean }
+  ): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+
+    if (isNativeAndroidApp()) {
+      return await sendNativeSalawatNotification(sheikhNameAr, formulaAr);
+    }
+
+    if (!('Notification' in window)) {
+      return false;
+    }
+
+    if (options?.requestPermissionOnTest && Notification.permission === 'default') {
+      await this.requestNotificationPermission();
+    }
+
+    if (Notification.permission !== 'granted') {
+      return false;
+    }
+
+    const title = 'ﷺ صلِّ على سيدنا محمد';
+    const body = `${sheikhNameAr} · ${formulaAr}`;
+    const tag = options?.isTest ? `mihrab-salawat-test-${Date.now()}` : 'mihrab-salawat-reminder';
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && typeof reg.showNotification === 'function') {
+          await reg.showNotification(title, {
+            body,
+            icon: '/pwa-192x192.png',
+            badge: '/pwa-192x192.png',
+            tag,
+            renotify: true,
+            dir: 'rtl',
+            lang: 'ar',
+            data: { route: 'times', type: 'salawat' },
+          } as NotificationOptions & { renotify?: boolean });
+          return true;
+        }
+      }
+
+      new Notification(title, {
+        body,
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        tag,
+        renotify: true,
+        dir: 'rtl',
+        lang: 'ar',
+      } as NotificationOptions & { renotify?: boolean });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Send Pre-Adhan preparation notification across Native Android, PWA SW, and Desktop browsers
+  public async sendPreAdhanNotification(params: {
+    prayerKey: string;
+    prayerNameAr: string;
+    reminderMinutes: number;
+    cityNameAr: string;
+    sheikhNameAr?: string;
+    mosqueTheme?: 'auto' | 'nabawi' | 'kaaba' | 'azhar';
+    isMeetingMode?: boolean;
+    isTest?: boolean;
+    requestPermissionOnTest?: boolean;
+  }): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+
+    const sheikhLabel = params.isMeetingMode
+      ? 'وضع الاجتماع الصامت'
+      : params.sheikhNameAr || '';
+
+    if (isNativeAndroidApp()) {
+      return await sendNativePreAdhanNotification({
+        prayerNameAr: params.prayerNameAr,
+        reminderMinutes: params.reminderMinutes,
+        cityNameAr: params.cityNameAr,
+        sheikhNameAr: sheikhLabel,
+      });
+    }
+
+    if (!('Notification' in window)) {
+      return false;
+    }
+
+    if (params.requestPermissionOnTest && Notification.permission === 'default') {
+      await this.requestNotificationPermission();
+    }
+
+    if (Notification.permission !== 'granted') {
+      return false;
+    }
+
+    const mosque = this.getMosqueNotificationAsset(params.mosqueTheme || 'auto', params.prayerKey);
+    const title = `اقتراب أذان ${params.prayerNameAr} (باقي ${params.reminderMinutes} د)`;
+    const body = `${params.cityNameAr} • ${params.isMeetingMode ? 'وضع الاجتماع الصامت' : 'استعد للوضوء والصلاة'}${
+      params.sheikhNameAr && !params.isMeetingMode ? ` • ${params.sheikhNameAr}` : ''
+    }`;
+    const tag = params.isTest
+      ? `mihrab-pre-adhan-test-${Date.now()}`
+      : `mihrab-pre-adhan-${params.prayerKey}`;
+
+    const notifOptions: NotificationOptions & { image?: string; renotify?: boolean } = {
+      body,
+      icon: mosque.imageUrl,
+      image: mosque.imageUrl,
+      badge: '/pwa-192x192.png',
+      tag,
+      renotify: true,
+      dir: 'rtl',
+      lang: 'ar',
+      requireInteraction: true,
+      data: { route: 'times', type: 'pre_adhan', prayerKey: params.prayerKey },
+    };
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && typeof reg.showNotification === 'function') {
+          await reg.showNotification(title, notifOptions);
+          return true;
+        }
+      }
+
+      new Notification(title, notifOptions);
+      return true;
+    } catch {
       return false;
     }
   }

@@ -23,6 +23,8 @@ import {
   Vibrate,
   X,
   Plane,
+  Pause,
+  RefreshCw,
 } from 'lucide-react';
 import { PrayerTimeData, CityLocation, UserSettings, PrayerName } from '../types';
 import {
@@ -34,6 +36,8 @@ import {
   resolvePrayerReciter,
 } from '../utils/audioAdhan';
 import { backgroundService } from '../utils/backgroundService';
+import { createPrecisionClockTicker } from '../utils/prayerScheduler';
+import { HERO_MOSQUE_BACKDROPS } from '../utils/adhanScenesData';
 import { FullScreenAdhanModal } from './FullScreenAdhanModal';
 import { DuaModal } from './DuaModal';
 import { PostPrayerTasbihModal } from './PostPrayerTasbihModal';
@@ -211,13 +215,70 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   const [lastFinishedPrayer, setLastFinishedPrayer] = useState<string>('الفجر');
   const [iqamaRemaining, setIqamaRemaining] = useState<string | null>(null);
   const [iqamaPrayerName, setIqamaPrayerName] = useState<string>('');
-  const [preAdhanAlertSent, setPreAdhanAlertSent] = useState<Set<string>>(new Set());
-  const [postPrayerAlertSent, setPostPrayerAlertSent] = useState<Set<string>>(new Set());
   const [isPostPrayerModalOpen, setIsPostPrayerModalOpen] = useState<boolean>(false);
   const [postPrayerNameAr, setPostPrayerNameAr] = useState<string>('العصر');
   const [isPostPrayerSimulated, setIsPostPrayerSimulated] = useState<boolean>(false);
   const [tasbihInitialPurpose, setTasbihInitialPurpose] = useState<'post_prayer' | 'jumuah_salawat'>('post_prayer');
   const [simulateNearAdhan, setSimulateNearAdhan] = useState<boolean>(false);
+
+  // Hero Next Prayer Card: 6-Mosque Scenic Backdrop & Motion Controls
+  const [activeHeroBackdropIdx, setActiveHeroBackdropIdx] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    const saved = Number(localStorage.getItem('mihrab_hero_mosque_idx'));
+    return Number.isFinite(saved) && saved >= 0 && saved < HERO_MOSQUE_BACKDROPS.length ? saved : 0;
+  });
+  const [isHeroMotionPlaying, setIsHeroMotionPlaying] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('mihrab_hero_motion_enabled');
+    if (saved === 'false') return false;
+    if (saved === 'true') return true;
+    return !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  });
+  const [failedHeroImages, setFailedHeroImages] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!isHeroMotionPlaying || HERO_MOSQUE_BACKDROPS.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setActiveHeroBackdropIdx((prev) => {
+        const next = (prev + 1) % HERO_MOSQUE_BACKDROPS.length;
+        try {
+          localStorage.setItem('mihrab_hero_mosque_idx', String(next));
+        } catch {
+          // ignore storage limits
+        }
+        return next;
+      });
+    }, 8500);
+    return () => window.clearInterval(timer);
+  }, [isHeroMotionPlaying]);
+
+  const handleCycleHeroBackdrop = () => {
+    setActiveHeroBackdropIdx((prev) => {
+      const next = (prev + 1) % HERO_MOSQUE_BACKDROPS.length;
+      try {
+        localStorage.setItem('mihrab_hero_mosque_idx', String(next));
+      } catch {
+        // ignore storage limits
+      }
+      return next;
+    });
+  };
+
+  const handleToggleHeroMotion = () => {
+    setIsHeroMotionPlaying((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('mihrab_hero_motion_enabled', String(next));
+      } catch {
+        // ignore storage limits
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    setNotificationsMuted(settings.notificationsEnabled === false);
+  }, [settings.notificationsEnabled]);
 
   const [fastingRevision, setFastingRevision] = useState(0);
 
@@ -285,7 +346,6 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   const qiyamNightInitRef = useRef<string>('');
   const witrAlertSentRef = useRef<string>('');
   const suhoorAlertSentRef = useRef<string>('');
-  const iqamaAlertSentRef = useRef<Set<string>>(new Set());
 
   // Feature: Interactive Sujud As-Sahw Guide Modal
   const [isSujudSahwModalOpen, setIsSujudSahwModalOpen] = useState<boolean>(false);
@@ -457,15 +517,12 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
 
   const checkPrayersRef = useRef<(now: Date) => void>(() => {});
 
-  // Timer, Pre-adhan reminders, Countdown & Iqama detection
+  // Precision clock ticker for live countdowns & Iqama display (resistant to tab throttling)
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
+    return createPrecisionClockTicker((now) => {
       setCurrentTime(now);
       checkPrayersRef.current(now);
-    }, 1000);
-
-    return () => clearInterval(timer);
+    });
   }, []);
 
   const timeToMinutes = (timeStr: string) => {
@@ -510,84 +567,15 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
     );
 
-    const latestQuietState = loadQuietModeState();
-
-    // 1. Pre-Adhan Reminder (10 or 15 mins before adhan)
-    const reminderWindow = settings.preAdhanReminderMinutes || 10;
-    if (reminderWindow > 0 && Math.abs(diffMinutes - reminderWindow) < 0.05 && now.getSeconds() === 0) {
-      const reminderKey = `${now.toDateString()}-${next.key}-pre`;
-      if (
-        !preAdhanAlertSent.has(reminderKey) &&
-        !shouldSuppressPrayerAudioOrAlert(latestQuietState, next.key, now)
-      ) {
-        setPreAdhanAlertSent((prev) => new Set(prev).add(reminderKey));
-        let spokenProfile: PreAdhanVoiceProfile | null = null;
-        if (meetingModeEnabled) {
-          if ('vibrate' in navigator) {
-            navigator.vibrate([300, 150, 300]);
-          }
-        } else if (settings.preAdhanSoundEnabled) {
-          spokenProfile = onTestPreAdhan
-            ? onTestPreAdhan(next.nameAr, true)
-            : adhanPlayer.playPreAdhanReminderSound(settings.preAdhanVoiceMode || 'rotate', {
-                isAutoTrigger: true,
-              });
-        }
-        backgroundService.sendPrayerNotification(
-          `اقتراب أذان ${next.nameAr} (باقي ${reminderWindow} دقائق)`,
-          `${currentLocation.nameAr} • ${meetingModeEnabled ? 'وضع الاجتماع الصامت' : 'استعد للوضوء والصلاة'}${spokenProfile ? ` • ${spokenProfile.nameAr}` : ''}`
-        );
-      }
-    }
-
-    // 2. Exact Adhan Arrival
-    if (!notificationsMuted && now.getSeconds() === 0) {
-      const nowTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      const matchingPrayer = prayersList.find((p) => {
-        const h = Math.floor(p.time / 60).toString().padStart(2, '0');
-        const m = (p.time % 60).toString().padStart(2, '0');
-        return `${h}:${m}` === nowTimeStr;
-      });
-
-      if (matchingPrayer) {
-        const isPrayerAdhanActive = settings.prayerAdhanEnabled?.[matchingPrayer.key] !== false;
-        const displayMatchName =
-          (now.getDay() === 5 || jumuahPreviewMode) && matchingPrayer.key === 'dhuhr'
-            ? 'الجمعة'
-            : matchingPrayer.nameAr;
-
-        if (
-          !isPrayerAdhanActive ||
-          shouldSuppressPrayerAudioOrAlert(latestQuietState, matchingPrayer.key, now)
-        ) {
-          // Prayer is set to silent or muted by Quiet Mode exception policy
-          return;
-        }
-
-        if (meetingModeEnabled) {
-          adhanPlayer.stop();
-          triggerSilentMeetingAdhan(displayMatchName, nowTimeStr);
-          backgroundService.sendPrayerNotification(
-            `تنبيه صامت · حان وقت صلاة ${displayMatchName}`,
-            `${currentLocation.nameAr} • وضع الاجتماع نشط (اهتزاز هادئ)`
-          );
-        } else {
-          backgroundService.sendPrayerNotification(displayMatchName, currentLocation.nameAr);
-          if (onOpenFullScreenAdhan) {
-            onOpenFullScreenAdhan(matchingPrayer.key, displayMatchName);
-          } else {
-            setFullScreenAdhanPrayer(matchingPrayer.key);
-            setIsFullScreenAdhanOpen(true);
-          }
-        }
-      }
-    }
-
-    // 3. Iqama Live Countdown detection & Auto-Playback at 00:00
+    // Iqama Live Countdown UI detection (auto-playback, Pre-Adhan, Adhan & Post-Prayer alerts run globally in App.tsx)
     let foundIqama = false;
     for (const p of prayersList) {
-      const iqamaDuration = (settings.iqamaMinutes as any)?.[p.key] || 20;
-      const diffFromAdhan = currentMinutes - p.time;
+      if (p.key === 'sunrise') continue;
+      const iqamaDuration = settings.iqamaMinutes?.[p.key] || 20;
+      let diffFromAdhan = currentMinutes - p.time;
+      if (diffFromAdhan < -12 * 60) {
+        diffFromAdhan += 24 * 60;
+      }
       const displayName = (now.getDay() === 5 || jumuahPreviewMode) && p.key === 'dhuhr' ? 'الجمعة' : p.nameAr;
 
       if (diffFromAdhan >= 0 && diffFromAdhan < iqamaDuration) {
@@ -599,51 +587,9 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         setIqamaRemaining(`${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
         break;
       }
-
-      if (diffFromAdhan >= iqamaDuration && diffFromAdhan < iqamaDuration + 0.08) {
-        const iqamaKey = `${now.toDateString()}-${p.key}-iqama`;
-        if (!iqamaAlertSentRef.current.has(iqamaKey)) {
-          iqamaAlertSentRef.current.add(iqamaKey);
-          if (!shouldSuppressPrayerAudioOrAlert(latestQuietState, p.key, now)) {
-            if (meetingModeEnabled) {
-              if ('vibrate' in navigator) {
-                navigator.vibrate([300, 150, 300]);
-              }
-            } else if (settings.iqamaAutoPlayEnabled !== false) {
-              if (onTestIqama) {
-                onTestIqama(displayName, true);
-              } else {
-                adhanPlayer.playIqamaSound(settings.iqamaVoiceMode || 'rotate', { isAutoTrigger: true });
-              }
-            }
-            if (!notificationsMuted) {
-              backgroundService.sendPrayerNotification(
-                `قد قامت الصلاة · إقامة صلاة ${displayName}`,
-                `${currentLocation.nameAr} • حان وقت إقامة الصلاة الآن`
-              );
-            }
-          }
-        }
-      }
     }
     if (!foundIqama) {
       setIqamaRemaining((prev) => (prev === null ? prev : null));
-    }
-
-    // 4. Post-Prayer Adhkar + Dual Tasbih Auto-Trigger at +10 minutes after Adhan
-    for (const p of prayersList) {
-      const diffFromAdhan = currentMinutes - p.time;
-      if (diffFromAdhan >= 10 && diffFromAdhan < 10.2) {
-        const postKey = `${now.toDateString()}-${p.key}-post10`;
-        if (!postPrayerAlertSent.has(postKey)) {
-          setPostPrayerAlertSent((prev) => new Set(prev).add(postKey));
-          if (!shouldSuppressGeneralNotification(latestQuietState, now)) {
-            setPostPrayerNameAr(p.nameAr);
-            setIsPostPrayerSimulated(false);
-            setIsPostPrayerModalOpen(true);
-          }
-        }
-      }
     }
   };
   checkPrayersRef.current = checkPrayersCountdownAndIqama;
@@ -703,18 +649,6 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     setQuietModeState((prev) => {
       const next = saveQuietModeState(updater(prev));
       return next;
-    });
-  };
-
-  const triggerSilentMeetingAdhan = (prayerNameAr: string, timeStr: string) => {
-    if ('vibrate' in navigator) {
-      navigator.vibrate([300, 150, 300]);
-    }
-    setPostMeetingReminderBanner(null);
-    setSilentMeetingAlert({
-      prayerNameAr,
-      timeStr,
-      reminderScheduledFor: null,
     });
   };
 
@@ -1242,18 +1176,18 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
 
       {/* Hero Banner / Next Prayer Architectural Sanctuary Frame */}
       <div
-        className={`relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#041f1a]/95 via-[#072e26]/90 to-[#031410]/95 border transition-all duration-300 ${
+        className={`relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#04120D] via-[#07261c] to-[#04120D] border transition-all duration-300 ${
           isAdhanNear
-            ? 'border-[#fbbf24] ring-4 ring-[#fbbf24]/25 shadow-[0_0_55px_rgba(251,191,36,0.32)]'
+            ? 'border-[#F6D884] ring-4 ring-[#CFA632]/30 shadow-[0_0_55px_rgba(246,216,132,0.28)]'
             : isJumuahActive
-            ? 'border-2 border-[#fbbf24]/85 ring-2 ring-[#fbbf24]/30 shadow-[0_0_75px_rgba(251,191,36,0.28)]'
-            : 'border-[#e5b869]/40 ring-1 ring-inset ring-[#e5b869]/15'
-        } p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl`}
+            ? 'border-2 border-[#F6D884]/85 ring-2 ring-[#CFA632]/30 shadow-[0_0_75px_rgba(246,216,132,0.26)]'
+            : 'border-[#CFA632]/45 ring-1 ring-inset ring-[#F6D884]/15'
+        } p-5 sm:p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl`}
       >
         {/* Subtle Inner Geometric Dot/Lattice Pattern */}
-        <div className="absolute inset-0 opacity-[0.05] pointer-events-none bg-[radial-gradient(#e5b869_1px,transparent_1px)] [background-size:20px_20px]" />
+        <div className="absolute inset-0 opacity-[0.05] pointer-events-none bg-[radial-gradient(#F6D884_1px,transparent_1px)] [background-size:20px_20px]" />
         {isJumuahActive && (
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(251,191,36,0.18)_0%,rgba(229,184,105,0.05)_45%,transparent_75%)]" />
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,rgba(246,216,132,0.18)_0%,rgba(207,166,50,0.05)_45%,transparent_75%)]" />
         )}
 
         {/* Delicate Arabesque Gold Corner Ornaments */}
@@ -1263,12 +1197,12 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         <ArabesqueCorner className="absolute bottom-2 left-2 -scale-x-100 -scale-y-100" />
 
         {/* Main Banner Row */}
-        <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-6">
+        <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-5 sm:gap-6">
           {/* Right Column (RTL Start): Next Prayer Badge, Amiri Title & Dates */}
-          <div className="text-center lg:text-right space-y-2.5">
+          <div className="text-center lg:text-right space-y-2.5 lg:shrink-0">
             <div className="flex items-center gap-2 justify-center lg:justify-start flex-wrap text-xs font-bold">
-              <div className="inline-flex items-center gap-1.5 text-[#fbbf24]">
-                <Clock className="w-3.5 h-3.5 text-[#e5b869]" />
+              <div className="inline-flex items-center gap-1.5 text-[#F6D884]">
+                <Clock className="w-3.5 h-3.5 text-[#CFA632]" />
                 <span>الصلاة القادمة</span>
               </div>
               {isJumuahActive && (
@@ -1348,273 +1282,366 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
             )}
           </div>
 
-          {/* Center Column: Pointed Islamic Mihrab Arch Countdown (or user-selected Islamic Style) */}
-          <div className="flex flex-col items-center">
-            {iqamaRemaining ? (
-              (() => {
-                const getIqamaSecs = (rem: string) => {
-                  const parts = rem.split(':').map(Number);
-                  return parts.length === 2 ? parts[0] * 60 + parts[1] : 999;
-                };
-                const secs = getIqamaSecs(iqamaRemaining);
-                const isNear = secs <= 120 && secs >= 0;
-                const styleMode = settings.iqamaStyle || 'ring';
+          {/* Center Column: Scenic Mosque Stage Behind Pointed Islamic Mihrab Arch Countdown */}
+          <div
+            className="theme-keep-light relative w-full lg:flex-1 lg:max-w-[520px] min-h-[268px] sm:min-h-[296px] rounded-2xl overflow-hidden border border-[#CFA632]/50 shadow-[0_14px_34px_rgba(0,0,0,0.45)] flex items-center justify-center px-4 pt-12 pb-6 sm:px-6 sm:pt-11 sm:pb-7"
+            style={{
+              background:
+                HERO_MOSQUE_BACKDROPS[activeHeroBackdropIdx % HERO_MOSQUE_BACKDROPS.length]
+                  ?.cssFallback,
+            }}
+          >
+            {/* Cross-fading High-Clarity Mosque Photos (No text/titles over photos) */}
+            {HERO_MOSQUE_BACKDROPS.map((scene, idx) => {
+              const isActive = idx === activeHeroBackdropIdx % HERO_MOSQUE_BACKDROPS.length;
+              const hasImgFailed = Boolean(failedHeroImages[scene.id]);
+              return (
+                <div
+                  key={scene.id}
+                  aria-hidden="true"
+                  className={`absolute inset-0 pointer-events-none select-none transition-opacity duration-[1600ms] ease-in-out ${
+                    isActive ? 'opacity-100 z-[1]' : 'opacity-0 z-0'
+                  }`}
+                >
+                  {!hasImgFailed ? (
+                    <img
+                      src={scene.imageUrl}
+                      alt="خلفية مسجد"
+                      referrerPolicy="no-referrer"
+                      onError={() => setFailedHeroImages((prev) => ({ ...prev, [scene.id]: true }))}
+                      style={{
+                        animationPlayState: isHeroMotionPlaying ? 'running' : 'paused',
+                      }}
+                      className={`w-full h-full object-cover object-center brightness-[1.03] contrast-[1.04] saturate-[1.06] ${scene.cameraClass}`}
+                    />
+                  ) : (
+                    <div className="w-full h-full" style={{ background: scene.cssFallback }} />
+                  )}
+                </div>
+              );
+            })}
 
-                return (
-                  <div className="flex flex-col items-center">
-                    {/* Style 1: Radial Progress Ring */}
-                    {styleMode === 'ring' && (
-                      <div
-                        className={`relative px-6 py-4 rounded-3xl border-2 backdrop-blur-md shadow-2xl flex items-center gap-4 transition-all ${
-                          isNear
-                            ? 'bg-rose-950/85 border-rose-500 text-rose-200 animate-pulse'
-                            : 'bg-[#031713]/90 border-[#e5b869]/65 text-amber-200'
-                        }`}
-                      >
-                        <div className="relative w-14 h-14 flex items-center justify-center">
-                          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                            <path
-                              className="text-emerald-950"
-                              strokeWidth="3"
-                              stroke="currentColor"
-                              fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                            />
-                            <path
-                              className={isNear ? 'text-rose-400' : 'text-[#fbbf24]'}
-                              strokeDasharray="75, 100"
-                              strokeWidth="3.5"
-                              strokeLinecap="round"
-                              stroke="currentColor"
-                              fill="none"
-                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                            />
-                          </svg>
-                          <Timer className={`absolute w-6 h-6 ${isNear ? 'text-rose-400' : 'text-[#e5b869]'}`} />
-                        </div>
-                        <div className="text-right">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-xs font-bold text-[#e5b869]">متبقي حتى إقامة صلاة {iqamaPrayerName}</span>
+            {/* Very Light Edge-Only Vignette Scrim (Preserves vivid mosque clarity at center) */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 z-[2] pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(ellipse at center, rgba(4, 18, 13, 0) 46%, rgba(4, 18, 13, 0.34) 82%, rgba(4, 18, 13, 0.62) 100%)',
+              }}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 z-[2] pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(to bottom, rgba(4, 18, 13, 0.28) 0%, transparent 24%, transparent 76%, rgba(4, 18, 13, 0.36) 100%)',
+              }}
+            />
+
+            {/* Compact Icon-Only Controls: Manual Switch + Motion Play/Pause */}
+            <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleCycleHeroBackdrop}
+                aria-label="تغيير الخلفية يدوياً"
+                title="تغيير الخلفية"
+                className="w-10 h-10 rounded-xl bg-[#04120D]/75 hover:bg-[#04120D]/90 border border-[#CFA632]/55 hover:border-[#F6D884] text-[#F6D884] backdrop-blur-md flex items-center justify-center transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.4)] cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleHeroMotion}
+                aria-pressed={isHeroMotionPlaying}
+                aria-label={isHeroMotionPlaying ? 'إيقاف الحركة التلقائية' : 'تشغيل الحركة التلقائية'}
+                title={isHeroMotionPlaying ? 'إيقاف الحركة التلقائية' : 'تشغيل الحركة التلقائية'}
+                className={`w-10 h-10 rounded-xl border backdrop-blur-md flex items-center justify-center transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.4)] cursor-pointer ${
+                  isHeroMotionPlaying
+                    ? 'bg-[#04120D]/75 hover:bg-[#04120D]/90 border-[#34D399]/60 text-[#34D399]'
+                    : 'bg-[#04120D]/80 hover:bg-[#04120D]/95 border-[#CFA632]/55 text-[#F6D884]'
+                }`}
+              >
+                {isHeroMotionPlaying ? (
+                  <Pause className="w-4 h-4" />
+                ) : (
+                  <Play className="w-4 h-4 fill-current" />
+                )}
+              </button>
+            </div>
+
+            <div className="relative z-10 flex flex-col items-center">
+              {iqamaRemaining ? (
+                (() => {
+                  const getIqamaSecs = (rem: string) => {
+                    const parts = rem.split(':').map(Number);
+                    return parts.length === 2 ? parts[0] * 60 + parts[1] : 999;
+                  };
+                  const secs = getIqamaSecs(iqamaRemaining);
+                  const isNear = secs <= 120 && secs >= 0;
+                  const styleMode = settings.iqamaStyle || 'ring';
+
+                  return (
+                    <div className="flex flex-col items-center">
+                      {/* Style 1: Radial Progress Ring */}
+                      {styleMode === 'ring' && (
+                        <div
+                          className={`relative px-6 py-4 rounded-3xl border-2 backdrop-blur-md shadow-2xl flex items-center gap-4 transition-all ${
+                            isNear
+                              ? 'bg-rose-950/80 border-rose-500 text-rose-200 animate-pulse'
+                              : 'bg-[#04120D]/74 border-[#CFA632]/85 text-[#F6D884]'
+                          }`}
+                        >
+                          <div className="relative w-14 h-14 flex items-center justify-center">
+                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                              <path
+                                className="text-emerald-950"
+                                strokeWidth="3"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                              <path
+                                className={isNear ? 'text-rose-400' : 'text-[#F6D884]'}
+                                strokeDasharray="75, 100"
+                                strokeWidth="3.5"
+                                strokeLinecap="round"
+                                stroke="currentColor"
+                                fill="none"
+                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                              />
+                            </svg>
+                            <Timer className={`absolute w-6 h-6 ${isNear ? 'text-rose-400' : 'text-[#F6D884]'}`} />
                           </div>
-                          <div className="text-3xl font-black font-mono tracking-wider tabular-nums text-white">
-                            {iqamaRemaining}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Style 2: Split Digit Tiles */}
-                    {styleMode === 'split' && (
-                      <div
-                        className={`p-4 rounded-2xl border backdrop-blur-md shadow-xl space-y-2.5 ${
-                          isNear ? 'bg-rose-950/85 border-rose-500' : 'bg-[#031713]/85 border-[#e5b869]/45'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between text-xs text-[#e5b869] font-bold px-1">
-                          <span>إقامة صلاة {iqamaPrayerName}</span>
-                        </div>
-                        <div className="flex items-center gap-2 font-mono text-3xl font-black">
-                          <div className="bg-[#04241d] border border-[#e5b869]/40 px-3 py-1.5 rounded-xl text-[#fbbf24] tabular-nums shadow-inner">
-                            {iqamaRemaining.split(':')[0]}
-                          </div>
-                          <span className={`${isNear ? 'text-rose-400' : 'text-[#fbbf24]'}`}>:</span>
-                          <div className="bg-[#04241d] border border-[#e5b869]/40 px-3 py-1.5 rounded-xl text-[#fbbf24] tabular-nums shadow-inner">
-                            {iqamaRemaining.split(':')[1]}
-                          </div>
-                        </div>
-                        <div className="w-full bg-[#02100d] h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-300 ${isNear ? 'bg-rose-500' : 'bg-gradient-to-r from-emerald-400 to-[#fbbf24]'}`}
-                            style={{ width: '70%' }}
-                          ></div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Style 3: Glass Capsule Pill */}
-                    {styleMode === 'pill' && (
-                      <div
-                        className={`px-6 py-3 rounded-full border backdrop-blur-md shadow-lg flex items-center gap-3 ${
-                          isNear ? 'bg-rose-950/90 border-rose-500 text-rose-200' : 'bg-[#031713]/85 border-[#e5b869]/45 text-[#fbbf24]'
-                        }`}
-                      >
-                        <Timer className={`w-5 h-5 ${isNear ? 'text-rose-400' : 'text-[#e5b869]'}`} />
-                        <div className="flex items-center gap-2 text-right">
-                          <span className="text-xs font-bold">إقامة {iqamaPrayerName}:</span>
-                          <span className="text-2xl font-black font-mono tracking-wider tabular-nums text-white">
-                            {iqamaRemaining}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()
-            ) : (
-              (() => {
-                const countdownStyle = settings.adhanCountdownStyle || 'islamic-mihrab';
-                const [hStr, mStr, sStr] = timeRemaining.split(':');
-                const displayH = simulateNearAdhan ? '00' : hStr;
-                const displayM = simulateNearAdhan ? '04' : mStr;
-                const displayS = simulateNearAdhan ? '59' : sStr;
-                const displayTime = simulateNearAdhan ? '00:04:59' : timeRemaining;
-
-                return (
-                  <div className="flex flex-col items-center">
-                    {/* Style 1: Pointed Islamic Mihrab Arch (المحراب المذهّب) */}
-                    {countdownStyle === 'islamic-mihrab' && (
-                      <div
-                        className={`relative px-10 pt-8 pb-5 rounded-t-[90px] rounded-b-2xl border-2 backdrop-blur-md shadow-[0_12px_36px_rgba(0,0,0,0.5)] flex flex-col items-center transition-all ${
-                          isAdhanNear
-                            ? 'bg-amber-950/85 border-[#fbbf24] ring-2 ring-[#fbbf24]/40 text-amber-100'
-                            : 'bg-gradient-to-b from-[#062d24]/95 to-[#031612]/95 border-[#e5b869]/75 text-[#fbbf24]'
-                        }`}
-                      >
-                        {/* Inner Double Gold Hairline Arch */}
-                        <div className="absolute inset-1.5 rounded-t-[84px] rounded-b-xl border border-[#e5b869]/30 pointer-events-none" />
-
-                        {/* 8-Pointed Golden Star Crown at Apex */}
-                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-[#041f1a] border border-[#e5b869]/70 flex items-center justify-center shadow-[0_0_16px_rgba(251,191,36,0.45)]">
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <rect x="5" y="5" width="14" height="14" stroke="#fbbf24" strokeWidth="1.5" fill="#fbbf24" fillOpacity="0.2" />
-                            <rect x="5" y="5" width="14" height="14" stroke="#fbbf24" strokeWidth="1.5" fill="#fbbf24" fillOpacity="0.2" transform="rotate(45 12 12)" />
-                            <circle cx="12" cy="12" r="2.2" fill="#fef08a" />
-                          </svg>
-                        </div>
-
-                        {isFastingIntent && (
-                          <div className="mt-1 mb-1 px-3 py-0.5 rounded-full bg-[#04241d]/90 border border-[#D4AF37]/60 text-[11px] font-bold text-[#F3CA63] flex items-center gap-1.5 shadow-inner">
-                            <Sparkles className="w-3 h-3 text-[#fbbf24]" />
-                            <span>✦ صائم اليوم ({fastingInfo.occasionTitle}) ✦</span>
-                          </div>
-                        )}
-                        <span className="text-xs text-[#e5b869] font-bold mb-0.5 font-amiri tracking-wide flex items-center gap-2">
-                          <span>المتبقي حتى الأذان</span>
-                          {isFastingIntent && (
-                            <span className="text-[10px] text-emerald-300 font-mono">
-                              (السحور: {fastingInfo.suhoorTimeStr} · الإفطار: {prayerTimes.maghrib})
-                            </span>
-                          )}
-                        </span>
-                        <div className="text-3xl md:text-5xl font-black font-mono tracking-wider tabular-nums text-white drop-shadow-[0_2px_10px_rgba(229,184,105,0.35)]">
-                          {displayTime}
-                        </div>
-                        {isFastingIntent && fastingInfo.isMaghribNear && (
-                          <div className="mt-2 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/50 text-[11px] text-amber-200 text-center font-amiri">
-                            دعاء الإفطار: «ذَهَبَ الظَّمَأُ وَابْتَلَّتِ الْعُرُوقُ، وَثَبَتَ الأَجْرُ إِنْ شَاءَ اللَّهُ»
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Style 2: Rub el Hizb (النجمة المثمّنة - ربع الحزب) */}
-                    {countdownStyle === 'rub-el-hizb' && (
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="text-xs text-[#e5b869] font-bold font-amiri">المتبقي حتى الأذان</span>
-                        <div className="flex items-center gap-3" dir="ltr">
-                          {[
-                            { val: displayH, label: 'ساعة' },
-                            { val: displayM, label: 'دقيقة' },
-                            { val: displayS, label: 'ثانية' },
-                          ].map((item, idx) => (
-                            <div
-                              key={idx}
-                              className={`relative p-3.5 rounded-2xl border-2 backdrop-blur-md shadow-xl flex flex-col items-center min-w-[76px] ${
-                                isAdhanNear
-                                  ? 'bg-amber-950/90 border-[#fbbf24] text-amber-100'
-                                  : 'bg-[#031713]/90 border-[#e5b869]/65 text-[#fbbf24]'
-                              }`}
-                            >
-                              <span className="absolute -top-2.5 text-[10px] text-[#fbbf24] font-bold bg-[#041f1a] px-2 py-0.5 rounded-full border border-[#e5b869]/55">
-                                ۞
-                              </span>
-                              <div className="text-2xl md:text-3xl font-black font-mono tabular-nums mt-1 text-white">
-                                {item.val}
-                              </div>
-                              <span className="text-[10px] text-[#e5b869] font-bold mt-1 font-sans">{item.label}</span>
+                          <div className="text-right">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-xs font-bold text-[#F6D884]">متبقي حتى إقامة صلاة {iqamaPrayerName}</span>
                             </div>
-                          ))}
+                            <div className="text-3xl font-black font-mono tracking-wider tabular-nums text-white drop-shadow-[0_2px_10px_rgba(4,18,13,0.9)]">
+                              {iqamaRemaining}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Style 3: Mashrabiya Arabesque (المشربية والأرابيسك) */}
-                    {countdownStyle === 'mashrabiya-arabesque' && (
-                      <div
-                        className={`relative px-7 py-4 rounded-2xl border-2 backdrop-blur-md shadow-2xl flex flex-col items-center space-y-2.5 ${
-                          isAdhanNear
-                            ? 'bg-amber-950/85 border-[#fbbf24] text-amber-100'
-                            : 'bg-[#031713]/90 border-[#e5b869]/65 text-[#fbbf24]'
-                        }`}
-                      >
-                        <span className="text-xs text-[#e5b869] font-bold font-amiri">المتبقي حتى الأذان</span>
-                        <div className="flex items-center gap-3 font-mono text-3xl md:text-4xl font-black tabular-nums text-white" dir="ltr">
-                          <span>{displayH}</span>
-                          <span className="text-[#e5b869]">❖</span>
-                          <span>{displayM}</span>
-                          <span className="text-[#e5b869]">❖</span>
-                          <span>{displayS}</span>
+                      {/* Style 2: Split Digit Tiles */}
+                      {styleMode === 'split' && (
+                        <div
+                          className={`p-4 rounded-2xl border backdrop-blur-md shadow-xl space-y-2.5 ${
+                            isNear ? 'bg-rose-950/80 border-rose-500' : 'bg-[#04120D]/74 border-[#CFA632]/70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs text-[#F6D884] font-bold px-1">
+                            <span>إقامة صلاة {iqamaPrayerName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 font-mono text-3xl font-black">
+                            <div className="bg-[#04120D]/90 border border-[#CFA632]/55 px-3 py-1.5 rounded-xl text-[#F6D884] tabular-nums shadow-inner">
+                              {iqamaRemaining.split(':')[0]}
+                            </div>
+                            <span className={`${isNear ? 'text-rose-400' : 'text-[#F6D884]'}`}>:</span>
+                            <div className="bg-[#04120D]/90 border border-[#CFA632]/55 px-3 py-1.5 rounded-xl text-[#F6D884] tabular-nums shadow-inner">
+                              {iqamaRemaining.split(':')[1]}
+                            </div>
+                          </div>
+                          <div className="w-full bg-[#04120D] h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 ${isNear ? 'bg-rose-500' : 'bg-gradient-to-r from-[#34D399] to-[#F6D884]'}`}
+                              style={{ width: '70%' }}
+                            ></div>
+                          </div>
                         </div>
-                        <div className="w-full bg-[#020e0b] h-1.5 rounded-full overflow-hidden border border-[#e5b869]/35">
+                      )}
+
+                      {/* Style 3: Glass Capsule Pill */}
+                      {styleMode === 'pill' && (
+                        <div
+                          className={`px-6 py-3 rounded-full border backdrop-blur-md shadow-lg flex items-center gap-3 ${
+                            isNear ? 'bg-rose-950/85 border-rose-500 text-rose-200' : 'bg-[#04120D]/74 border-[#CFA632]/70 text-[#F6D884]'
+                          }`}
+                        >
+                          <Timer className={`w-5 h-5 ${isNear ? 'text-rose-400' : 'text-[#F6D884]'}`} />
+                          <div className="flex items-center gap-2 text-right">
+                            <span className="text-xs font-bold">إقامة {iqamaPrayerName}:</span>
+                            <span className="text-2xl font-black font-mono tracking-wider tabular-nums text-white drop-shadow-[0_2px_10px_rgba(4,18,13,0.9)]">
+                              {iqamaRemaining}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : (
+                (() => {
+                  const countdownStyle = settings.adhanCountdownStyle || 'islamic-mihrab';
+                  const [hStr, mStr, sStr] = timeRemaining.split(':');
+                  const displayH = simulateNearAdhan ? '00' : hStr;
+                  const displayM = simulateNearAdhan ? '04' : mStr;
+                  const displayS = simulateNearAdhan ? '59' : sStr;
+                  const displayTime = simulateNearAdhan ? '00:04:59' : timeRemaining;
+
+                  return (
+                    <div className="flex flex-col items-center">
+                      {/* Style 1: Pointed Islamic Mihrab Arch (المحراب المذهّب) */}
+                      {countdownStyle === 'islamic-mihrab' && (
+                        <div
+                          className={`relative px-7 sm:px-9 pt-7 pb-4 rounded-t-[90px] rounded-b-2xl border-2 backdrop-blur-md shadow-[0_12px_36px_rgba(0,0,0,0.55)] flex flex-col items-center transition-all ${
+                            isAdhanNear
+                              ? 'bg-amber-950/75 border-[#F6D884] ring-2 ring-[#F6D884]/40 text-amber-100'
+                              : 'bg-[#04120D]/72 border-[#CFA632]/85 text-[#F6D884]'
+                          }`}
+                        >
+                          {/* Inner Double Gold Hairline Arch */}
+                          <div className="absolute inset-1.5 rounded-t-[84px] rounded-b-xl border border-[#CFA632]/35 pointer-events-none" />
+
+                          {/* 8-Pointed Golden Star Crown at Apex */}
+                          <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-[#04120D] border border-[#CFA632]/80 flex items-center justify-center shadow-[0_0_16px_rgba(246,216,132,0.45)]">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                              <rect x="5" y="5" width="14" height="14" stroke="#F6D884" strokeWidth="1.5" fill="#F6D884" fillOpacity="0.2" />
+                              <rect x="5" y="5" width="14" height="14" stroke="#F6D884" strokeWidth="1.5" fill="#F6D884" fillOpacity="0.2" transform="rotate(45 12 12)" />
+                              <circle cx="12" cy="12" r="2.2" fill="#F6D884" />
+                            </svg>
+                          </div>
+
+                          {isFastingIntent && (
+                            <div className="mt-1 mb-1 px-3 py-0.5 rounded-full bg-[#04120D]/85 border border-[#CFA632]/60 text-[11px] font-bold text-[#F6D884] flex items-center gap-1.5 shadow-inner">
+                              <Sparkles className="w-3 h-3 text-[#F6D884]" />
+                              <span>✦ صائم اليوم ({fastingInfo.occasionTitle}) ✦</span>
+                            </div>
+                          )}
+                          <span className="text-xs text-[#F6D884] font-bold mb-0.5 font-amiri tracking-wide flex items-center gap-2">
+                            <span>المتبقي حتى الأذان</span>
+                            {isFastingIntent && (
+                              <span className="text-[10px] text-[#34D399] font-mono tabular-nums">
+                                (السحور: {fastingInfo.suhoorTimeStr} · الإفطار: {prayerTimes.maghrib})
+                              </span>
+                            )}
+                          </span>
                           <div
-                            className={`h-full transition-all duration-300 ${
-                              isAdhanNear ? 'bg-[#fbbf24] animate-pulse' : 'bg-gradient-to-r from-emerald-400 to-[#fbbf24]'
-                            }`}
-                            style={{ width: simulateNearAdhan ? '15%' : '75%' }}
-                          ></div>
+                            dir="ltr"
+                            className="text-3xl sm:text-4xl md:text-5xl font-black font-mono tracking-wider tabular-nums text-white drop-shadow-[0_2px_12px_rgba(4,18,13,0.95)]"
+                          >
+                            {displayTime}
+                          </div>
+                          {isFastingIntent && fastingInfo.isMaghribNear && (
+                            <div className="mt-2 px-3 py-1.5 rounded-xl bg-amber-950/85 border border-amber-500/50 text-[11px] text-amber-200 text-center font-amiri">
+                              دعاء الإفطار: «ذَهَبَ الظَّمَأُ وَابْتَلَّتِ الْعُرُوقُ، وَثَبَتَ الأَجْرُ إِنْ شَاءَ اللَّهُ»
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Style 4: Celestial Astrolabe (الهلال والإسطرلاب الفلكي) */}
-                    {countdownStyle === 'celestial-astrolabe' && (
-                      <div
-                        className={`relative px-8 py-4 rounded-full border-2 backdrop-blur-md shadow-2xl flex flex-col items-center ${
-                          isAdhanNear
-                            ? 'bg-amber-950/85 border-[#fbbf24] text-amber-100'
-                            : 'bg-[#031713]/90 border-[#e5b869]/65 text-[#fbbf24]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="text-[#e5b869] text-xs font-bold font-amiri">المتبقي حتى الأذان</span>
+                      {/* Style 2: Rub el Hizb (النجمة المثمّنة - ربع الحزب) */}
+                      {countdownStyle === 'rub-el-hizb' && (
+                        <div className="flex flex-col items-center gap-2">
+                          <span className="text-xs text-[#F6D884] font-bold font-amiri px-3 py-0.5 rounded-full bg-[#04120D]/65 backdrop-blur-sm">
+                            المتبقي حتى الأذان
+                          </span>
+                          <div className="flex items-center gap-3" dir="ltr">
+                            {[
+                              { val: displayH, label: 'ساعة' },
+                              { val: displayM, label: 'دقيقة' },
+                              { val: displayS, label: 'ثانية' },
+                            ].map((item, idx) => (
+                              <div
+                                key={idx}
+                                className={`relative p-3.5 rounded-2xl border-2 backdrop-blur-md shadow-xl flex flex-col items-center min-w-[74px] ${
+                                  isAdhanNear
+                                    ? 'bg-amber-950/80 border-[#F6D884] text-amber-100'
+                                    : 'bg-[#04120D]/74 border-[#CFA632]/75 text-[#F6D884]'
+                                }`}
+                              >
+                                <span className="absolute -top-2.5 text-[10px] text-[#F6D884] font-bold bg-[#04120D] px-2 py-0.5 rounded-full border border-[#CFA632]/65">
+                                  ۞
+                                </span>
+                                <div className="text-2xl md:text-3xl font-black font-mono tabular-nums mt-1 text-white drop-shadow-[0_2px_8px_rgba(4,18,13,0.9)]">
+                                  {item.val}
+                                </div>
+                                <span className="text-[10px] text-[#F6D884] font-bold mt-1 font-sans">{item.label}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="text-3xl md:text-4xl font-black font-mono tracking-wider tabular-nums text-white">
-                          {displayTime}
+                      )}
+
+                      {/* Style 3: Mashrabiya Arabesque (المشربية والأرابيسك) */}
+                      {countdownStyle === 'mashrabiya-arabesque' && (
+                        <div
+                          className={`relative px-7 py-4 rounded-2xl border-2 backdrop-blur-md shadow-2xl flex flex-col items-center space-y-2.5 ${
+                            isAdhanNear
+                              ? 'bg-amber-950/80 border-[#F6D884] text-amber-100'
+                              : 'bg-[#04120D]/74 border-[#CFA632]/75 text-[#F6D884]'
+                          }`}
+                        >
+                          <span className="text-xs text-[#F6D884] font-bold font-amiri">المتبقي حتى الأذان</span>
+                          <div className="flex items-center gap-3 font-mono text-3xl md:text-4xl font-black tabular-nums text-white drop-shadow-[0_2px_10px_rgba(4,18,13,0.9)]" dir="ltr">
+                            <span>{displayH}</span>
+                            <span className="text-[#CFA632]">❖</span>
+                            <span>{displayM}</span>
+                            <span className="text-[#CFA632]">❖</span>
+                            <span>{displayS}</span>
+                          </div>
+                          <div className="w-full bg-[#04120D] h-1.5 rounded-full overflow-hidden border border-[#CFA632]/40">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                isAdhanNear ? 'bg-[#F6D884] animate-pulse' : 'bg-gradient-to-r from-[#34D399] to-[#F6D884]'
+                              }`}
+                              style={{ width: simulateNearAdhan ? '15%' : '75%' }}
+                            ></div>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()
-            )}
+                      )}
+
+                      {/* Style 4: Celestial Astrolabe (الهلال والإسطرلاب الفلكي) */}
+                      {countdownStyle === 'celestial-astrolabe' && (
+                        <div
+                          className={`relative px-8 py-4 rounded-full border-2 backdrop-blur-md shadow-2xl flex flex-col items-center ${
+                            isAdhanNear
+                              ? 'bg-amber-950/80 border-[#F6D884] text-amber-100'
+                              : 'bg-[#04120D]/74 border-[#CFA632]/75 text-[#F6D884]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-[#F6D884] text-xs font-bold font-amiri">المتبقي حتى الأذان</span>
+                          </div>
+                          <div dir="ltr" className="text-3xl md:text-4xl font-black font-mono tracking-wider tabular-nums text-white drop-shadow-[0_2px_10px_rgba(4,18,13,0.9)]">
+                            {displayTime}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
           </div>
 
           {/* Left Column (RTL End): Sound Activation, Notification Bell & Quick Last Third Card */}
-          <div className="flex flex-col items-stretch sm:items-end gap-2.5 w-full lg:w-auto">
-            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+          <div className="flex flex-col items-stretch sm:items-end gap-2.5 w-full lg:w-auto lg:shrink-0">
+            <div className="flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-end gap-2 w-full lg:w-auto">
               <button
                 onClick={handleActivateAudio}
                 disabled={isActivatingAudio}
-                className={`flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl font-semibold border transition-all text-sm w-full sm:w-auto whitespace-nowrap ${
+                className={`min-h-[44px] flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold border transition-all text-xs sm:text-sm whitespace-nowrap ${
                   isAudioUnlocked
-                    ? 'bg-emerald-950/75 border-emerald-500/60 text-emerald-300'
-                    : 'bg-[#04211b] hover:bg-[#062d25] border-[#e5b869]/40 text-[#fbbf24]'
+                    ? 'bg-emerald-950/75 border-[#34D399]/60 text-[#34D399]'
+                    : 'bg-[#04120D] hover:bg-[#072219] border-[#CFA632]/45 text-[#F6D884]'
                 }`}
                 title="تفعيل الإذن الصوتي لتشغيل الأذان التلقائي"
               >
                 {isActivatingAudio ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                    <Loader2 className="w-4 h-4 animate-spin text-[#34D399]" />
                     <span>جاري التفعيل...</span>
                   </>
                 ) : isAudioUnlocked ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <CheckCircle2 className="w-4 h-4 text-[#34D399]" />
                     <span>تم تفعيل الصوت</span>
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="w-4 h-4 text-[#fbbf24]" />
+                    <ShieldCheck className="w-4 h-4 text-[#F6D884]" />
                     <span>تفعيل الصوت</span>
                   </>
                 )}
@@ -1626,8 +1653,8 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
                 aria-pressed={meetingModeEnabled}
                 className={`min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-2xl font-semibold border transition-all text-xs sm:text-sm whitespace-nowrap shrink-0 ${
                   meetingModeEnabled
-                    ? 'bg-gradient-to-r from-[#fbbf24]/25 to-emerald-900/75 border-[#fbbf24] text-[#fbbf24] shadow-[0_0_16px_rgba(251,191,36,0.22)]'
-                    : 'bg-[#04211b] hover:bg-[#062d25] border-[#e5b869]/40 text-slate-200 hover:text-[#fbbf24]'
+                    ? 'bg-gradient-to-r from-[#F6D884]/25 to-emerald-900/75 border-[#F6D884] text-[#F6D884] shadow-[0_0_16px_rgba(246,216,132,0.22)]'
+                    : 'bg-[#04120D] hover:bg-[#072219] border-[#CFA632]/45 text-slate-200 hover:text-[#F6D884]'
                 }`}
                 title="تبديل وضع المؤذن الصامت للمكاتب والاجتماعات (اهتزاز هادئ بدون صوت مرتفع)"
               >
@@ -1639,14 +1666,15 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
                 onClick={() => {
                   const nextState = !notificationsMuted;
                   setNotificationsMuted(nextState);
+                  onUpdateSettings?.({ notificationsEnabled: !nextState });
                   if (!nextState) {
                     backgroundService.requestNotificationPermission();
                   }
                 }}
-                className={`p-3.5 rounded-2xl border transition-all shrink-0 ${
+                className={`min-w-[44px] min-h-[44px] p-3 rounded-2xl border transition-all shrink-0 flex items-center justify-center ${
                   notificationsMuted
                     ? 'bg-rose-950/50 border-rose-700/60 text-rose-300'
-                    : 'bg-[#04211b] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#062d25]'
+                    : 'bg-[#04120D] border-[#CFA632]/45 text-[#F6D884] hover:bg-[#072219]'
                 }`}
                 title={notificationsMuted ? 'تنبيهات الأذان مكتومة' : 'التنبيهات التلقائية مفعلة'}
               >

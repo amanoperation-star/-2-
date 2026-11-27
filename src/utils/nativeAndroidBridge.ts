@@ -33,6 +33,19 @@ interface WidgetBridgePluginInterface {
     shown: boolean;
     granted: boolean;
   }>;
+  showSalawatNotificationNow(options: { sheikhNameAr?: string; formulaAr?: string }): Promise<{
+    shown: boolean;
+    granted: boolean;
+  }>;
+  showPreAdhanNotificationNow(options: {
+    prayerNameAr?: string;
+    reminderMinutes?: number;
+    cityNameAr?: string;
+    sheikhNameAr?: string;
+  }): Promise<{
+    shown: boolean;
+    granted: boolean;
+  }>;
   getBackgroundReliabilityStatus(): Promise<NativeBackgroundReliabilityStatus>;
   requestExactAlarmPermission(): Promise<{ opened: boolean; granted: boolean }>;
   requestFullScreenIntentPermission(): Promise<{ opened: boolean; granted: boolean }>;
@@ -171,6 +184,38 @@ export async function sendNativeTestPrayerNotification(
     return await WidgetBridge.showTestPrayerNotification({ mosqueTheme });
   } catch {
     return { shown: false, granted: false };
+  }
+}
+
+export async function sendNativeSalawatNotification(
+  sheikhNameAr: string,
+  formulaAr: string
+): Promise<boolean> {
+  if (!isNativeAndroidApp()) {
+    return false;
+  }
+  try {
+    const res = await WidgetBridge.showSalawatNotificationNow({ sheikhNameAr, formulaAr });
+    return Boolean(res?.shown);
+  } catch {
+    return false;
+  }
+}
+
+export async function sendNativePreAdhanNotification(params: {
+  prayerNameAr: string;
+  reminderMinutes: number;
+  cityNameAr: string;
+  sheikhNameAr?: string;
+}): Promise<boolean> {
+  if (!isNativeAndroidApp()) {
+    return false;
+  }
+  try {
+    const res = await WidgetBridge.showPreAdhanNotificationNow(params);
+    return Boolean(res?.shown);
+  } catch {
+    return false;
   }
 }
 

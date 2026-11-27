@@ -20,6 +20,16 @@ import { IstikharaHajahModal } from './components/IstikharaHajahModal';
 import { WidgetStudioModal } from './components/WidgetStudioModal';
 import { SpiritualSplashOverlay } from './components/SpiritualSplashOverlay';
 import { PrayerWidgetPreview } from './components/PrayerWidgetPreview';
+import { PostPrayerTasbihModal } from './components/PostPrayerTasbihModal';
+import {
+  createPrecisionClockTicker,
+  evaluateDuePrayerEvents,
+  hasSchedulerFired,
+  isEventDueInWindow,
+  markSchedulerFired,
+  parsePrayerTimeEpoch,
+  toSchedulerDateKey,
+} from './utils/prayerScheduler';
 import {
   WIDGET_SIZES,
   WIDGET_THEMES,
@@ -85,11 +95,19 @@ import { CityLocation, UserSettings, PrayerTimeData, AppThemeId, PrayerName } fr
 import { CITIES, applyPrayerTimeOffsets, calculatePrayerTimes } from './utils/prayerCalculator';
 import { calculateDuhaSchedule, formatTime12Ar } from './utils/duhaSunriseData';
 import {
+  QUIET_MODE_UPDATED_EVENT,
   loadQuietModeState,
   shouldSuppressGeneralNotification,
   shouldSuppressPrayerAudioOrAlert,
 } from './utils/quietModeData';
-import { adhanPlayer, getDuaSource, SalawatVoiceProfile, PreAdhanVoiceProfile, IqamaVoiceProfile } from './utils/audioAdhan';
+import {
+  adhanPlayer,
+  getDuaSource,
+  resolveValidAdhkarReciterForPeriod,
+  SalawatVoiceProfile,
+  PreAdhanVoiceProfile,
+  IqamaVoiceProfile,
+} from './utils/audioAdhan';
 import { LIVE_BACKGROUNDS, getSmartBackground, isCurrentTimeDay } from './utils/backgroundsData';
 import {
   KhatmaPlanDays,
@@ -181,8 +199,17 @@ export default function App() {
       const saved = localStorage.getItem('dua_audio_reciter');
       return getDuaSource(saved || 'shaarawy').id;
     })(),
-    preAdhanReminderMinutes: 10,
-    preAdhanSoundEnabled: true,
+    preAdhanReminderMinutes: (() => {
+      if (typeof window === 'undefined') return 10;
+      const saved = localStorage.getItem('pre_adhan_reminder_minutes');
+      if (saved === null) return 10;
+      const parsed = Number(saved);
+      return Number.isFinite(parsed) && parsed >= 0 && parsed <= 60 ? parsed : 10;
+    })(),
+    preAdhanSoundEnabled:
+      typeof window !== 'undefined' && localStorage.getItem('pre_adhan_sound_enabled') !== null
+        ? localStorage.getItem('pre_adhan_sound_enabled') === 'true'
+        : true,
     preAdhanVoiceMode: (() => {
       if (typeof window === 'undefined') return 'rotate';
       const saved = localStorage.getItem('pre_adhan_voice_mode');
@@ -237,6 +264,18 @@ export default function App() {
         : true,
     adhkarReciter:
       (typeof window !== 'undefined' ? localStorage.getItem('adhkar_reciter') : null) || 'alafasy_adhkar',
+    morningAdhkarReciter: (() => {
+      if (typeof window === 'undefined') return 'alafasy_adhkar';
+      const saved = localStorage.getItem('morning_adhkar_reciter');
+      const legacy = localStorage.getItem('adhkar_reciter');
+      return resolveValidAdhkarReciterForPeriod(saved || legacy || undefined, 'morning', true);
+    })(),
+    eveningAdhkarReciter: (() => {
+      if (typeof window === 'undefined') return 'alafasy_adhkar';
+      const saved = localStorage.getItem('evening_adhkar_reciter');
+      const legacy = localStorage.getItem('adhkar_reciter');
+      return resolveValidAdhkarReciterForPeriod(saved || legacy || undefined, 'evening', true);
+    })(),
     adhkarShortSheikh:
       (typeof window !== 'undefined' ? localStorage.getItem('adhkar_short_sheikh') : null) || 'rotate',
     iqamaStyle: (typeof window !== 'undefined' ? (localStorage.getItem('iqama_style_preference') as 'ring' | 'split' | 'pill') : 'ring') || 'ring',
@@ -589,15 +628,52 @@ export default function App() {
     const hijri = params.get('hijri');
     const wird = params.get('wird');
     const fasting = params.get('fasting');
+    const insp = params.get('insp');
+    const duha = params.get('duha');
+    const quiet = params.get('quiet');
+    const actions = params.get('actions');
+    const rings = params.get('rings');
+    const bg = params.get('bg');
+    const bgop = params.get('bgop');
+    const fscale = params.get('fscale');
     const rate = params.get('rate');
+    const parsedOpacity = bgop !== null ? Number(bgop) : NaN;
     return {
       ...base,
-      size: size === 'lock_pill' || size === 'medium' || size === 'large' ? size : base.size,
-      theme: theme === 'emerald' || theme === 'glass' || theme === 'oled' ? theme : base.theme,
+      size:
+        size === 'lock_pill' ||
+        size === 'medium' ||
+        size === 'large' ||
+        size === 'spiritual_card'
+          ? size
+          : base.size,
+      theme:
+        theme === 'emerald' ||
+        theme === 'glass' ||
+        theme === 'oled' ||
+        theme === 'parchment' ||
+        theme === 'royal_gold'
+          ? theme
+          : base.theme,
       showLiveSeconds: sec !== null ? sec === '1' : base.showLiveSeconds,
       showHijriDate: hijri !== null ? hijri === '1' : base.showHijriDate,
       showSunnahWird: wird !== null ? wird === '1' : base.showSunnahWird,
       showFastingAlert: fasting !== null ? fasting === '1' : base.showFastingAlert,
+      showDailyInspiration: insp !== null ? insp === '1' : base.showDailyInspiration,
+      showDuhaSunrise: duha !== null ? duha === '1' : base.showDuhaSunrise,
+      showQuietAndLastThird: quiet !== null ? quiet === '1' : base.showQuietAndLastThird,
+      showQuickActions: actions !== null ? actions === '1' : base.showQuickActions,
+      showDayProgressRings: rings !== null ? rings === '1' : base.showDayProgressRings,
+      mosqueBackgroundId:
+        bg === 'none' || bg === 'makkah' || bg === 'madinah' || bg === 'aqsa' || bg === 'azhar'
+          ? bg
+          : base.mosqueBackgroundId,
+      mosqueBgOpacity:
+        Number.isFinite(parsedOpacity) && parsedOpacity >= 15 && parsedOpacity <= 80
+          ? parsedOpacity
+          : base.mosqueBgOpacity,
+      fontScale:
+        fscale === 'sm' || fscale === 'md' || fscale === 'lg' ? fscale : base.fontScale,
       refreshInterval: rate === '1m' || rate === '1s' ? rate : base.refreshInterval,
     };
   });
@@ -641,92 +717,141 @@ export default function App() {
     isTest?: boolean;
   } | null>(null);
 
+  const appMountedAtRef = React.useRef<number>(Date.now());
+  const [globalSilentMeetingAlert, setGlobalSilentMeetingAlert] = useState<{
+    prayerNameAr: string;
+    timeStr: string;
+  } | null>(null);
+  const [globalPostPrayerModal, setGlobalPostPrayerModal] = useState<{
+    isOpen: boolean;
+    prayerNameAr: string;
+  }>({ isOpen: false, prayerNameAr: 'العصر' });
+
   const [scheduledAdhkarBanner, setScheduledAdhkarBanner] = useState<{
     period: 'morning' | 'evening';
     title: string;
   } | null>(null);
-  const lastMorningAdhkarTriggerRef = React.useRef<string>('');
-  const lastEveningAdhkarTriggerRef = React.useRef<string>('');
   const [duhaSunriseBanner, setDuhaSunriseBanner] = useState<{
     title: string;
     subtitle: string;
   } | null>(null);
-  const lastDuhaTriggerRef = React.useRef<string>('');
 
+  // Silent global audio unlock on first user interaction anywhere in the app
   useEffect(() => {
-    const checkAdhkarSchedule = () => {
-      const now = new Date();
-      if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) return;
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const todayKey = now.toDateString();
+    if (typeof window === 'undefined') return;
+    let attempted = false;
+    const handleFirstGesture = () => {
+      if (attempted && adhanPlayer.getIsUnlocked()) return;
+      attempted = true;
+      void adhanPlayer.unlockAudio();
+    };
+    window.addEventListener('pointerdown', handleFirstGesture, { passive: true, capture: true });
+    window.addEventListener('touchstart', handleFirstGesture, { passive: true, capture: true });
+    window.addEventListener('keydown', handleFirstGesture, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstGesture, { capture: true });
+      window.removeEventListener('touchstart', handleFirstGesture, { capture: true });
+      window.removeEventListener('keydown', handleFirstGesture, { capture: true });
+    };
+  }, []);
 
-      if (
-        settings.morningAdhkarEnabled !== false &&
-        settings.morningAdhkarTime &&
-        timeStr === settings.morningAdhkarTime
-      ) {
-        const trigKey = `${todayKey}-morning-${settings.morningAdhkarTime}`;
-        if (lastMorningAdhkarTriggerRef.current !== trigKey) {
-          lastMorningAdhkarTriggerRef.current = trigKey;
+  // Scheduled Morning/Evening Adhkar using precision ticker + catch-up window
+  useEffect(() => {
+    const checkAdhkarSchedule = (now: Date) => {
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) return;
+      const nowMs = now.getTime();
+      const dateKey = toSchedulerDateKey(now);
+
+      if (settings.morningAdhkarEnabled !== false && settings.morningAdhkarTime) {
+        const morningEpoch = parsePrayerTimeEpoch(now, settings.morningAdhkarTime, 0);
+        const trigKey = `${dateKey}|morning_adhkar|${settings.morningAdhkarTime}`;
+        if (
+          morningEpoch !== null &&
+          !hasSchedulerFired(trigKey) &&
+          isEventDueInWindow(nowMs, morningEpoch, appMountedAtRef.current)
+        ) {
+          markSchedulerFired(trigKey);
           if (settings.adhkarAutoPlayAudio !== false && !settings.meetingModeEnabled) {
-            adhanPlayer.playAdhkar(settings.adhkarReciter || 'alafasy_adhkar', 'أذكار الصباح المباركة', 'morning');
+            const morningReciter = resolveValidAdhkarReciterForPeriod(
+              settings.morningAdhkarReciter || settings.adhkarReciter,
+              'morning',
+              true
+            );
+            adhanPlayer.playAdhkar(morningReciter, 'أذكار الصباح المباركة', 'morning');
           }
           if (settings.notificationsEnabled) {
-            backgroundService.sendPrayerNotification('حان وقت أذكار الصباح', 'ابدأ يومك بذكر الله وحصن نفسك بالأذكار المأثورة');
+            backgroundService.sendPrayerNotification(
+              'حان وقت أذكار الصباح',
+              'ابدأ يومك بذكر الله وحصن نفسك بالأذكار المأثورة'
+            );
           }
           setScheduledAdhkarBanner({ period: 'morning', title: 'حان الآن وقت أذكار الصباح ☀️' });
         }
       }
 
-      if (
-        settings.eveningAdhkarEnabled !== false &&
-        settings.eveningAdhkarTime &&
-        timeStr === settings.eveningAdhkarTime
-      ) {
-        const trigKey = `${todayKey}-evening-${settings.eveningAdhkarTime}`;
-        if (lastEveningAdhkarTriggerRef.current !== trigKey) {
-          lastEveningAdhkarTriggerRef.current = trigKey;
+      if (settings.eveningAdhkarEnabled !== false && settings.eveningAdhkarTime) {
+        const eveningEpoch = parsePrayerTimeEpoch(now, settings.eveningAdhkarTime, 0);
+        const trigKey = `${dateKey}|evening_adhkar|${settings.eveningAdhkarTime}`;
+        if (
+          eveningEpoch !== null &&
+          !hasSchedulerFired(trigKey) &&
+          isEventDueInWindow(nowMs, eveningEpoch, appMountedAtRef.current)
+        ) {
+          markSchedulerFired(trigKey);
           if (settings.adhkarAutoPlayAudio !== false && !settings.meetingModeEnabled) {
-            adhanPlayer.playAdhkar(settings.adhkarReciter || 'alafasy_adhkar', 'أذكار المساء المباركة', 'evening');
+            const eveningReciter = resolveValidAdhkarReciterForPeriod(
+              settings.eveningAdhkarReciter || settings.adhkarReciter,
+              'evening',
+              true
+            );
+            adhanPlayer.playAdhkar(eveningReciter, 'أذكار المساء المباركة', 'evening');
           }
           if (settings.notificationsEnabled) {
-            backgroundService.sendPrayerNotification('حان وقت أذكار المساء', 'احفظ نفسك وليلتك بذكر الله والأذكار المأثورة');
+            backgroundService.sendPrayerNotification(
+              'حان وقت أذكار المساء',
+              'احفظ نفسك وليلتك بذكر الله والأذكار المأثورة'
+            );
           }
           setScheduledAdhkarBanner({ period: 'evening', title: 'حان الآن وقت أذكار المساء 🌙' });
         }
       }
     };
 
-    checkAdhkarSchedule();
-    const timer = setInterval(checkAdhkarSchedule, 1000);
-
-    return () => clearInterval(timer);
+    return createPrecisionClockTicker(checkAdhkarSchedule);
   }, [
     settings.morningAdhkarEnabled,
     settings.eveningAdhkarEnabled,
     settings.morningAdhkarTime,
     settings.eveningAdhkarTime,
     settings.adhkarReciter,
+    settings.morningAdhkarReciter,
+    settings.eveningAdhkarReciter,
     settings.adhkarAutoPlayAudio,
     settings.meetingModeEnabled,
     settings.notificationsEnabled,
   ]);
 
-  // Scheduled Sunrise & Duha Prayer Reminders
+  // Scheduled Sunrise & Duha Prayer Reminders using precision ticker + catch-up window
   useEffect(() => {
     if (!settings.sunriseReminderEnabled && !settings.duhaReminderEnabled) return;
 
-    const checkDuhaSunriseReminders = () => {
-      const now = new Date();
+    const checkDuhaSunriseReminders = (now: Date) => {
       if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) return;
-      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const todayKey = now.toDateString();
+      const nowMs = now.getTime();
+      const dateKey = toSchedulerDateKey(now);
       const schedule = calculateDuhaSchedule(prayerTimes.sunrise, prayerTimes.dhuhr, now);
 
-      const triggerAlert = (id: string, title: string, subtitle: string) => {
-        const trigKey = `${todayKey}-${id}-${timeStr}`;
-        if (lastDuhaTriggerRef.current === trigKey) return;
-        lastDuhaTriggerRef.current = trigKey;
+      const triggerAlert = (id: string, targetHHmm: string, title: string, subtitle: string) => {
+        const targetEpoch = parsePrayerTimeEpoch(now, targetHHmm, 0);
+        const trigKey = `${dateKey}|duha_sunrise|${id}|${targetHHmm}`;
+        if (
+          targetEpoch === null ||
+          hasSchedulerFired(trigKey) ||
+          !isEventDueInWindow(nowMs, targetEpoch, appMountedAtRef.current)
+        ) {
+          return;
+        }
+        markSchedulerFired(trigKey);
 
         if (settings.duhaReminderSoundEnabled !== false && !settings.meetingModeEnabled) {
           adhanPlayer.playChime();
@@ -737,9 +862,10 @@ export default function App() {
         setDuhaSunriseBanner({ title, subtitle });
       };
 
-      if (settings.sunriseReminderEnabled && timeStr === schedule.sunriseStr) {
+      if (settings.sunriseReminderEnabled) {
         triggerAlert(
           'sunrise',
+          schedule.sunriseStr,
           'حان الآن وقت شروق الشمس ☀️',
           `تُفتح نافذة صلاة الإشراق والضحى الساعة ${formatTime12Ar(schedule.ishraqStartStr)}`
         );
@@ -747,15 +873,18 @@ export default function App() {
 
       if (settings.duhaReminderEnabled) {
         const timing = settings.duhaReminderTiming || 'ishraq';
-        if ((timing === 'ishraq' || timing === 'both') && timeStr === schedule.ishraqStartStr) {
+        if (timing === 'ishraq' || timing === 'both') {
           triggerAlert(
             'duha_ishraq',
+            schedule.ishraqStartStr,
             'حان الآن وقت صلاة الإشراق والضحى ✨',
             `ابدأ بركعتي الإشراق (ينتهي وقت الضحى الساعة ${formatTime12Ar(schedule.duhaEndStr)})`
           );
-        } else if ((timing === 'peak' || timing === 'both') && timeStr === schedule.bestDuhaStr) {
+        }
+        if (timing === 'peak' || timing === 'both') {
           triggerAlert(
             'duha_peak',
+            schedule.bestDuhaStr,
             'أفضل وقت لصلاة الضحى الآن ☀️',
             `صلاة الأوّابين حين ترمض الفصال — متاحة حتى ${formatTime12Ar(schedule.duhaEndStr)}`
           );
@@ -763,9 +892,7 @@ export default function App() {
       }
     };
 
-    checkDuhaSunriseReminders();
-    const timer = window.setInterval(checkDuhaSunriseReminders, 10000);
-    return () => window.clearInterval(timer);
+    return createPrecisionClockTicker(checkDuhaSunriseReminders);
   }, [
     prayerTimes.sunrise,
     prayerTimes.dhuhr,
@@ -1311,10 +1438,12 @@ export default function App() {
     window.addEventListener('sunnah_rawatib_changed', runBridgeSync);
     window.addEventListener('fasting_intent_changed', runBridgeSync);
     window.addEventListener('post_prayer_checkin_changed', runBridgeSync);
+    window.addEventListener(QUIET_MODE_UPDATED_EVENT, runBridgeSync);
     return () => {
       window.removeEventListener('sunnah_rawatib_changed', runBridgeSync);
       window.removeEventListener('fasting_intent_changed', runBridgeSync);
       window.removeEventListener('post_prayer_checkin_changed', runBridgeSync);
+      window.removeEventListener(QUIET_MODE_UPDATED_EVENT, runBridgeSync);
     };
   }, [prayerTimes, currentLocation, settings, khatmaState, widgetConfig]);
 
@@ -1622,39 +1751,55 @@ export default function App() {
     settings.volume,
   ]);
 
-  // Periodic Salawat upon the Prophet (ﷺ) audio scheduler (every N minutes)
+  // Periodic Salawat upon the Prophet (ﷺ) audio & notification scheduler (every N minutes)
   useEffect(() => {
     if (!settings.salawatEnabled || settings.meetingModeEnabled) return;
     const intervalMinutes = settings.salawatIntervalMinutes ?? 10;
-    const timer = window.setInterval(() => {
-      if (shouldSuppressGeneralNotification(loadQuietModeState(), new Date())) return;
+    const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+    let lastSalawatFiredAt = Date.now();
+
+    const maybeTriggerSalawat = () => {
+      const nowMs = Date.now();
+      if (nowMs - lastSalawatFiredAt < intervalMs) return;
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), new Date(nowMs))) {
+        lastSalawatFiredAt = nowMs;
+        return;
+      }
+
       const spokenProfile = adhanPlayer.playSalawat(settings.salawatVoiceMode || 'rotate', {
         isAutoTrigger: true,
       });
       if (spokenProfile) {
+        lastSalawatFiredAt = nowMs;
         setActiveSalawatToast(spokenProfile);
-        if (
-          !isNativeAndroidApp() &&
-          typeof document !== 'undefined' &&
-          document.hidden &&
-          'Notification' in window &&
-          Notification.permission === 'granted'
-        ) {
-          try {
-            new Notification('ﷺ صلِّ على سيدنا محمد', {
-              body: `${spokenProfile.nameAr} · ${spokenProfile.formulaAr}`,
-              icon: '/pwa-192x192.png',
-              dir: 'rtl',
-              lang: 'ar',
-            });
-          } catch {
-            // ignore
-          }
-        }
+        void backgroundService.sendSalawatNotification(
+          spokenProfile.nameAr,
+          spokenProfile.formulaAr,
+          { isTest: false }
+        );
       }
-    }, intervalMinutes * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, [settings.salawatEnabled, settings.salawatIntervalMinutes, settings.salawatVoiceMode, settings.meetingModeEnabled]);
+    };
+
+    const timer = window.setInterval(maybeTriggerSalawat, Math.min(15000, intervalMs));
+    const onVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        maybeTriggerSalawat();
+      }
+    };
+    window.addEventListener('focus', onVisibilityOrFocus);
+    document.addEventListener('visibilitychange', onVisibilityOrFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus);
+    };
+  }, [
+    settings.salawatEnabled,
+    settings.salawatIntervalMinutes,
+    settings.salawatVoiceMode,
+    settings.meetingModeEnabled,
+  ]);
 
   // Auto-dismiss Salawat floating toast after 9 seconds
   useEffect(() => {
@@ -1689,6 +1834,10 @@ export default function App() {
     });
     if (profile) {
       setActiveSalawatToast(profile);
+      void backgroundService.sendSalawatNotification(profile.nameAr, profile.formulaAr, {
+        isTest: true,
+        requestPermissionOnTest: true,
+      });
     }
   };
 
@@ -1703,11 +1852,24 @@ export default function App() {
     );
     if (profile) {
       setActivePreAdhanToast({ profile, prayerNameAr });
+      if (!isAutoTrigger) {
+        const nextPrayerInfo = getNextPrayerInfo(prayerTimes);
+        void backgroundService.sendPreAdhanNotification({
+          prayerKey: nextPrayerInfo.key,
+          prayerNameAr: prayerNameAr || nextPrayerInfo.nameAr,
+          reminderMinutes: settings.preAdhanReminderMinutes || 10,
+          cityNameAr: currentLocation.nameAr,
+          sheikhNameAr: profile.nameAr,
+          mosqueTheme: settings.notificationMosqueTheme || 'auto',
+          isTest: true,
+          requestPermissionOnTest: true,
+        });
+      }
     }
     return profile;
   };
 
-  const handleTestIqama = (
+  const handleTestIqama = useCallback((
     voiceMode?: string,
     prayerNameAr?: string,
     isAutoTrigger: boolean = false
@@ -1720,7 +1882,108 @@ export default function App() {
       setActiveIqamaToast({ profile, prayerNameAr });
     }
     return profile;
+  }, [settings.iqamaVoiceMode]);
+
+  // Global Always-On Precision Prayer Scheduler (Adhan, Pre-Adhan, Iqama, Post-Prayer)
+  // Runs continuously regardless of active tab, open modal, or standalone widget mode.
+  const globalPrayerSchedulerRef = React.useRef<(now: Date) => void>(() => {});
+  globalPrayerSchedulerRef.current = (now: Date) => {
+    const jumuahPreview =
+      typeof window !== 'undefined' && localStorage.getItem('jumuah_preview_mode') === 'true';
+    const dueEvents = evaluateDuePrayerEvents({
+      now,
+      prayerTimes,
+      settings,
+      appMountedAtMs: appMountedAtRef.current,
+      jumuahPreviewMode: jumuahPreview,
+    });
+
+    for (const evt of dueEvents) {
+      markSchedulerFired(evt.dedupKey);
+
+      if (evt.type === 'adhan') {
+        if (settings.meetingModeEnabled) {
+          adhanPlayer.stop();
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate([300, 150, 300]);
+          }
+          setGlobalSilentMeetingAlert({
+            prayerNameAr: evt.prayerNameAr,
+            timeStr: evt.adhanTimeStr,
+          });
+          if (!isNativeAndroidApp() && settings.adhanBannerNotificationEnabled !== false) {
+            backgroundService.sendPrayerNotification(
+              `تنبيه صامت · حان وقت صلاة ${evt.prayerNameAr}`,
+              `${currentLocation.nameAr} • وضع الاجتماع نشط (اهتزاز هادئ)`,
+              settings.notificationMosqueTheme || 'auto',
+              evt.prayerKey
+            );
+          }
+        } else {
+          handleOpenFullScreenAdhanModal(evt.prayerKey, evt.prayerNameAr, false);
+        }
+      } else if (evt.type === 'pre_adhan') {
+        const reminderWindow = settings.preAdhanReminderMinutes || 10;
+        let spokenProfile: PreAdhanVoiceProfile | null = null;
+        if (settings.meetingModeEnabled) {
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate([250, 120, 250]);
+          }
+          spokenProfile = adhanPlayer.selectPreAdhanVoice(settings.preAdhanVoiceMode || 'rotate');
+          setActivePreAdhanToast({ profile: spokenProfile, prayerNameAr: evt.prayerNameAr });
+        } else if (settings.preAdhanSoundEnabled !== false) {
+          spokenProfile = handleTestPreAdhan(undefined, evt.prayerNameAr, true);
+          if (!spokenProfile) {
+            spokenProfile = adhanPlayer.selectPreAdhanVoice(settings.preAdhanVoiceMode || 'rotate');
+            setActivePreAdhanToast({ profile: spokenProfile, prayerNameAr: evt.prayerNameAr });
+          }
+        } else {
+          spokenProfile = adhanPlayer.selectPreAdhanVoice(settings.preAdhanVoiceMode || 'rotate');
+          setActivePreAdhanToast({ profile: spokenProfile, prayerNameAr: evt.prayerNameAr });
+        }
+
+        if (settings.notificationsEnabled !== false) {
+          void backgroundService.sendPreAdhanNotification({
+            prayerKey: evt.prayerKey,
+            prayerNameAr: evt.prayerNameAr,
+            reminderMinutes: reminderWindow,
+            cityNameAr: currentLocation.nameAr,
+            sheikhNameAr: spokenProfile?.nameAr,
+            mosqueTheme: settings.notificationMosqueTheme || 'auto',
+            isMeetingMode: Boolean(settings.meetingModeEnabled),
+            isTest: false,
+          });
+        }
+      } else if (evt.type === 'iqama') {
+        if (settings.meetingModeEnabled) {
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            navigator.vibrate([300, 150, 300]);
+          }
+        } else if (settings.iqamaAutoPlayEnabled !== false) {
+          handleTestIqama(undefined, evt.prayerNameAr, true);
+        }
+        if (settings.notificationsEnabled !== false && !isNativeAndroidApp()) {
+          backgroundService.sendPrayerNotification(
+            `قد قامت الصلاة · إقامة صلاة ${evt.prayerNameAr}`,
+            `${currentLocation.nameAr} • حان وقت إقامة الصلاة الآن`,
+            settings.notificationMosqueTheme || 'auto',
+            evt.prayerKey
+          );
+        }
+      } else if (evt.type === 'post10') {
+        setGlobalPostPrayerModal({
+          isOpen: true,
+          prayerNameAr: evt.prayerNameAr,
+        });
+      }
+    }
   };
+
+  useEffect(() => {
+    return createPrecisionClockTicker((now) => {
+      globalPrayerSchedulerRef.current(now);
+    });
+  }, []);
 
   const handleUpdateSettings = (newSettings: Partial<UserSettings>) => {
     if (newSettings.autoThemeEnabled) {
@@ -1789,6 +2052,12 @@ export default function App() {
       if (newSettings.salawatVoiceMode) {
         localStorage.setItem('salawat_voice_mode', newSettings.salawatVoiceMode);
       }
+      if (typeof newSettings.preAdhanReminderMinutes === 'number') {
+        localStorage.setItem('pre_adhan_reminder_minutes', String(newSettings.preAdhanReminderMinutes));
+      }
+      if (typeof newSettings.preAdhanSoundEnabled === 'boolean') {
+        localStorage.setItem('pre_adhan_sound_enabled', String(newSettings.preAdhanSoundEnabled));
+      }
       if (newSettings.preAdhanVoiceMode) {
         localStorage.setItem('pre_adhan_voice_mode', newSettings.preAdhanVoiceMode);
       }
@@ -1812,6 +2081,12 @@ export default function App() {
       }
       if (newSettings.adhkarReciter) {
         localStorage.setItem('adhkar_reciter', newSettings.adhkarReciter);
+      }
+      if (newSettings.morningAdhkarReciter) {
+        localStorage.setItem('morning_adhkar_reciter', newSettings.morningAdhkarReciter);
+      }
+      if (newSettings.eveningAdhkarReciter) {
+        localStorage.setItem('evening_adhkar_reciter', newSettings.eveningAdhkarReciter);
       }
       if (newSettings.adhkarShortSheikh) {
         localStorage.setItem('adhkar_short_sheikh', newSettings.adhkarShortSheikh);
@@ -2012,15 +2287,20 @@ export default function App() {
 
   // Standalone Live Widget Mode (?widget=true)
   if (standaloneWidgetConfig) {
+    const isParchmentStandalone = standaloneWidgetConfig.theme === 'parchment';
     return (
       <div
         dir="rtl"
-        className="min-h-screen bg-[#050807] flex flex-col items-center justify-center p-4 sm:p-6 gap-5"
+        className={`min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 gap-5 transition-colors ${
+          isParchmentStandalone ? 'bg-[#F5EBD0]' : 'bg-[#050807]'
+        }`}
         style={{
           backgroundImage:
             standaloneWidgetConfig.theme === 'glass'
               ? 'radial-gradient(circle at 30% 25%, rgba(16,185,129,0.28), transparent 55%), radial-gradient(circle at 75% 75%, rgba(212,175,55,0.22), transparent 55%)'
-              : undefined,
+              : standaloneWidgetConfig.theme === 'royal_gold'
+                ? 'radial-gradient(circle at 50% 20%, rgba(246,216,132,0.16), transparent 60%)'
+                : undefined,
         }}
       >
         <div className="w-full max-w-md space-y-4">
@@ -2029,6 +2309,17 @@ export default function App() {
             prayerTimes={prayerTimes}
             currentLocation={currentLocation}
             settings={settings}
+            onNavigateShortcut={(target) => {
+              setStandaloneWidgetConfig(null);
+              if (typeof window !== 'undefined') {
+                window.history.replaceState({}, '', '/');
+              }
+              if (target === 'standby') {
+                setIsStandbyModeOpen(true);
+              } else {
+                setActiveTab(target);
+              }
+            }}
           />
 
           <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
@@ -2085,6 +2376,80 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        <FullScreenAdhanModal
+          isOpen={fullScreenAdhanState.isOpen}
+          onClose={() => setFullScreenAdhanState((prev) => ({ ...prev, isOpen: false }))}
+          prayerKey={fullScreenAdhanState.prayerKey}
+          prayerNameAr={fullScreenAdhanState.prayerNameAr}
+          currentLocation={currentLocation}
+          settings={settings}
+          isSimulation={fullScreenAdhanState.isSimulation}
+        />
+
+        {activePreAdhanToast && (
+          <div
+            className="fixed bottom-5 right-5 z-[60] max-w-sm w-[calc(100vw-2.5rem)] rounded-2xl bg-gradient-to-br from-[#062f26]/95 via-[#031b16]/98 to-[#02120e]/98 border-2 border-[#e5b869]/60 shadow-[0_14px_40px_rgba(0,0,0,0.6),0_0_28px_rgba(229,184,105,0.22)] p-4 text-right backdrop-blur-xl"
+            dir="rtl"
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <span className="text-xs font-bold text-[#fbbf24]">
+                {activePreAdhanToast.prayerNameAr
+                  ? `تنبيه الاستعداد لصلاة ${activePreAdhanToast.prayerNameAr}`
+                  : 'تنبيه الاستعداد للوضوء والصلاة'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  adhanPlayer.stop();
+                  setActivePreAdhanToast(null);
+                }}
+                className="text-slate-400 hover:text-[#fbbf24] text-xs px-1.5 py-0.5 rounded-lg"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="font-amiri text-base text-white leading-relaxed mb-2">
+              {activePreAdhanToast.profile.verseAr}
+            </p>
+            <div className="text-[11px] font-bold text-emerald-300">
+              {activePreAdhanToast.profile.nameAr}
+            </div>
+          </div>
+        )}
+
+        {activeIqamaToast && (
+          <div
+            className="fixed bottom-5 right-5 z-[65] max-w-sm w-[calc(100vw-2.5rem)] rounded-2xl bg-gradient-to-br from-[#062f26]/95 via-[#031b16]/98 to-[#02120e]/98 border-2 border-[#fbbf24]/75 shadow-[0_14px_40px_rgba(0,0,0,0.65),0_0_32px_rgba(251,191,36,0.28)] p-4 text-right backdrop-blur-xl"
+            dir="rtl"
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <span className="text-sm font-bold text-[#fbbf24] font-amiri">
+                {activeIqamaToast.prayerNameAr
+                  ? `قد قامت الصلاة · إقامة صلاة ${activeIqamaToast.prayerNameAr}`
+                  : 'قد قامت الصلاة · إقامة الصلاة'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  adhanPlayer.stop();
+                  setActiveIqamaToast(null);
+                }}
+                className="text-slate-400 hover:text-[#fbbf24] text-xs px-1.5 py-0.5 rounded-lg"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="font-amiri text-base text-white leading-relaxed mb-2">
+              حيّ على الصلاة · حيّ على الفلاح · قد قامت الصلاة قد قامت الصلاة
+            </p>
+            <div className="text-[11px] font-bold text-emerald-300">
+              {activeIqamaToast.profile.nameAr}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2514,6 +2879,46 @@ export default function App() {
           settings={settings}
           isSimulation={fullScreenAdhanState.isSimulation}
         />
+
+        {/* Global Post-Prayer Adhkar + Dual Tasbih Modal (fires from any active tab at +10m) */}
+        <PostPrayerTasbihModal
+          isOpen={globalPostPrayerModal.isOpen}
+          onClose={() => setGlobalPostPrayerModal((prev) => ({ ...prev, isOpen: false }))}
+          prayerNameAr={globalPostPrayerModal.prayerNameAr}
+          isSimulated={false}
+          isJumuahMode={new Date().getDay() === 5}
+          initialPurpose="post_prayer"
+        />
+
+        {/* Global Silent Meeting Mode Banner (when Adhan arrives during any tab) */}
+        {globalSilentMeetingAlert && (
+          <div
+            dir="rtl"
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[65] max-w-md w-[calc(100vw-2rem)] rounded-2xl border-2 border-[#fbbf24]/80 bg-gradient-to-br from-[#062f26]/95 via-[#031b16]/98 to-[#02120e]/98 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.65)] backdrop-blur-xl text-right"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-bold text-[#fbbf24]">
+                  ❖ المؤذن الصامت للمكاتب والاجتماعات ❖
+                </div>
+                <div className="font-amiri text-base font-bold text-white mt-1">
+                  حان وقت صلاة {globalSilentMeetingAlert.prayerNameAr} ({globalSilentMeetingAlert.timeStr})
+                </div>
+                <div className="text-xs text-emerald-300 mt-0.5">
+                  تم كتم صوت الأذان وتفعيل الاهتزاز الهادئ تلقائياً
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGlobalSilentMeetingAlert(null)}
+                className="text-slate-400 hover:text-[#fbbf24] text-xs px-2 py-1 rounded-lg"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Istikhara & Hajah Prayer Helper Modal */}
         <IstikharaHajahModal

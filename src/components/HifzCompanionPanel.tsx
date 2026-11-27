@@ -134,7 +134,10 @@ export const HifzCompanionPanel: React.FC<HifzCompanionPanelProps> = ({ onTestRe
   };
 
   useEffect(() => {
+    const onStopMedia = () => stopAudio();
+    window.addEventListener('mihrab_stop_background_media', onStopMedia);
     return () => {
+      window.removeEventListener('mihrab_stop_background_media', onStopMedia);
       stopAudio();
     };
   }, []);

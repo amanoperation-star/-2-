@@ -375,60 +375,119 @@ export function getDuaSource(duaId: string = 'shaarawy'): AdhanAudioSource {
   return (duaId && DUA_SOURCES[duaId]) ? DUA_SOURCES[duaId] : DUA_SOURCES.shaarawy;
 }
 
-// Adhkar Morning & Evening Sheikh Audio Sources
-export const ADHKAR_SOURCES: Record<string, AdhanAudioSource> = {
+export type AdhkarPeriod = 'morning' | 'evening';
+
+export interface AdhkarAudioSource extends AdhanAudioSource {
+  periods: AdhkarPeriod[];
+  morningUrls: string[];
+  eveningUrls: string[];
+  morningLabelAr?: string;
+  eveningLabelAr?: string;
+}
+
+// Adhkar Morning & Evening Sheikh Audio Sources (Strictly Separated Streams & Curated Lists)
+export const ADHKAR_SOURCES: Record<string, AdhkarAudioSource> = {
   alafasy_adhkar: {
     id: 'alafasy_adhkar',
-    nameAr: 'الشيخ مشاري راشد العفاسي (أذكار الصباح والمساء)',
+    nameAr: 'الشيخ مشاري راشد العفاسي',
+    morningLabelAr: 'الشيخ مشاري راشد العفاسي (أذكار الصباح)',
+    eveningLabelAr: 'الشيخ مشاري راشد العفاسي (أذكار المساء)',
     nameEn: 'Sheikh Mishary Rashid Alafasy',
-    urls: [
-      '/audio/adhkar-masaa-alafasy.mp3',
+    periods: ['morning', 'evening'],
+    morningUrls: [
       '/audio/adhkar-sabah-alafasy.mp3',
-      'https://archive.org/download/adkar-Morning-Evening/athkar_04.mp3',
       'https://archive.org/download/adkar-Morning-Evening/athkar_03.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [
+      '/audio/adhkar-masaa-alafasy.mp3',
+      'https://archive.org/download/adkar-Morning-Evening/athkar_04.mp3',
+      '/audio/adhkar-masaa.mp3',
+    ],
+    urls: [
+      '/audio/adhkar-sabah-alafasy.mp3',
+      '/audio/adhkar-masaa-alafasy.mp3',
     ],
   },
   abbad_adhkar: {
     id: 'abbad_adhkar',
-    nameAr: 'الشيخ فارس عباد (صوت شجي مؤثر)',
+    nameAr: 'الشيخ فارس عباد',
+    morningLabelAr: 'الشيخ فارس عباد (أذكار الصباح شجية)',
+    eveningLabelAr: 'الشيخ فارس عباد (أذكار المساء شجية)',
     nameEn: 'Sheikh Fares Abbad',
-    urls: [
-      '/audio/adhkar-masaa-abbad.mp3',
+    periods: ['morning', 'evening'],
+    morningUrls: [
       '/audio/adhkar-sabah-abbad.mp3',
-      'https://archive.org/download/adkar-Morning-Evening/athkar_06.mp3',
       'https://archive.org/download/adkar-Morning-Evening/athkar_05.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [
+      '/audio/adhkar-masaa-abbad.mp3',
+      'https://archive.org/download/adkar-Morning-Evening/athkar_06.mp3',
+      '/audio/adhkar-masaa.mp3',
+    ],
+    urls: [
+      '/audio/adhkar-sabah-abbad.mp3',
+      '/audio/adhkar-masaa-abbad.mp3',
     ],
   },
   jibreel_adhkar: {
     id: 'jibreel_adhkar',
-    nameAr: 'الشيخ محمد جبريل (أذكار الصباح والمساء)',
+    nameAr: 'الشيخ محمد جبريل',
+    morningLabelAr: 'الشيخ محمد جبريل (أذكار الصباح)',
+    eveningLabelAr: 'الشيخ محمد جبريل (أذكار المساء)',
     nameEn: 'Sheikh Mohamed Jibreel',
-    urls: [
-      'https://archive.org/download/adkar-Morning-Evening/athkar_08.mp3',
+    periods: ['morning', 'evening'],
+    morningUrls: [
       'https://archive.org/download/adkar-Morning-Evening/athkar_07.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_08.mp3',
+      '/audio/adhkar-masaa.mp3',
+    ],
+    urls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_07.mp3',
+      'https://archive.org/download/adkar-Morning-Evening/athkar_08.mp3',
     ],
   },
   qatami_adhkar: {
     id: 'qatami_adhkar',
-    nameAr: 'الشيخ ناصر القطامي (نبرة شجية هادئة)',
+    nameAr: 'الشيخ ناصر القطامي',
+    morningLabelAr: 'الشيخ ناصر القطامي (نبرة صباحية هادئة)',
+    eveningLabelAr: 'الشيخ ناصر القطامي (نبرة مسائية شجية)',
     nameEn: 'Sheikh Nasser Al-Qatami',
+    periods: ['morning', 'evening'],
+    morningUrls: [
+      '/audio/adhkar-qatami.mp3',
+      'https://archive.org/download/adkar-Morning-Evening/athkar_02.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [
+      '/audio/adhkar-qatami.mp3',
+      'https://archive.org/download/adkar-Morning-Evening/athkar_02.mp3',
+      '/audio/adhkar-masaa.mp3',
+    ],
     urls: [
       '/audio/adhkar-qatami.mp3',
       'https://archive.org/download/adkar-Morning-Evening/athkar_02.mp3',
     ],
   },
-  muaiqly_adhkar: {
-    id: 'muaiqly_adhkar',
-    nameAr: 'الشيخ ماهر المعيقلي (إمام الحرم المكي)',
-    nameEn: 'Sheikh Maher Al-Muaiqly',
-    urls: [
-      'https://archive.org/download/adkar-Morning-Evening/athkar_25.mp3',
-    ],
-  },
   ghamdi_adhkar: {
     id: 'ghamdi_adhkar',
-    nameAr: 'الشيخ سعد الغامدي (نبرة خاشعة هادئة)',
+    nameAr: 'الشيخ سعد الغامدي',
+    morningLabelAr: 'الشيخ سعد الغامدي (أذكار الصباح خاشعة)',
+    eveningLabelAr: 'الشيخ سعد الغامدي (أذكار وأدعية مسائية هادئة)',
     nameEn: 'Sheikh Saad Al-Ghamdi',
+    periods: ['morning', 'evening'],
+    morningUrls: [
+      'https://archive.org/download/20250607_20250607_1005/%D8%A3%D8%B0%D9%83%D8%A7%D8%B1%20%D8%A7%D9%84%D8%B5%D8%A8%D8%A7%D8%AD%20%D9%84%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B3%D8%B9%D8%AF%20%D8%A7%D9%84%D8%BA%D8%A7%D9%85%D8%AF%D9%8A.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [
+      'https://archive.org/download/ad3iya-ghamidi/ad3iya-ghamidi.mp3',
+      '/audio/adhkar-masaa.mp3',
+    ],
     urls: [
       'https://archive.org/download/20250607_20250607_1005/%D8%A3%D8%B0%D9%83%D8%A7%D8%B1%20%D8%A7%D9%84%D8%B5%D8%A8%D8%A7%D8%AD%20%D9%84%D9%84%D8%B4%D9%8A%D8%AE%20%D8%B3%D8%B9%D8%AF%20%D8%A7%D9%84%D8%BA%D8%A7%D9%85%D8%AF%D9%8A.mp3',
       'https://archive.org/download/ad3iya-ghamidi/ad3iya-ghamidi.mp3',
@@ -436,28 +495,101 @@ export const ADHKAR_SOURCES: Record<string, AdhanAudioSource> = {
   },
   idris_abkar_adhkar: {
     id: 'idris_abkar_adhkar',
-    nameAr: 'الشيخ إدريس أبكر (أذكار الصباح خاشعة)',
+    nameAr: 'الشيخ إدريس أبكر (أذكار الصباح)',
+    morningLabelAr: 'الشيخ إدريس أبكر (أذكار الصباح خاشعة)',
     nameEn: 'Sheikh Idris Abkar',
+    periods: ['morning'],
+    morningUrls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_27.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [],
     urls: [
       'https://archive.org/download/adkar-Morning-Evening/athkar_27.mp3',
     ],
   },
   otaibi_adhkar: {
     id: 'otaibi_adhkar',
-    nameAr: 'الشيخ سلمان العتيبي (أذكار الصباح والمساء)',
+    nameAr: 'الشيخ سلمان العتيبي',
+    morningLabelAr: 'الشيخ سلمان العتيبي (أذكار الصباح)',
+    eveningLabelAr: 'الشيخ سلمان العتيبي (أذكار المساء)',
     nameEn: 'Sheikh Salman Al-Otaibi',
+    periods: ['morning', 'evening'],
+    morningUrls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_21.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_22.mp3',
+      '/audio/adhkar-masaa.mp3',
+    ],
     urls: [
       'https://archive.org/download/adkar-Morning-Evening/athkar_21.mp3',
       'https://archive.org/download/adkar-Morning-Evening/athkar_22.mp3',
     ],
   },
+  muaiqly_adhkar: {
+    id: 'muaiqly_adhkar',
+    nameAr: 'الشيخ ماهر المعيقلي (إمام الحرم المكي)',
+    morningLabelAr: 'الشيخ ماهر المعيقلي (وِرد الصباح)',
+    eveningLabelAr: 'الشيخ ماهر المعيقلي (وِرد المساء)',
+    nameEn: 'Sheikh Maher Al-Muaiqly',
+    periods: ['morning', 'evening'],
+    morningUrls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_25.mp3',
+      '/audio/adhkar-sabah.mp3',
+    ],
+    eveningUrls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_25.mp3',
+      '/audio/adhkar-masaa.mp3',
+    ],
+    urls: [
+      'https://archive.org/download/adkar-Morning-Evening/athkar_25.mp3',
+    ],
+  },
   speech_synth: {
     id: 'speech_synth',
     nameAr: 'النطق الصوتي العربي الفصيح (الذكي المباشر)',
+    morningLabelAr: 'النطق الصوتي الفصيح لأذكار الصباح',
+    eveningLabelAr: 'النطق الصوتي الفصيح لأذكار المساء',
     nameEn: 'Smart Speech Synthesis',
+    periods: ['morning', 'evening'],
+    morningUrls: [],
+    eveningUrls: [],
     urls: [],
   },
 };
+
+export function getAdhkarSourcesForPeriod(
+  period: AdhkarPeriod,
+  includeSpeechSynth: boolean = true
+): AdhkarAudioSource[] {
+  return Object.values(ADHKAR_SOURCES).filter((src) => {
+    if (!includeSpeechSynth && src.id === 'speech_synth') return false;
+    return src.periods.includes(period);
+  });
+}
+
+export function resolveValidAdhkarReciterForPeriod(
+  reciterId: string | undefined,
+  period: AdhkarPeriod,
+  allowSpeechSynth: boolean = true
+): string {
+  if (reciterId && ADHKAR_SOURCES[reciterId]) {
+    const candidate = ADHKAR_SOURCES[reciterId];
+    if (candidate.periods.includes(period) && (allowSpeechSynth || candidate.id !== 'speech_synth')) {
+      return candidate.id;
+    }
+  }
+  return 'alafasy_adhkar';
+}
+
+export function getAdhkarSourceLabel(reciterId: string | undefined, period: AdhkarPeriod): string {
+  const validId = resolveValidAdhkarReciterForPeriod(reciterId, period, true);
+  const src = ADHKAR_SOURCES[validId] || ADHKAR_SOURCES.alafasy_adhkar;
+  if (period === 'morning') return src.morningLabelAr || src.nameAr;
+  return src.eveningLabelAr || src.nameAr;
+}
 
 export interface SalawatVoiceProfile {
   id: 'mishary' | 'dosari' | 'muaiqly' | 'naqshabandi' | 'naqshabandi_radio';
@@ -926,7 +1058,7 @@ class AdhanPlayerManager {
     this.listeners.forEach((l) => l.onError?.(message, isFatal));
   }
 
-  // Pre-unlock audio permission for autoplay/adhan without browser blocking
+  // Pre-unlock audio permission for autoplay/adhan/pre-adhan/iqama/salawat without browser blocking
   public async unlockAudio(): Promise<boolean> {
     try {
       const AudioContextClass =
@@ -946,19 +1078,35 @@ class AdhanPlayerManager {
         source.start(0);
       }
 
-      if (!this.audio) {
-        this.initAudioElement();
-      }
-      if (this.audio) {
-        const silentMp3 =
-          'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-        this.audio.src = silentMp3;
-        this.audio.load();
-        const playPromise = this.audio.play();
-        if (playPromise !== undefined) {
-          await playPromise;
-          this.audio.pause();
-          this.audio.currentTime = 0;
+      if (!this.audio) this.initAudioElement();
+      if (!this.preAdhanAudio) this.initPreAdhanAudioElement();
+      if (!this.iqamaAudio) this.initIqamaAudioElement();
+      if (!this.salawatAudio) this.initSalawatAudioElement();
+
+      const silentWav =
+        'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+      const elementsToPrime = [
+        this.audio,
+        this.preAdhanAudio,
+        this.iqamaAudio,
+        this.salawatAudio,
+      ];
+
+      for (const el of elementsToPrime) {
+        if (!el) continue;
+        // Skip priming elements currently playing real audio
+        if (!el.paused && el.src && !el.src.startsWith('data:audio/wav')) continue;
+        try {
+          el.src = silentWav;
+          el.load();
+          const playPromise = el.play();
+          if (playPromise !== undefined) {
+            await playPromise;
+            el.pause();
+            el.currentTime = 0;
+          }
+        } catch {
+          // ignore individual element prime error
         }
       }
 
@@ -1000,6 +1148,26 @@ class AdhanPlayerManager {
       window.clearTimeout(this.autoDuaTimeoutId);
       this.autoDuaTimeoutId = null;
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mihrab_stop_background_media'));
+    }
+    if (this.preAdhanAudio && !this.preAdhanAudio.paused) {
+      this.preAdhanAudio.pause();
+      this.preAdhanAudio.currentTime = 0;
+    }
+    if (this.iqamaAudio && !this.iqamaAudio.paused) {
+      this.iqamaAudio.pause();
+      this.iqamaAudio.currentTime = 0;
+    }
+    if (this.salawatAudio && !this.salawatAudio.paused) {
+      this.salawatAudio.pause();
+      this.salawatAudio.currentTime = 0;
+    }
+    if (this.qiyamAudio && !this.qiyamAudio.paused) {
+      this.qiyamAudio.pause();
+      this.qiyamAudio.currentTime = 0;
+    }
+
     const source = getAdhanSource(reciterId, prayerKey);
     this.audioPlayNonce++;
     this.activeType = 'adhan';
@@ -1047,19 +1215,28 @@ class AdhanPlayerManager {
     await this.tryPlayCurrentUrl();
   }
 
-  // Play Adhkar Morning / Evening Audio Recitation (Real Sheikh MP3 with offline cache & speech fallback)
+  // Play Adhkar Morning / Evening Audio Recitation (Strictly separated Sabah vs Masaa streams)
   public async playAdhkar(
     reciterId: string = 'alafasy_adhkar',
     sampleText?: string,
     period: 'morning' | 'evening' | 'general' = 'general'
   ): Promise<void> {
-    const source = ADHKAR_SOURCES[reciterId] || ADHKAR_SOURCES.alafasy_adhkar;
+    const resolvedPeriod: AdhkarPeriod = period === 'evening' ? 'evening' : 'morning';
+    const validId = resolveValidAdhkarReciterForPeriod(reciterId, resolvedPeriod, true);
+    const source = ADHKAR_SOURCES[validId] || ADHKAR_SOURCES.alafasy_adhkar;
     this.audioPlayNonce++;
     this.activeType = 'adhkar';
     this.currentReciter = source.id;
     this.lastError = null;
 
-    if (source.id === 'speech_synth' || source.urls.length === 0) {
+    const periodUrls =
+      period === 'morning'
+        ? source.morningUrls
+        : period === 'evening'
+          ? source.eveningUrls
+          : [...source.morningUrls, ...source.eveningUrls];
+
+    if (source.id === 'speech_synth' || periodUrls.length === 0) {
       const adhkarText =
         period === 'evening'
           ? sampleText ||
@@ -1070,21 +1247,7 @@ class AdhanPlayerManager {
       return;
     }
 
-    const orderedUrls = [...source.urls].sort((a, b) => {
-      if (period === 'morning') {
-        const aScore = a.includes('sabah') || a.includes('03') || a.includes('05') || a.includes('07') ? 0 : 1;
-        const bScore = b.includes('sabah') || b.includes('03') || b.includes('05') || b.includes('07') ? 0 : 1;
-        return aScore - bScore;
-      }
-      if (period === 'evening') {
-        const aScore = a.includes('masaa') || a.includes('04') || a.includes('06') || a.includes('08') ? 0 : 1;
-        const bScore = b.includes('masaa') || b.includes('04') || b.includes('06') || b.includes('08') ? 0 : 1;
-        return aScore - bScore;
-      }
-      return 0;
-    });
-
-    this.currentReciterUrls = orderedUrls;
+    this.currentReciterUrls = [...periodUrls];
     this.currentUrlIndex = 0;
 
     if (!this.audio) {
@@ -1404,7 +1567,7 @@ class AdhanPlayerManager {
     if (
       isAuto &&
       this.state === 'playing' &&
-      (this.activeType === 'adhan' || this.activeType === 'dua' || this.activeType === 'adhkar')
+      (this.activeType === 'adhan' || this.activeType === 'dua' || this.activeType === 'iqama')
     ) {
       return null;
     }
@@ -1429,10 +1592,22 @@ class AdhanPlayerManager {
   ): Promise<void> {
     if (!this.preAdhanAudio) return;
 
-    // Pause any overlapping Salawat audio cleanly before playing prayer alert
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mihrab_stop_background_media', { detail: { reason: 'pre_adhan' } }));
+    }
+
+    // Pause any overlapping lower-priority audio cleanly before playing prayer preparation alert
     if (this.salawatAudio && !this.salawatAudio.paused) {
       this.salawatAudio.pause();
       this.salawatAudio.currentTime = 0;
+    }
+    if (this.qiyamAudio && !this.qiyamAudio.paused) {
+      this.qiyamAudio.pause();
+      this.qiyamAudio.currentTime = 0;
+    }
+    if (this.audio && !this.audio.paused && (this.activeType === 'adhkar' || this.activeType === 'salawat')) {
+      this.audio.pause();
+      this.audio.currentTime = 0;
     }
 
     this.activeType = 'pre_adhan_reminder';
@@ -1487,7 +1662,7 @@ class AdhanPlayerManager {
     if (
       isAuto &&
       this.state === 'playing' &&
-      (this.activeType === 'adhan' || this.activeType === 'dua' || this.activeType === 'adhkar')
+      (this.activeType === 'adhan' || this.activeType === 'dua')
     ) {
       return null;
     }
@@ -1513,6 +1688,13 @@ class AdhanPlayerManager {
   ): Promise<void> {
     if (!this.iqamaAudio) return;
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mihrab_stop_background_media'));
+    }
+    if (this.audio && !this.audio.paused && this.activeType !== 'adhan' && this.activeType !== 'dua') {
+      this.audio.pause();
+      this.audio.currentTime = 0;
+    }
     if (this.salawatAudio && !this.salawatAudio.paused) {
       this.salawatAudio.pause();
       this.salawatAudio.currentTime = 0;

@@ -25,6 +25,8 @@ public final class BackgroundReminderScheduler {
     private static final int REQ_SALAWAT = 6102;
     private static final int REQ_PERIODIC = 6103;
     private static final int REQ_SHOW_CLOCK_APP = 6104;
+    private static final int REQ_PRE_ADHAN = 6105;
+    private static final int REQ_IQAMA = 6106;
 
     private BackgroundReminderScheduler() {}
 
@@ -47,10 +49,46 @@ public final class BackgroundReminderScheduler {
         try {
             JSONObject root = new JSONObject(rawJson);
             scheduleNextPrayerAdhan(context, root);
+            scheduleNextPreAdhan(context, root, 0L);
+            scheduleNextIqama(context, root);
             scheduleSalawatFromRoot(context, root, false);
             schedulePeriodicFromRoot(context, root, false);
         } catch (Exception ignored) {
             // ignore malformed JSON
+        }
+    }
+
+    public static void scheduleNextPreAdhan(Context context) {
+        scheduleNextPreAdhanAfter(context, 0L);
+    }
+
+    public static void scheduleNextPreAdhanAfter(Context context, long minAfterEpochMs) {
+        if (context == null) return;
+        SharedPreferences widgetPrefs = context.getSharedPreferences(
+            PrayerWidgetHelper.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        String rawJson = widgetPrefs.getString(PrayerWidgetHelper.KEY_PAYLOAD_JSON, null);
+        if (rawJson == null || rawJson.isEmpty()) return;
+        try {
+            scheduleNextPreAdhan(context, new JSONObject(rawJson), minAfterEpochMs);
+        } catch (Exception ignored) {
+            // ignore
+        }
+    }
+
+    public static void scheduleNextIqama(Context context) {
+        if (context == null) return;
+        SharedPreferences widgetPrefs = context.getSharedPreferences(
+            PrayerWidgetHelper.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        String rawJson = widgetPrefs.getString(PrayerWidgetHelper.KEY_PAYLOAD_JSON, null);
+        if (rawJson == null || rawJson.isEmpty()) return;
+        try {
+            scheduleNextIqama(context, new JSONObject(rawJson));
+        } catch (Exception ignored) {
+            // ignore
         }
     }
 
@@ -117,6 +155,8 @@ public final class BackgroundReminderScheduler {
         Calendar nowCal = Calendar.getInstance();
         nowCal.setTimeInMillis(nowMs);
 
+        JSONObject prayerAdhanEnabled = audioSettings != null ? audioSettings.optJSONObject("prayerAdhanEnabled") : null;
+
         JSONObject matchedPrayer = null;
         long matchedEpoch = 0L;
 
@@ -125,6 +165,7 @@ public final class BackgroundReminderScheduler {
             if (item == null) continue;
             String key = item.optString("key", "");
             if ("sunrise".equals(key)) continue;
+            if (prayerAdhanEnabled != null && !prayerAdhanEnabled.optBoolean(key, true)) continue;
             long candidate = PrayerNotificationHelper.parseTimeTodayEpoch(nowCal, item.optString("time24", ""), 0);
             if (candidate > nowMs + 1000L) {
                 matchedPrayer = item;
@@ -139,6 +180,7 @@ public final class BackgroundReminderScheduler {
                 if (item == null) continue;
                 String key = item.optString("key", "");
                 if ("sunrise".equals(key)) continue;
+                if (prayerAdhanEnabled != null && !prayerAdhanEnabled.optBoolean(key, true)) continue;
                 long candidate = PrayerNotificationHelper.parseTimeTodayEpoch(nowCal, item.optString("time24", ""), 1);
                 if (candidate > nowMs + 1000L) {
                     matchedPrayer = item;
@@ -148,7 +190,10 @@ public final class BackgroundReminderScheduler {
             }
         }
 
-        if (matchedPrayer == null || matchedEpoch <= nowMs) return;
+        if (matchedPrayer == null || matchedEpoch <= nowMs) {
+            cancelAlarm(context, BackgroundAlarmReceiver.ACTION_EXACT_ADHAN_ALARM, REQ_EXACT_ADHAN);
+            return;
+        }
 
         String pKey = matchedPrayer.optString("key", "dhuhr");
         Calendar targetCal = Calendar.getInstance();
@@ -193,6 +238,199 @@ public final class BackgroundReminderScheduler {
             scheduleAllowWhileIdleFallback(am, matchedEpoch, pi, false);
         } catch (Exception ignored) {
             scheduleAllowWhileIdleFallback(am, matchedEpoch, pi, false);
+        }
+    }
+
+    private static void scheduleNextPreAdhan(Context context, JSONObject root, long minAfterEpochMs) {
+        JSONObject audioSettings = root.optJSONObject("audioSettings");
+        boolean notificationsEnabled = audioSettings == null || audioSettings.optBoolean("notificationsEnabled", true);
+        JSONObject prayerAdhanEnabled = audioSettings != null ? audioSettings.optJSONObject("prayerAdhanEnabled") : null;
+        JSONObject preAdhan = root.optJSONObject("preAdhanSettings");
+        int reminderMins = preAdhan != null ? preAdhan.optInt("minutes", 10) : 10;
+        boolean soundEnabled = preAdhan == null || preAdhan.optBoolean("soundEnabled", true);
+
+        if (reminderMins <= 0 || (!notificationsEnabled && !soundEnabled)) {
+            cancelAlarm(context, BackgroundAlarmReceiver.ACTION_PRE_ADHAN_ALARM, REQ_PRE_ADHAN);
+            return;
+        }
+
+        long nowMs = System.currentTimeMillis();
+        long minThresholdMs = Math.max(nowMs + 1000L, minAfterEpochMs > 0L ? minAfterEpochMs + 2000L : 0L);
+        String cityNameAr = root.optString("cityNameAr", "القاهرة");
+        JSONObject notifSettings = root.optJSONObject("notificationSettings");
+        String mosqueTheme = notifSettings != null ? notifSettings.optString("mosqueTheme", "auto") : "auto";
+
+        String nowDateKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(nowMs));
+        String tomorrowDateKey = root.optString("tomorrowDateKey", "");
+        JSONArray todaySchedule = root.optJSONArray("todaySchedule");
+        JSONArray tomorrowSchedule = root.optJSONArray("tomorrowSchedule");
+
+        JSONArray activeSchedule = todaySchedule;
+        JSONArray nextSchedule = tomorrowSchedule != null ? tomorrowSchedule : todaySchedule;
+        if (!tomorrowDateKey.isEmpty() && tomorrowDateKey.equals(nowDateKey) && tomorrowSchedule != null) {
+            activeSchedule = tomorrowSchedule;
+            nextSchedule = tomorrowSchedule;
+        } else if (activeSchedule == null) {
+            activeSchedule = root.optJSONArray("dailyPrayers");
+            nextSchedule = activeSchedule;
+        }
+        if (activeSchedule == null || activeSchedule.length() == 0) return;
+
+        Calendar nowCal = Calendar.getInstance();
+        nowCal.setTimeInMillis(nowMs);
+
+        JSONObject matchedPrayer = null;
+        long matchedAdhanEpoch = 0L;
+        long matchedTriggerEpoch = 0L;
+
+        for (int dayOffset = 0; dayOffset <= 1; dayOffset++) {
+            JSONArray sched = dayOffset == 0 ? activeSchedule : nextSchedule;
+            if (sched == null) continue;
+            for (int i = 0; i < sched.length(); i++) {
+                JSONObject item = sched.optJSONObject(i);
+                if (item == null) continue;
+                String key = item.optString("key", "");
+                if ("sunrise".equals(key)) continue;
+                if (prayerAdhanEnabled != null && !prayerAdhanEnabled.optBoolean(key, true)) continue;
+                long adhanEpoch = PrayerNotificationHelper.parseTimeTodayEpoch(nowCal, item.optString("time24", ""), dayOffset);
+                if (adhanEpoch <= 0L) continue;
+                long triggerEpoch = adhanEpoch - reminderMins * 60_000L;
+                if (triggerEpoch > minThresholdMs && (matchedTriggerEpoch == 0L || triggerEpoch < matchedTriggerEpoch)) {
+                    matchedPrayer = item;
+                    matchedAdhanEpoch = adhanEpoch;
+                    matchedTriggerEpoch = triggerEpoch;
+                }
+            }
+            if (matchedPrayer != null) break;
+        }
+
+        if (matchedPrayer == null || matchedTriggerEpoch <= nowMs) {
+            cancelAlarm(context, BackgroundAlarmReceiver.ACTION_PRE_ADHAN_ALARM, REQ_PRE_ADHAN);
+            return;
+        }
+
+        String pKey = matchedPrayer.optString("key", "dhuhr");
+        Calendar targetCal = Calendar.getInstance();
+        targetCal.setTimeInMillis(matchedAdhanEpoch);
+        String pName = matchedPrayer.optString("nameAr", "الصلاة");
+        if ("dhuhr".equals(pKey)) {
+            pName = (targetCal.get(Calendar.DAY_OF_WEEK) == Calendar.FRIDAY) ? "الجمعة" : "الظهر";
+        }
+
+        Intent intent = new Intent(context, BackgroundAlarmReceiver.class);
+        intent.setAction(BackgroundAlarmReceiver.ACTION_PRE_ADHAN_ALARM);
+        intent.putExtra("prayer_key", pKey);
+        intent.putExtra("prayer_name", pName);
+        intent.putExtra("reminder_minutes", reminderMins);
+        intent.putExtra("city_name", cityNameAr);
+        intent.putExtra("mosque_theme", mosqueTheme);
+        intent.putExtra("target_epoch_ms", matchedTriggerEpoch);
+
+        PendingIntent pi = PendingIntent.getBroadcast(
+            context,
+            REQ_PRE_ADHAN,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am != null) {
+            scheduleAllowWhileIdleFallback(am, matchedTriggerEpoch, pi, canScheduleExactAlarms(context));
+        }
+    }
+
+    private static void scheduleNextIqama(Context context, JSONObject root) {
+        JSONObject audioSettings = root.optJSONObject("audioSettings");
+        boolean notificationsEnabled = audioSettings == null || audioSettings.optBoolean("notificationsEnabled", true);
+        JSONObject iqamaSettings = root.optJSONObject("iqamaSettings");
+        boolean autoPlayEnabled = iqamaSettings == null || iqamaSettings.optBoolean("autoPlayEnabled", true);
+
+        if (!notificationsEnabled && !autoPlayEnabled) {
+            cancelAlarm(context, BackgroundAlarmReceiver.ACTION_IQAMA_ALARM, REQ_IQAMA);
+            return;
+        }
+
+        JSONObject minutesObj = iqamaSettings != null ? iqamaSettings.optJSONObject("minutes") : null;
+        long nowMs = System.currentTimeMillis();
+        String cityNameAr = root.optString("cityNameAr", "القاهرة");
+        JSONObject notifSettings = root.optJSONObject("notificationSettings");
+        String mosqueTheme = notifSettings != null ? notifSettings.optString("mosqueTheme", "auto") : "auto";
+
+        String nowDateKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(nowMs));
+        String tomorrowDateKey = root.optString("tomorrowDateKey", "");
+        JSONArray todaySchedule = root.optJSONArray("todaySchedule");
+        JSONArray tomorrowSchedule = root.optJSONArray("tomorrowSchedule");
+
+        JSONArray activeSchedule = todaySchedule;
+        JSONArray nextSchedule = tomorrowSchedule != null ? tomorrowSchedule : todaySchedule;
+        if (!tomorrowDateKey.isEmpty() && tomorrowDateKey.equals(nowDateKey) && tomorrowSchedule != null) {
+            activeSchedule = tomorrowSchedule;
+            nextSchedule = tomorrowSchedule;
+        } else if (activeSchedule == null) {
+            activeSchedule = root.optJSONArray("dailyPrayers");
+            nextSchedule = activeSchedule;
+        }
+        if (activeSchedule == null || activeSchedule.length() == 0) return;
+
+        Calendar nowCal = Calendar.getInstance();
+        nowCal.setTimeInMillis(nowMs);
+
+        JSONObject matchedPrayer = null;
+        long matchedAdhanEpoch = 0L;
+        long matchedIqamaEpoch = 0L;
+
+        int[] dayOffsets = new int[] { -1, 0, 1 };
+        for (int dayOffset : dayOffsets) {
+            JSONArray sched = dayOffset == 1 ? nextSchedule : activeSchedule;
+            if (sched == null) continue;
+            for (int i = 0; i < sched.length(); i++) {
+                JSONObject item = sched.optJSONObject(i);
+                if (item == null) continue;
+                String key = item.optString("key", "");
+                if ("sunrise".equals(key)) continue;
+                int offsetMins = minutesObj != null ? Math.max(1, minutesObj.optInt(key, 15)) : 15;
+                long adhanEpoch = PrayerNotificationHelper.parseTimeTodayEpoch(nowCal, item.optString("time24", ""), dayOffset);
+                if (adhanEpoch <= 0L) continue;
+                long iqamaEpoch = adhanEpoch + offsetMins * 60_000L;
+                if (iqamaEpoch > nowMs + 1000L && (matchedIqamaEpoch == 0L || iqamaEpoch < matchedIqamaEpoch)) {
+                    matchedPrayer = item;
+                    matchedAdhanEpoch = adhanEpoch;
+                    matchedIqamaEpoch = iqamaEpoch;
+                }
+            }
+        }
+
+        if (matchedPrayer == null || matchedIqamaEpoch <= nowMs) {
+            cancelAlarm(context, BackgroundAlarmReceiver.ACTION_IQAMA_ALARM, REQ_IQAMA);
+            return;
+        }
+
+        String pKey = matchedPrayer.optString("key", "dhuhr");
+        Calendar targetCal = Calendar.getInstance();
+        targetCal.setTimeInMillis(matchedAdhanEpoch);
+        String pName = matchedPrayer.optString("nameAr", "الصلاة");
+        if ("dhuhr".equals(pKey)) {
+            pName = (targetCal.get(Calendar.DAY_OF_WEEK) == Calendar.FRIDAY) ? "الجمعة" : "الظهر";
+        }
+
+        Intent intent = new Intent(context, BackgroundAlarmReceiver.class);
+        intent.setAction(BackgroundAlarmReceiver.ACTION_IQAMA_ALARM);
+        intent.putExtra("prayer_key", pKey);
+        intent.putExtra("prayer_name", pName);
+        intent.putExtra("city_name", cityNameAr);
+        intent.putExtra("mosque_theme", mosqueTheme);
+        intent.putExtra("target_epoch_ms", matchedIqamaEpoch);
+
+        PendingIntent pi = PendingIntent.getBroadcast(
+            context,
+            REQ_IQAMA,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am != null) {
+            scheduleAllowWhileIdleFallback(am, matchedIqamaEpoch, pi, canScheduleExactAlarms(context));
         }
     }
 

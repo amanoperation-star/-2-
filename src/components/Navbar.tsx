@@ -6,12 +6,7 @@ import {
   Sparkles,
   Settings,
   MapPin,
-  Volume2,
-  Square,
-  ShieldCheck,
-  CheckCircle2,
   Award,
-  Image as ImageIcon,
   Shield,
   Check,
   RotateCcw,
@@ -19,12 +14,10 @@ import {
   Calendar,
   TrainFront,
   Home,
-  Palette,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
 import { CityLocation, UserSettings } from '../types';
-import { adhanPlayer, AudioPlayerState } from '../utils/audioAdhan';
 import { WeatherWidget } from './WeatherWidget';
 import { PWAInstallButton } from './PWAInstallButton';
 import {
@@ -35,7 +28,6 @@ import {
   TOTAL_MUSHAF_PAGES,
   getDailyWirdSchedule,
 } from '../utils/khatmaData';
-import { getThemeDefinition, normalizeThemeId } from '../utils/themesData';
 
 interface NavbarProps {
   activeTab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute' | 'family';
@@ -45,8 +37,8 @@ interface NavbarProps {
   onOpenSettings: () => void;
   onOpenIqamaTab?: () => void;
   onToggleTvMode?: () => void;
-  onOpenBackgroundPicker: () => void;
-  onCycleTheme: () => void;
+  onOpenBackgroundPicker?: () => void;
+  onCycleTheme?: () => void;
   autoThemeStatusBadge?: string;
   onOpenSteadfastness?: () => void;
   onOpenStandbyMode?: () => void;
@@ -73,17 +65,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   currentLocation,
-  settings,
   onOpenSettings,
   onOpenIqamaTab,
   onToggleTvMode,
-  onOpenBackgroundPicker,
-  onCycleTheme,
-  autoThemeStatusBadge,
   onOpenSteadfastness,
   onOpenStandbyMode,
   onOpenIstikharaHajah,
-  onOpenWidgetsStudio,
   khatmaState,
   khatmaSchedule,
   onSwitchKhatmaPlan,
@@ -92,14 +79,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenWirdModal,
   onNavigateHome,
 }) => {
-  const [playerState, setPlayerState] = useState<AudioPlayerState>('idle');
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [kaabaOpen, setKaabaOpen] = useState<boolean>(false);
   const [khatmaOpen, setKhatmaOpen] = useState<boolean>(false);
   const toolsScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollToolsStart, setCanScrollToolsStart] = useState<boolean>(false);
   const [canScrollToolsEnd, setCanScrollToolsEnd] = useState<boolean>(false);
-  const activeThemeDef = getThemeDefinition(normalizeThemeId(settings.theme));
 
   const updateToolsScrollEdges = useCallback(() => {
     const el = toolsScrollRef.current;
@@ -138,7 +122,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       observer?.disconnect();
       window.removeEventListener('resize', updateToolsScrollEdges);
     };
-  }, [updateToolsScrollEdges, playerState, isUnlocked, activeThemeDef.nameAr]);
+  }, [updateToolsScrollEdges]);
 
   const scrollToolsBy = (deltaX: number) => {
     const el = toolsScrollRef.current;
@@ -149,28 +133,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isFriday = new Date().getDay() === 5;
   const getPrayerLabel = (key: KhatmaPrayerKey) =>
     key === 'dhuhr' && isFriday ? 'الجمعة' : KHATMA_PRAYER_LABELS[key];
-
-  useEffect(() => {
-    setIsUnlocked(adhanPlayer.getIsUnlocked());
-    const unsub = adhanPlayer.subscribe({
-      onStateChange: (st) => setPlayerState(st),
-      onUnlocked: () => setIsUnlocked(true),
-    });
-    return () => unsub();
-  }, []);
-
-  const handleToggleAdhan = () => {
-    if (playerState === 'playing' || playerState === 'loading') {
-      adhanPlayer.stop();
-    } else {
-      adhanPlayer.playAdhan(settings.adhanReciter);
-    }
-  };
-
-  const handleUnlockAudio = async () => {
-    await adhanPlayer.unlockAudio();
-    adhanPlayer.playChime();
-  };
 
   const navigateToSection = (
     tab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute' | 'family'
@@ -297,79 +259,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-label="شريط التحكم السريع"
             className="flex flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar py-0.5 touch-pan-x scroll-smooth"
           >
-            {/* 1. الصوت */}
-            <button
-              type="button"
-              onClick={handleToggleAdhan}
-              aria-pressed={playerState === 'playing'}
-              title={playerState === 'playing' ? 'إيقاف صوت الأذان' : 'تشغيل صوت الأذان'}
-              className={`min-h-[40px] px-3.5 py-2 rounded-full border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)] ${
-                playerState === 'playing'
-                  ? 'bg-gradient-to-b from-rose-900/90 to-rose-950 border-rose-400/75 text-rose-100 shadow-[0_0_14px_rgba(244,63,94,0.28)]'
-                  : 'bg-gradient-to-b from-[#0C281F] to-[#05140F] border-[#34D399]/50 hover:border-[#34D399] hover:bg-[#0E3126] text-[#34D399]'
-              }`}
-            >
-              {playerState === 'playing' ? (
-                <>
-                  <Square className="w-3.5 h-3.5 fill-current shrink-0" />
-                  <span>إيقاف الصوت</span>
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>الصوت</span>
-                </>
-              )}
-            </button>
-
-            {/* 2. تفعيل الصوت */}
-            <button
-              type="button"
-              onClick={handleUnlockAudio}
-              aria-pressed={isUnlocked}
-              title="تفعيل إذن الصوت في المتصفح"
-              className={`min-h-[40px] px-3.5 py-2 rounded-full border text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)] ${
-                isUnlocked
-                  ? 'bg-gradient-to-b from-[#093628] to-[#051F16] border-[#34D399]/65 text-[#34D399] shadow-[0_0_12px_rgba(52,211,153,0.18)]'
-                  : 'bg-gradient-to-b from-[#0C281F] to-[#05140F] border-[#CFA632]/45 hover:border-[#F6D884] text-[#F6D884]'
-              }`}
-            >
-              {isUnlocked ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>الصوت مفعّل</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#F6D884] shrink-0" />
-                  <span>تفعيل الصوت</span>
-                </>
-              )}
-            </button>
-
-            {/* 3. تغيير الخلفية */}
-            <button
-              type="button"
-              onClick={onOpenBackgroundPicker}
-              title="تغيير خلفية المساجد"
-              className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/45 hover:border-[#F6D884] hover:from-[#0F3327] text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
-            >
-              <ImageIcon className="w-3.5 h-3.5 text-[#F6D884] shrink-0" />
-              <span>تغيير الخلفية</span>
-            </button>
-
-            {/* 4. الثيم الزمردي */}
-            <button
-              type="button"
-              onClick={onCycleTheme}
-              title={`تبديل المظهر الحالي (${activeThemeDef.nameAr})`}
-              className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/45 hover:border-[#F6D884] hover:from-[#0F3327] text-slate-100 hover:text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
-            >
-              <Palette className="w-3.5 h-3.5 text-[#34D399] shrink-0" />
-              <span>{activeThemeDef.nameAr}</span>
-            </button>
-
-            {/* 5. وضع العرض */}
+            {/* 1. وضع العرض */}
             {(onOpenStandbyMode || onToggleTvMode) && (
               <button
                 type="button"
@@ -382,20 +272,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* 6. الودجات */}
-            {onOpenWidgetsStudio && (
-              <button
-                type="button"
-                onClick={onOpenWidgetsStudio}
-                title="الودجات واختصارات الشاشة"
-                className="min-h-[40px] px-3.5 py-2 rounded-full bg-gradient-to-b from-[#0C281F] to-[#05140F] border border-[#CFA632]/45 hover:border-[#F6D884] hover:from-[#0F3327] text-slate-100 hover:text-[#F6D884] text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-95 shadow-[0_4px_12px_rgba(0,0,0,0.35)]"
-              >
-                <span aria-hidden="true" className="leading-none text-sm">📱</span>
-                <span>الودجات</span>
-              </button>
-            )}
-
-            {/* 7. الأدعية */}
+            {/* 3. الأدعية */}
             {onOpenIstikharaHajah && (
               <button
                 type="button"
@@ -834,70 +711,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-1.5">
-              <button
-                onClick={handleUnlockAudio}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-semibold border transition-all whitespace-nowrap shrink-0 ${
-                  isUnlocked
-                    ? 'bg-emerald-950/75 border-emerald-500/60 text-emerald-300'
-                    : 'bg-[#05221c] border-[#e5b869]/30 text-[#fbbf24] hover:bg-[#072f27]'
-                }`}
-                title="تفعيل إذن الصوت في المتصفح"
-              >
-                {isUnlocked ? (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>الصوت مفعّل</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#fbbf24]" />
-                    <span>تفعيل الصوت</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={handleToggleAdhan}
-                title={playerState === 'playing' ? 'إيقاف الأذان' : 'سماع الأذان الحقيقي (MP3)'}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl transition-all text-xs font-semibold border whitespace-nowrap shrink-0 ${
-                  playerState === 'playing'
-                    ? 'bg-rose-600 border-rose-500 text-white shadow-md shadow-rose-950/50'
-                    : 'bg-[#05221c] border-emerald-600/40 text-emerald-300 hover:bg-[#072f27]'
-                }`}
-              >
-                {playerState === 'playing' ? (
-                  <>
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    <span>إيقاف الأذان</span>
-                  </>
-                ) : (
-                  <>
-                    <Volume2 className="w-3.5 h-3.5" />
-                    <span>سماع الأذان</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={onCycleTheme}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  onOpenBackgroundPicker();
-                }}
-                title={
-                  autoThemeStatusBadge
-                    ? `${autoThemeStatusBadge} — انقر للتبديل اليدوي للمظهر أو بالزر الأيمن لخلفيات المساجد`
-                    : `التبديل السريع للمظهر (${activeThemeDef.nameAr}) — اضغط بالزر الأيمن لخلفيات المساجد`
-                }
-                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-[#05221c] text-slate-200 hover:bg-[#072f27] transition-colors text-xs font-semibold border border-[#e5b869]/30 whitespace-nowrap shrink-0"
-              >
-                <ImageIcon className="w-3.5 h-3.5 text-[#fbbf24]" />
-                <span>
-                  خلفيات المساجد · {activeThemeDef.nameAr}
-                  {autoThemeStatusBadge ? (autoThemeStatusBadge.startsWith('☀️') ? ' · ☀️' : ' · 🌙') : ''}
-                </span>
-              </button>
-
               {(onOpenStandbyMode || onToggleTvMode) && (
                 <button
                   type="button"
@@ -919,18 +732,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <span className="leading-none">🤲</span>
                   <span>الاستخارة والحاجة</span>
-                </button>
-              )}
-
-              {onOpenWidgetsStudio && (
-                <button
-                  type="button"
-                  onClick={onOpenWidgetsStudio}
-                  title="استوديو الودجات واختصارات الشاشة الرئيسية وشاشة القفل"
-                  className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-[#111C18] text-[#F3CA63] hover:bg-[#172822] transition-all border border-[#D4AF37]/45 text-xs font-bold whitespace-nowrap shrink-0"
-                >
-                  <span className="leading-none">📱</span>
-                  <span>الودجات</span>
                 </button>
               )}
 

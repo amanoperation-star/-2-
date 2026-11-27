@@ -11,6 +11,7 @@ import android.os.VibrationEffect;
 import android.os.Build;
 import androidx.core.content.ContextCompat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 import org.json.JSONArray;
@@ -18,13 +19,19 @@ import org.json.JSONObject;
 
 public class BackgroundAlarmReceiver extends BroadcastReceiver {
     public static final String ACTION_EXACT_ADHAN_ALARM = "com.almawaqeet.mihrab.ACTION_EXACT_ADHAN_ALARM";
+    public static final String ACTION_PRE_ADHAN_ALARM = "com.almawaqeet.mihrab.ACTION_PRE_ADHAN_ALARM";
+    public static final String ACTION_IQAMA_ALARM = "com.almawaqeet.mihrab.ACTION_IQAMA_ALARM";
     public static final String ACTION_SALAWAT_ALARM = "com.almawaqeet.mihrab.ACTION_SALAWAT_ALARM";
     public static final String ACTION_PERIODIC_REMINDER_ALARM = "com.almawaqeet.mihrab.ACTION_PERIODIC_REMINDER_ALARM";
     public static final String ACTION_STOP_AUDIO_SERVICE = "com.almawaqeet.mihrab.ACTION_STOP_AUDIO_SERVICE";
 
     private static final String KEY_SALAWAT_ROTATE_IDX = "salawat_rotate_idx";
+    private static final String KEY_PRE_ADHAN_ROTATE_IDX = "pre_adhan_rotate_idx";
+    private static final String KEY_IQAMA_ROTATE_IDX = "iqama_rotate_idx";
     private static final String KEY_LAST_PERIODIC_ID = "last_periodic_id";
     private static final String KEY_LAST_ADHAN_FIRED_KEY = "last_adhan_fired_epoch_key";
+    private static final String KEY_LAST_PRE_ADHAN_FIRED_KEY = "last_pre_adhan_fired_epoch_key";
+    private static final String KEY_LAST_IQAMA_FIRED_KEY = "last_iqama_fired_epoch_key";
 
     private static final SalawatPreset[] SALAWAT_PRESETS = new SalawatPreset[] {
         new SalawatPreset(
@@ -71,6 +78,16 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
 
         if (ACTION_EXACT_ADHAN_ALARM.equals(action)) {
             handleAdhanAlarm(context, intent, false);
+            return;
+        }
+
+        if (ACTION_PRE_ADHAN_ALARM.equals(action)) {
+            handlePreAdhanAlarm(context, intent);
+            return;
+        }
+
+        if (ACTION_IQAMA_ALARM.equals(action)) {
+            handleIqamaAlarm(context, intent);
             return;
         }
 
@@ -127,6 +144,8 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
         PrayerNotificationHelper.cancelAdhanNotification(context);
         PrayerNotificationHelper.cancelSalawatNotification(context);
+        PrayerNotificationHelper.cancelPreAdhanNotification(context);
+        PrayerNotificationHelper.cancelIqamaNotification(context);
     }
 
     private static void handleAdhanAlarm(Context context, Intent intent, boolean isTest) {
@@ -200,11 +219,14 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             }
         }
 
-        if (!isTest && (!notificationsEnabled || "sunrise".equals(prayerKey))) {
-            PrayerWidgetHelper.updateAllWidgets(context);
-            PrayerNotificationHelper.refreshOngoingNotification(context);
-            BackgroundReminderScheduler.scheduleAll(context);
-            return;
+        if (!isTest) {
+            boolean quietSuppressed = isQuietModeSuppressingPrayer(root, prayerKey, System.currentTimeMillis());
+            if (!notificationsEnabled || "sunrise".equals(prayerKey) || quietSuppressed) {
+                PrayerWidgetHelper.updateAllWidgets(context);
+                PrayerNotificationHelper.refreshOngoingNotification(context);
+                BackgroundReminderScheduler.scheduleAll(context);
+                return;
+            }
         }
 
         // If user is actively viewing Mihrab right now (not locked/closed), hand off to React FullScreenAdhanModal
@@ -332,7 +354,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             BackgroundReminderScheduler.scheduleNextSalawat(context);
         }
 
-        if (!isTest && (!enabled || meetingMode)) {
+        if (!isTest && (!enabled || meetingMode || isQuietModeSuppressingGeneral(root, System.currentTimeMillis()))) {
             return;
         }
 
@@ -354,16 +376,11 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             ContextCompat.startForegroundService(context, serviceIntent);
         } catch (Exception ignored) {
             // fallback to posting visual notification if foreground service blocked
-            if (PrayerNotificationHelper.hasNotificationPermission(context)) {
-                androidx.core.app.NotificationManagerCompat.from(context).notify(
-                    PrayerNotificationHelper.SALAWAT_NOTIFICATION_ID,
-                    PrayerNotificationHelper.buildSalawatNotification(
-                        context,
-                        preset.sheikhNameAr,
-                        preset.formulaAr
-                    )
-                );
-            }
+            PrayerNotificationHelper.showSalawatNotification(
+                context,
+                preset.sheikhNameAr,
+                preset.formulaAr
+            );
         }
     }
 
@@ -408,6 +425,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
 
         if (!isTest && !enabled) return;
+        if (!isTest && isQuietModeSuppressingGeneral(root, System.currentTimeMillis())) return;
         if (!isTest && BackgroundReminderScheduler.isNowWithinPeriodicQuietHours(context)) return;
         if (!isTest && MainActivity.isAppInForeground) return;
 
@@ -531,9 +549,332 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         return chosen;
     }
 
-    private static SalawatPreset resolveSalawatPreset(Context context, String voiceMode) {
+    private static final SalawatPreset[] PRE_ADHAN_PRESETS = new SalawatPreset[] {
+        new SalawatPreset("mishary", "الشيخ مشاري راشد العفاسي", "", "/audio/prayer-alert-mishary.mp3"),
+        new SalawatPreset("dosari", "الشيخ ياسر الدوسري", "", "/audio/prayer-alert-dosari.mp3"),
+        new SalawatPreset("muaiqly", "الشيخ ماهر المعيقلي", "", "/audio/prayer-alert-muaiqly.mp3"),
+        new SalawatPreset("minshawi", "الشيخ محمد صديق المنشاوي", "", "/audio/prayer-alert-minshawi.mp3"),
+        new SalawatPreset("abdulbasit", "الشيخ عبد الباسط عبد الصمد", "", "/audio/prayer-alert-abdulbasit.mp3"),
+        new SalawatPreset("qatami", "الشيخ ناصر القطامي", "", "/audio/prayer-alert-qatami.mp3"),
+    };
+
+    private static final SalawatPreset[] IQAMA_PRESETS = new SalawatPreset[] {
+        new SalawatPreset("basnawi", "الشيخ أحمد بصنوي (الحرم المكي)", "", "/audio/iqama-basnawi.mp3"),
+        new SalawatPreset("hadrawi", "الشيخ فاروق حضراوي (الحرم المكي)", "", "/audio/iqama-hadrawi.mp3"),
+        new SalawatPreset("majed_abbas", "الشيخ ماجد العباس (الحرم المكي)", "", "/audio/iqama-majed-abbas.mp3"),
+        new SalawatPreset("madinah_haram", "إقامة المسجد النبوي الشريف", "", "/audio/iqama-madinah.m4a"),
+        new SalawatPreset("faisal_labban", "الشيخ فيصل اللبان", "", "/audio/iqama-faisal-labban.mp3"),
+        new SalawatPreset("makkah_classic", "إقامة الحرمين المأثورة", "", "/audio/iqama-classic.mp3"),
+    };
+
+    private static void handlePreAdhanAlarm(Context context, Intent intent) {
+        SharedPreferences widgetPrefs = context.getSharedPreferences(
+            PrayerWidgetHelper.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        String rawJson = widgetPrefs.getString(PrayerWidgetHelper.KEY_PAYLOAD_JSON, null);
+        JSONObject root = null;
+        try {
+            if (rawJson != null && !rawJson.isEmpty()) {
+                root = new JSONObject(rawJson);
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        long targetEpochMs = intent.getLongExtra("target_epoch_ms", 0L);
+        BackgroundReminderScheduler.scheduleNextPreAdhanAfter(context, targetEpochMs);
+
+        String prayerKey = intent.getStringExtra("prayer_key");
+        String prayerNameAr = intent.getStringExtra("prayer_name");
+        int reminderMins = intent.getIntExtra("reminder_minutes", 10);
+        String cityNameAr = intent.getStringExtra("city_name");
+
+        if (prayerKey == null || prayerKey.isEmpty()) prayerKey = "dhuhr";
+        if (prayerNameAr == null || prayerNameAr.isEmpty()) prayerNameAr = "الصلاة";
+        if (cityNameAr == null || cityNameAr.isEmpty()) cityNameAr = "القاهرة";
+
+        SharedPreferences statePrefs = context.getSharedPreferences(
+            BackgroundReminderScheduler.STATE_PREFS,
+            Context.MODE_PRIVATE
+        );
+        String dedupeKey = prayerKey + "_" + targetEpochMs;
+        if (targetEpochMs > 0L && dedupeKey.equals(statePrefs.getString(KEY_LAST_PRE_ADHAN_FIRED_KEY, ""))) {
+            return;
+        }
+        statePrefs.edit().putString(KEY_LAST_PRE_ADHAN_FIRED_KEY, dedupeKey).apply();
+
+        boolean notificationsEnabled = true;
+        boolean meetingMode = false;
+        boolean soundEnabled = true;
+        String voiceMode = "rotate";
+        float volume = 1.0f;
+
+        if (root != null) {
+            JSONObject audio = root.optJSONObject("audioSettings");
+            if (audio != null) {
+                notificationsEnabled = audio.optBoolean("notificationsEnabled", true);
+                meetingMode = audio.optBoolean("meetingModeEnabled", false);
+                volume = (float) audio.optDouble("volume", 1.0);
+            }
+            JSONObject preAdhan = root.optJSONObject("preAdhanSettings");
+            if (preAdhan != null) {
+                soundEnabled = preAdhan.optBoolean("soundEnabled", true);
+                voiceMode = preAdhan.optString("voiceMode", "rotate");
+            }
+        }
+
+        if (
+            (!notificationsEnabled && !soundEnabled)
+                || isQuietModeSuppressingPrayer(root, prayerKey, System.currentTimeMillis())
+        ) {
+            return;
+        }
+
+        if (MainActivity.isAppInForeground) {
+            return;
+        }
+
+        SalawatPreset preset = resolveRotatingPreset(
+            context,
+            voiceMode,
+            PRE_ADHAN_PRESETS,
+            KEY_PRE_ADHAN_ROTATE_IDX
+        );
+
+        if (meetingMode || !soundEnabled) {
+            if (meetingMode) {
+                triggerGentleVibration(context);
+            }
+            if (notificationsEnabled) {
+                PrayerNotificationHelper.showPreAdhanNotification(
+                    context,
+                    prayerNameAr,
+                    reminderMins,
+                    cityNameAr,
+                    meetingMode ? "وضع الاجتماع الصامت" : ""
+                );
+            }
+            return;
+        }
+
+        Intent serviceIntent = new Intent(context, MihrabAudioService.class);
+        serviceIntent.setAction(MihrabAudioService.ACTION_PLAY_PRE_ADHAN);
+        serviceIntent.putExtra("prayer_name", prayerNameAr);
+        serviceIntent.putExtra("reminder_minutes", reminderMins);
+        serviceIntent.putExtra("city_name", cityNameAr);
+        serviceIntent.putExtra("sheikh_name", preset.sheikhNameAr);
+        serviceIntent.putExtra("asset_path", preset.assetPath);
+        serviceIntent.putExtra("fallback_asset_path", "/audio/prayer-alert-mishary.mp3");
+        serviceIntent.putExtra("volume", volume);
+
+        try {
+            ContextCompat.startForegroundService(context, serviceIntent);
+        } catch (Exception ignored) {
+            if (notificationsEnabled) {
+                PrayerNotificationHelper.showPreAdhanNotification(
+                    context,
+                    prayerNameAr,
+                    reminderMins,
+                    cityNameAr,
+                    preset.sheikhNameAr
+                );
+            }
+        }
+    }
+
+    private static void handleIqamaAlarm(Context context, Intent intent) {
+        SharedPreferences widgetPrefs = context.getSharedPreferences(
+            PrayerWidgetHelper.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        String rawJson = widgetPrefs.getString(PrayerWidgetHelper.KEY_PAYLOAD_JSON, null);
+        JSONObject root = null;
+        try {
+            if (rawJson != null && !rawJson.isEmpty()) {
+                root = new JSONObject(rawJson);
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        BackgroundReminderScheduler.scheduleNextIqama(context);
+
+        String prayerKey = intent.getStringExtra("prayer_key");
+        String prayerNameAr = intent.getStringExtra("prayer_name");
+        String cityNameAr = intent.getStringExtra("city_name");
+        String mosqueTheme = intent.getStringExtra("mosque_theme");
+        long targetEpochMs = intent.getLongExtra("target_epoch_ms", 0L);
+
+        if (prayerKey == null || prayerKey.isEmpty()) prayerKey = "dhuhr";
+        if (prayerNameAr == null || prayerNameAr.isEmpty()) prayerNameAr = "الصلاة";
+        if (cityNameAr == null || cityNameAr.isEmpty()) cityNameAr = "القاهرة";
+        if (mosqueTheme == null || mosqueTheme.isEmpty()) mosqueTheme = "auto";
+
+        SharedPreferences statePrefs = context.getSharedPreferences(
+            BackgroundReminderScheduler.STATE_PREFS,
+            Context.MODE_PRIVATE
+        );
+        String dedupeKey = prayerKey + "_" + targetEpochMs;
+        if (targetEpochMs > 0L && dedupeKey.equals(statePrefs.getString(KEY_LAST_IQAMA_FIRED_KEY, ""))) {
+            return;
+        }
+        statePrefs.edit().putString(KEY_LAST_IQAMA_FIRED_KEY, dedupeKey).apply();
+
+        boolean notificationsEnabled = true;
+        boolean meetingMode = false;
+        boolean autoPlayEnabled = true;
+        String voiceMode = "rotate";
+        float volume = 1.0f;
+
+        if (root != null) {
+            JSONObject audio = root.optJSONObject("audioSettings");
+            if (audio != null) {
+                notificationsEnabled = audio.optBoolean("notificationsEnabled", true);
+                meetingMode = audio.optBoolean("meetingModeEnabled", false);
+                volume = (float) audio.optDouble("volume", 1.0);
+            }
+            JSONObject iqama = root.optJSONObject("iqamaSettings");
+            if (iqama != null) {
+                autoPlayEnabled = iqama.optBoolean("autoPlayEnabled", true);
+                voiceMode = iqama.optString("voiceMode", "rotate");
+            }
+        }
+
+        if (
+            (!notificationsEnabled && !autoPlayEnabled)
+                || isQuietModeSuppressingPrayer(root, prayerKey, System.currentTimeMillis())
+        ) {
+            return;
+        }
+
+        if (MainActivity.isAppInForeground) {
+            return;
+        }
+
+        SalawatPreset preset = resolveRotatingPreset(
+            context,
+            voiceMode,
+            IQAMA_PRESETS,
+            KEY_IQAMA_ROTATE_IDX
+        );
+
+        if (meetingMode || !autoPlayEnabled) {
+            if (meetingMode) {
+                triggerGentleVibration(context);
+            }
+            if (notificationsEnabled && PrayerNotificationHelper.hasNotificationPermission(context)) {
+                androidx.core.app.NotificationManagerCompat.from(context).notify(
+                    PrayerNotificationHelper.IQAMA_NOTIFICATION_ID,
+                    PrayerNotificationHelper.buildIqamaNotification(
+                        context,
+                        prayerKey,
+                        prayerNameAr,
+                        cityNameAr,
+                        meetingMode ? "وضع الاجتماع الصامت" : "",
+                        mosqueTheme
+                    )
+                );
+            }
+            return;
+        }
+
+        Intent serviceIntent = new Intent(context, MihrabAudioService.class);
+        serviceIntent.setAction(MihrabAudioService.ACTION_PLAY_IQAMA);
+        serviceIntent.putExtra("prayer_key", prayerKey);
+        serviceIntent.putExtra("prayer_name", prayerNameAr);
+        serviceIntent.putExtra("city_name", cityNameAr);
+        serviceIntent.putExtra("sheikh_name", preset.sheikhNameAr);
+        serviceIntent.putExtra("mosque_theme", mosqueTheme);
+        serviceIntent.putExtra("asset_path", preset.assetPath);
+        serviceIntent.putExtra("fallback_asset_path", "/audio/iqama-classic.mp3");
+        serviceIntent.putExtra("volume", volume);
+
+        try {
+            ContextCompat.startForegroundService(context, serviceIntent);
+        } catch (Exception ignored) {
+            if (notificationsEnabled && PrayerNotificationHelper.hasNotificationPermission(context)) {
+                androidx.core.app.NotificationManagerCompat.from(context).notify(
+                    PrayerNotificationHelper.IQAMA_NOTIFICATION_ID,
+                    PrayerNotificationHelper.buildIqamaNotification(
+                        context,
+                        prayerKey,
+                        prayerNameAr,
+                        cityNameAr,
+                        preset.sheikhNameAr,
+                        mosqueTheme
+                    )
+                );
+            }
+        }
+    }
+
+    private static boolean isQuietNow(JSONObject quietMode, long nowMs) {
+        if (quietMode == null) return false;
+        if (quietMode.optBoolean("manualActive", false)) return true;
+        long pauseUntilMs = quietMode.optLong("pauseUntilMs", 0L);
+        if (pauseUntilMs > nowMs) return true;
+        JSONArray schedules = quietMode.optJSONArray("schedules");
+        if (schedules != null) {
+            Calendar cal = Calendar.getInstance();
+            cal.setTimeInMillis(nowMs);
+            int nowMin = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
+            for (int i = 0; i < schedules.length(); i++) {
+                JSONObject slot = schedules.optJSONObject(i);
+                if (slot == null || !slot.optBoolean("enabled", false)) continue;
+                int startMin = parseQuietHHmm(slot.optString("startTime", "23:00"), 23 * 60);
+                int endMin = parseQuietHHmm(slot.optString("endTime", "06:00"), 6 * 60);
+                if (startMin == endMin) return true;
+                if (startMin < endMin) {
+                    if (nowMin >= startMin && nowMin < endMin) return true;
+                } else {
+                    if (nowMin >= startMin || nowMin < endMin) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static int parseQuietHHmm(String hhmm, int fallback) {
+        if (hhmm == null || !hhmm.contains(":")) return fallback;
+        try {
+            String[] parts = hhmm.trim().split(":");
+            int h = Math.max(0, Math.min(23, Integer.parseInt(parts[0])));
+            int m = Math.max(0, Math.min(59, Integer.parseInt(parts[1])));
+            return h * 60 + m;
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    private static boolean isQuietModeSuppressingGeneral(JSONObject root, long nowMs) {
+        if (root == null) return false;
+        JSONObject quietMode = root.optJSONObject("quietMode");
+        return isQuietNow(quietMode, nowMs);
+    }
+
+    private static boolean isQuietModeSuppressingPrayer(JSONObject root, String prayerKey, long nowMs) {
+        if (root == null) return false;
+        JSONObject quietMode = root.optJSONObject("quietMode");
+        if (!isQuietNow(quietMode, nowMs)) return false;
+        String policy = quietMode != null ? quietMode.optString("exceptionPolicy", "fajr_only") : "fajr_only";
+        if ("all_adhan".equals(policy)) {
+            return "sunrise".equals(prayerKey);
+        }
+        if ("fajr_only".equals(policy)) {
+            return !"fajr".equals(prayerKey);
+        }
+        return true;
+    }
+
+    private static SalawatPreset resolveRotatingPreset(
+        Context context,
+        String voiceMode,
+        SalawatPreset[] presets,
+        String prefsKey
+    ) {
         if (voiceMode != null && !"rotate".equals(voiceMode)) {
-            for (SalawatPreset preset : SALAWAT_PRESETS) {
+            for (SalawatPreset preset : presets) {
                 if (preset.id.equals(voiceMode)) {
                     return preset;
                 }
@@ -543,10 +884,14 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             BackgroundReminderScheduler.STATE_PREFS,
             Context.MODE_PRIVATE
         );
-        int idx = state.getInt(KEY_SALAWAT_ROTATE_IDX, 0);
-        SalawatPreset chosen = SALAWAT_PRESETS[Math.abs(idx) % SALAWAT_PRESETS.length];
-        state.edit().putInt(KEY_SALAWAT_ROTATE_IDX, (idx + 1) % SALAWAT_PRESETS.length).apply();
+        int idx = state.getInt(prefsKey, 0);
+        SalawatPreset chosen = presets[Math.abs(idx) % presets.length];
+        state.edit().putInt(prefsKey, (idx + 1) % presets.length).apply();
         return chosen;
+    }
+
+    private static SalawatPreset resolveSalawatPreset(Context context, String voiceMode) {
+        return resolveRotatingPreset(context, voiceMode, SALAWAT_PRESETS, KEY_SALAWAT_ROTATE_IDX);
     }
 
     private static void triggerGentleVibration(Context context) {

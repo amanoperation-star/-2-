@@ -271,7 +271,10 @@ export const CompanionHubSection: React.FC<CompanionHubSectionProps> = ({
   };
 
   useEffect(() => {
+    const onStopMedia = () => stopRuqyahPlayback();
+    window.addEventListener('mihrab_stop_background_media', onStopMedia);
     return () => {
+      window.removeEventListener('mihrab_stop_background_media', onStopMedia);
       stopRuqyahPlayback();
       if (wakeLockRef.current) {
         wakeLockRef.current.release?.().catch(() => {});

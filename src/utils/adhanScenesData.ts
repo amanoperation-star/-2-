@@ -3,6 +3,8 @@ import madinahNabawiImg from '../assets/images/adhan_madinah_nabawi_179570525428
 import aqsaQudsImg from '../assets/images/adhan_aqsa_quds_1795705255663.jpg';
 import azharCairoImg from '../assets/images/adhan_azhar_cairo_1795705255105.jpg';
 import zayedIstanbulImg from '../assets/images/adhan_zayed_istanbul_1795705255830.jpg';
+import husseinCairoImg from '../assets/images/mosque_hussein_cairo_1795814383755.jpg';
+import qatarDohaImg from '../assets/images/mosque_qatar_doha_1795814384029.jpg';
 import { PrayerName } from '../types';
 
 export type AdhanMosqueSceneId =
@@ -11,6 +13,60 @@ export type AdhanMosqueSceneId =
   | 'aqsa_quds'
   | 'azhar_cairo'
   | 'zayed_istanbul';
+
+export type HeroMosqueSceneId =
+  | 'kaaba'
+  | 'madinah'
+  | 'azhar'
+  | 'hussein'
+  | 'uae'
+  | 'qatar';
+
+export interface HeroMosqueBackdrop {
+  id: HeroMosqueSceneId;
+  imageUrl: string;
+  cameraClass: AdhanCameraPreset;
+  cssFallback: string;
+}
+
+export const HERO_MOSQUE_BACKDROPS: HeroMosqueBackdrop[] = [
+  {
+    id: 'kaaba',
+    imageUrl: makkahHaramImg,
+    cameraClass: 'adhan-pan-zoom',
+    cssFallback: 'radial-gradient(circle at 50% 45%, #0a3628 0%, #04120D 90%)',
+  },
+  {
+    id: 'madinah',
+    imageUrl: madinahNabawiImg,
+    cameraClass: 'adhan-pan-left',
+    cssFallback: 'radial-gradient(circle at 50% 45%, #0a3b2c 0%, #04120D 90%)',
+  },
+  {
+    id: 'azhar',
+    imageUrl: azharCairoImg,
+    cameraClass: 'adhan-drift-arc',
+    cssFallback: 'radial-gradient(circle at 50% 45%, #1c2c20 0%, #04120D 90%)',
+  },
+  {
+    id: 'hussein',
+    imageUrl: husseinCairoImg,
+    cameraClass: 'adhan-pan-right',
+    cssFallback: 'radial-gradient(circle at 50% 45%, #182722 0%, #04120D 90%)',
+  },
+  {
+    id: 'uae',
+    imageUrl: zayedIstanbulImg,
+    cameraClass: 'adhan-rise-glow',
+    cssFallback: 'radial-gradient(circle at 50% 45%, #0c2c26 0%, #04120D 90%)',
+  },
+  {
+    id: 'qatar',
+    imageUrl: qatarDohaImg,
+    cameraClass: 'adhan-pan-zoom',
+    cssFallback: 'radial-gradient(circle at 50% 45%, #122620 0%, #04120D 90%)',
+  },
+];
 
 export type AdhanMotionStyle = 'hybrid' | 'video' | 'cinematic';
 

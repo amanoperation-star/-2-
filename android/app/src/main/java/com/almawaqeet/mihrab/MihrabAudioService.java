@@ -19,6 +19,8 @@ import androidx.core.app.ServiceCompat;
 public class MihrabAudioService extends Service {
     public static final String ACTION_PLAY_ADHAN = "com.almawaqeet.mihrab.SERVICE_PLAY_ADHAN";
     public static final String ACTION_PLAY_SALAWAT = "com.almawaqeet.mihrab.SERVICE_PLAY_SALAWAT";
+    public static final String ACTION_PLAY_PRE_ADHAN = "com.almawaqeet.mihrab.SERVICE_PLAY_PRE_ADHAN";
+    public static final String ACTION_PLAY_IQAMA = "com.almawaqeet.mihrab.SERVICE_PLAY_IQAMA";
     public static final String ACTION_STOP = "com.almawaqeet.mihrab.SERVICE_STOP";
 
     private MediaPlayer mediaPlayer;
@@ -102,6 +104,62 @@ public class MihrabAudioService extends Service {
             acquireTimedWakeLock(90 * 1000L);
             scheduleSafetyStop(65 * 1000L, false);
             playAssetWithFallback(primaryAsset, fallbackAsset, AudioAttributes.USAGE_MEDIA, false);
+            return START_NOT_STICKY;
+        }
+
+        if (ACTION_PLAY_PRE_ADHAN.equals(action)) {
+            currentMode = "pre_adhan";
+            String prayerNameAr = intent.getStringExtra("prayer_name");
+            int reminderMinutes = intent.getIntExtra("reminder_minutes", 10);
+            String cityNameAr = intent.getStringExtra("city_name");
+            String sheikhName = intent.getStringExtra("sheikh_name");
+            String primaryAsset = intent.getStringExtra("asset_path");
+            String fallbackAsset = intent.getStringExtra("fallback_asset_path");
+            autoDuaAfterAdhan = false;
+            pendingDuaAssetPath = "";
+            currentVolume = Math.max(0.15f, Math.min(1.0f, intent.getFloatExtra("volume", 1.0f)));
+
+            Notification notification = PrayerNotificationHelper.buildPreAdhanNotification(
+                this,
+                prayerNameAr != null ? prayerNameAr : "الصلاة",
+                reminderMinutes,
+                cityNameAr != null ? cityNameAr : "مواقيت الصلاة",
+                sheikhName != null ? sheikhName : ""
+            );
+            promoteForeground(PrayerNotificationHelper.PRE_ADHAN_NOTIFICATION_ID, notification);
+
+            acquireTimedWakeLock(90 * 1000L);
+            scheduleSafetyStop(65 * 1000L, false);
+            playAssetWithFallback(primaryAsset, fallbackAsset, AudioAttributes.USAGE_ALARM, false);
+            return START_NOT_STICKY;
+        }
+
+        if (ACTION_PLAY_IQAMA.equals(action)) {
+            currentMode = "iqama";
+            String prayerKey = intent.getStringExtra("prayer_key");
+            String prayerNameAr = intent.getStringExtra("prayer_name");
+            String cityNameAr = intent.getStringExtra("city_name");
+            String sheikhName = intent.getStringExtra("sheikh_name");
+            String mosqueTheme = intent.getStringExtra("mosque_theme");
+            String primaryAsset = intent.getStringExtra("asset_path");
+            String fallbackAsset = intent.getStringExtra("fallback_asset_path");
+            autoDuaAfterAdhan = false;
+            pendingDuaAssetPath = "";
+            currentVolume = Math.max(0.15f, Math.min(1.0f, intent.getFloatExtra("volume", 1.0f)));
+
+            Notification notification = PrayerNotificationHelper.buildIqamaNotification(
+                this,
+                prayerKey != null ? prayerKey : "dhuhr",
+                prayerNameAr != null ? prayerNameAr : "الصلاة",
+                cityNameAr != null ? cityNameAr : "مواقيت الصلاة",
+                sheikhName != null ? sheikhName : "",
+                mosqueTheme != null ? mosqueTheme : "auto"
+            );
+            promoteForeground(PrayerNotificationHelper.IQAMA_NOTIFICATION_ID, notification);
+
+            acquireTimedWakeLock(2 * 60 * 1000L);
+            scheduleSafetyStop(95 * 1000L, false);
+            playAssetWithFallback(primaryAsset, fallbackAsset, AudioAttributes.USAGE_ALARM, false);
             return START_NOT_STICKY;
         }
 
@@ -233,9 +291,13 @@ public class MihrabAudioService extends Service {
         try {
             AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
             if (am != null) {
+                boolean isAlarmMode =
+                    "adhan".equals(currentMode)
+                        || "iqama".equals(currentMode)
+                        || "pre_adhan".equals(currentMode);
                 am.requestAudioFocus(
                     null,
-                    "adhan".equals(currentMode) ? AudioManager.STREAM_ALARM : AudioManager.STREAM_MUSIC,
+                    isAlarmMode ? AudioManager.STREAM_ALARM : AudioManager.STREAM_MUSIC,
                     AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
                 );
             }

@@ -15,13 +15,26 @@ import {
 } from './sunnahRawatibData';
 import { calculatePrayerTimes } from './prayerCalculator';
 import { syncNativeAndroidWidgetData } from './nativeAndroidBridge';
-import { getAdhanSource, getDuaSource } from './audioAdhan';
+import {
+  IQAMA_SHEIKH_VOICES,
+  PRE_ADHAN_SHEIKH_VOICES,
+  getAdhanSource,
+  getDuaSource,
+} from './audioAdhan';
 import { PERIODIC_VERSES_AND_HADITHS } from './islamicData';
+import { calculateDuhaSchedule } from './duhaSunriseData';
+import { QuietModeState, evaluateQuietMode, loadQuietModeState } from './quietModeData';
+import makkahHaramImg from '../assets/images/adhan_makkah_haram_1795705254443.jpg';
+import madinahNabawiImg from '../assets/images/adhan_madinah_nabawi_1795705254283.jpg';
+import aqsaQudsImg from '../assets/images/adhan_aqsa_quds_1795705255663.jpg';
+import azharCairoImg from '../assets/images/adhan_azhar_cairo_1795705255105.jpg';
 
-export type WidgetThemeId = 'emerald' | 'glass' | 'oled';
-export type WidgetSizeId = 'lock_pill' | 'medium' | 'large';
+export type WidgetThemeId = 'emerald' | 'glass' | 'oled' | 'parchment' | 'royal_gold';
+export type WidgetSizeId = 'lock_pill' | 'medium' | 'large' | 'spiritual_card';
 export type PhoneSimulatorSurface = 'lock' | 'home';
 export type WidgetRefreshInterval = '1s' | '1m';
+export type WidgetFontScale = 'sm' | 'md' | 'lg';
+export type WidgetMosqueBackgroundId = 'none' | 'makkah' | 'madinah' | 'aqsa' | 'azhar';
 
 export interface WidgetStudioConfig {
   autoSync: boolean;
@@ -32,6 +45,14 @@ export interface WidgetStudioConfig {
   showHijriDate: boolean;
   showSunnahWird: boolean;
   showFastingAlert: boolean;
+  showDailyInspiration: boolean;
+  showDuhaSunrise: boolean;
+  showQuietAndLastThird: boolean;
+  showQuickActions: boolean;
+  showDayProgressRings: boolean;
+  mosqueBackgroundId: WidgetMosqueBackgroundId;
+  mosqueBgOpacity: number;
+  fontScale: WidgetFontScale;
   refreshInterval: WidgetRefreshInterval;
 }
 
@@ -78,6 +99,21 @@ export interface WidgetBridgePayload {
     reminderMessage: string | null;
     suhoorTimeStr: string;
   };
+  duhaSunrise?: {
+    sunriseStr: string;
+    ishraqStartStr: string;
+    bestDuhaStr: string;
+    duhaEndStr: string;
+    statusLabelAr: string;
+  };
+  quietMode?: {
+    isQuietNow: boolean;
+    statusLabelAr: string;
+    manualActive: boolean;
+    pauseUntilMs: number | null;
+    exceptionPolicy: QuietModeState['exceptionPolicy'];
+    schedules: QuietModeState['schedules'];
+  };
   widgetSettings: WidgetStudioConfig;
   notificationSettings: {
     stickyEnabled: boolean;
@@ -86,6 +122,7 @@ export interface WidgetBridgePayload {
   };
   audioSettings: {
     notificationsEnabled: boolean;
+    prayerAdhanEnabled: Record<string, boolean>;
     adhanReciter: string;
     fajrAdhanReciter: string;
     volume: number;
@@ -98,6 +135,26 @@ export interface WidgetBridgePayload {
     duaAssetUrl: string;
     adhanReciterNameAr: string;
     fajrAdhanReciterNameAr: string;
+  };
+  preAdhanSettings?: {
+    minutes: number;
+    soundEnabled: boolean;
+    voiceMode: string;
+    assetUrl: string;
+    sheikhNameAr: string;
+  };
+  iqamaSettings?: {
+    autoPlayEnabled: boolean;
+    voiceMode: string;
+    assetUrl: string;
+    sheikhNameAr: string;
+    minutes: {
+      fajr: number;
+      dhuhr: number;
+      asr: number;
+      maghrib: number;
+      isha: number;
+    };
   };
   backgroundReminders: {
     salawatEnabled: boolean;
@@ -117,6 +174,60 @@ export interface WidgetBridgePayload {
 
 export const WIDGET_STUDIO_STORAGE_KEY = 'al_mawaqeet_widget_studio_v1';
 export const MIHRAB_WIDGET_BRIDGE_KEY = 'mihrab_widget_bridge_data_v1';
+export const WIDGET_TASBIH_STORAGE_KEY = 'mihrab_widget_tasbih_v1';
+export const WIDGET_TASBIH_EVENT = 'mihrab_widget_tasbih_changed';
+
+export const WIDGET_TASBIH_PHRASES = [
+  'سبحان الله',
+  'الحمد لله',
+  'لا إله إلا الله',
+  'الله أكبر',
+  'أستغفر الله',
+  'اللهم صلِّ على محمد ﷺ',
+];
+
+export interface WidgetTasbihState {
+  dateKey: string;
+  count: number;
+  phraseIndex: number;
+}
+
+export function loadWidgetTasbihState(now: Date = new Date()): WidgetTasbihState {
+  const today = toLocalDateKey(now);
+  if (typeof window === 'undefined') {
+    return { dateKey: today, count: 0, phraseIndex: 0 };
+  }
+  try {
+    const raw = localStorage.getItem(WIDGET_TASBIH_STORAGE_KEY);
+    if (!raw) return { dateKey: today, count: 0, phraseIndex: 0 };
+    const parsed = JSON.parse(raw) as Partial<WidgetTasbihState>;
+    const phraseIndex =
+      typeof parsed.phraseIndex === 'number' &&
+      parsed.phraseIndex >= 0 &&
+      parsed.phraseIndex < WIDGET_TASBIH_PHRASES.length
+        ? parsed.phraseIndex
+        : 0;
+    const count =
+      parsed.dateKey === today && typeof parsed.count === 'number' && parsed.count >= 0
+        ? parsed.count
+        : 0;
+    return { dateKey: today, count, phraseIndex };
+  } catch {
+    return { dateKey: today, count: 0, phraseIndex: 0 };
+  }
+}
+
+export function saveWidgetTasbihState(next: WidgetTasbihState): WidgetTasbihState {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(WIDGET_TASBIH_STORAGE_KEY, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent(WIDGET_TASBIH_EVENT, { detail: next }));
+    } catch {
+      // ignore storage errors
+    }
+  }
+  return next;
+}
 
 export const DEFAULT_WIDGET_CONFIG: WidgetStudioConfig = {
   autoSync: true,
@@ -127,6 +238,14 @@ export const DEFAULT_WIDGET_CONFIG: WidgetStudioConfig = {
   showHijriDate: true,
   showSunnahWird: true,
   showFastingAlert: true,
+  showDailyInspiration: true,
+  showDuhaSunrise: false,
+  showQuietAndLastThird: true,
+  showQuickActions: true,
+  showDayProgressRings: true,
+  mosqueBackgroundId: 'none',
+  mosqueBgOpacity: 35,
+  fontScale: 'md',
   refreshInterval: '1s',
 };
 
@@ -154,6 +273,18 @@ export const WIDGET_THEMES: Array<{
     descAr: 'أسود عميق (#050807) موفّر للطاقة بحدود ذهبية دقيقة',
     swatchClass: 'bg-[#050807] border-[#D4AF37]/75',
   },
+  {
+    id: 'parchment',
+    nameAr: 'الورق الكريمي الفاتح',
+    descAr: 'خلفية ورقية كريمية مريحة للعين بخط زمردي وإطار ذهبي',
+    swatchClass: 'bg-[#FAF3E0] border-[#C49A3A]',
+  },
+  {
+    id: 'royal_gold',
+    nameAr: 'الذهبي الملكي الفاخر',
+    descAr: 'تدرج برونزي ليلي دافئ مزدان بزخارف ولمسات ذهبية ملكية',
+    swatchClass: 'bg-gradient-to-br from-[#2B1F08] to-[#120C03] border-[#F6D884]',
+  },
 ];
 
 export const WIDGET_SIZES: Array<{
@@ -166,21 +297,43 @@ export const WIDGET_SIZES: Array<{
     id: 'lock_pill',
     nameAr: 'شاشة القفل المصغّر',
     badgeAr: 'Lock Screen Pill',
-    descAr: 'كبسولة أفقية رفيعة تعرض أيقونة الصلاة القادمة، اسمها، والعدّاد التنازلي الحي فقط',
+    descAr: 'كبسولة أفقية رفيعة تعرض أيقونة الصلاة القادمة، اسمها، والعدّاد التنازلي الحي',
   },
   {
     id: 'medium',
     nameAr: 'محراب متوسط',
     badgeAr: '2×2 Mihrab Arch',
-    descAr: 'تصميم مقوّس على هيئة محراب مصغّر يعرض الصلاة القادمة ووقت الأذان وشريط التقدم',
+    descAr: 'تصميم مقوّس على هيئة محراب مصغّر يعرض الصلاة القادمة والإقامة والعناصر المختارة',
   },
   {
     id: 'large',
     nameAr: 'الجدول الكامل',
     badgeAr: '4×2 Full Prayer & Tracker',
-    descAr: 'جانبان: محراب الصلاة القادمة يميناً وجدول الصلوات الخمس يساراً مع شريط الوِرد والرواتب',
+    descAr: 'محراب الصلاة القادمة يميناً وجدول الصلوات الخمس يساراً مع مؤشرات الإنجاز والتذكير',
+  },
+  {
+    id: 'spiritual_card',
+    nameAr: 'بطاقة الأذكار والتسبيح والوِرد',
+    badgeAr: '4×2 Dhikr & Wird',
+    descAr: 'لوحة روحانية مخصصة للسبحة التفاعلية الحية وحلقات الإنجاز اليومي والآية المتجددة',
   },
 ];
+
+export const WIDGET_MOSQUE_BACKGROUNDS: Array<{
+  id: WidgetMosqueBackgroundId;
+  titleAr: string;
+  imageUrl: string | null;
+}> = [
+  { id: 'none', titleAr: 'بدون صورة', imageUrl: null },
+  { id: 'makkah', titleAr: 'المسجد الحرام', imageUrl: makkahHaramImg },
+  { id: 'madinah', titleAr: 'المسجد النبوي', imageUrl: madinahNabawiImg },
+  { id: 'aqsa', titleAr: 'المسجد الأقصى', imageUrl: aqsaQudsImg },
+  { id: 'azhar', titleAr: 'الجامع الأزهر', imageUrl: azharCairoImg },
+];
+
+export function getWidgetMosqueImageUrl(id: WidgetMosqueBackgroundId): string | null {
+  return WIDGET_MOSQUE_BACKGROUNDS.find((m) => m.id === id)?.imageUrl ?? null;
+}
 
 export function loadWidgetConfig(): WidgetStudioConfig {
   if (typeof window === 'undefined') return DEFAULT_WIDGET_CONFIG;
@@ -194,11 +347,18 @@ export function loadWidgetConfig(): WidgetStudioConfig {
           ? parsed.autoSync
           : DEFAULT_WIDGET_CONFIG.autoSync,
       theme:
-        parsed.theme === 'glass' || parsed.theme === 'oled' || parsed.theme === 'emerald'
+        parsed.theme === 'glass' ||
+        parsed.theme === 'oled' ||
+        parsed.theme === 'emerald' ||
+        parsed.theme === 'parchment' ||
+        parsed.theme === 'royal_gold'
           ? parsed.theme
           : DEFAULT_WIDGET_CONFIG.theme,
       size:
-        parsed.size === 'lock_pill' || parsed.size === 'medium' || parsed.size === 'large'
+        parsed.size === 'lock_pill' ||
+        parsed.size === 'medium' ||
+        parsed.size === 'large' ||
+        parsed.size === 'spiritual_card'
           ? parsed.size
           : DEFAULT_WIDGET_CONFIG.size,
       previewSurface:
@@ -221,6 +381,42 @@ export function loadWidgetConfig(): WidgetStudioConfig {
         typeof parsed.showFastingAlert === 'boolean'
           ? parsed.showFastingAlert
           : DEFAULT_WIDGET_CONFIG.showFastingAlert,
+      showDailyInspiration:
+        typeof parsed.showDailyInspiration === 'boolean'
+          ? parsed.showDailyInspiration
+          : DEFAULT_WIDGET_CONFIG.showDailyInspiration,
+      showDuhaSunrise:
+        typeof parsed.showDuhaSunrise === 'boolean'
+          ? parsed.showDuhaSunrise
+          : DEFAULT_WIDGET_CONFIG.showDuhaSunrise,
+      showQuietAndLastThird:
+        typeof parsed.showQuietAndLastThird === 'boolean'
+          ? parsed.showQuietAndLastThird
+          : DEFAULT_WIDGET_CONFIG.showQuietAndLastThird,
+      showQuickActions:
+        typeof parsed.showQuickActions === 'boolean'
+          ? parsed.showQuickActions
+          : DEFAULT_WIDGET_CONFIG.showQuickActions,
+      showDayProgressRings:
+        typeof parsed.showDayProgressRings === 'boolean'
+          ? parsed.showDayProgressRings
+          : DEFAULT_WIDGET_CONFIG.showDayProgressRings,
+      mosqueBackgroundId:
+        parsed.mosqueBackgroundId === 'makkah' ||
+        parsed.mosqueBackgroundId === 'madinah' ||
+        parsed.mosqueBackgroundId === 'aqsa' ||
+        parsed.mosqueBackgroundId === 'azhar' ||
+        parsed.mosqueBackgroundId === 'none'
+          ? parsed.mosqueBackgroundId
+          : DEFAULT_WIDGET_CONFIG.mosqueBackgroundId,
+      mosqueBgOpacity:
+        typeof parsed.mosqueBgOpacity === 'number' && Number.isFinite(parsed.mosqueBgOpacity)
+          ? Math.min(80, Math.max(15, parsed.mosqueBgOpacity))
+          : DEFAULT_WIDGET_CONFIG.mosqueBgOpacity,
+      fontScale:
+        parsed.fontScale === 'sm' || parsed.fontScale === 'md' || parsed.fontScale === 'lg'
+          ? parsed.fontScale
+          : DEFAULT_WIDGET_CONFIG.fontScale,
       refreshInterval:
         parsed.refreshInterval === '1m' || parsed.refreshInterval === '1s'
           ? parsed.refreshInterval
@@ -366,9 +562,23 @@ export function buildWidgetBridgePayload(params: {
     ashuraArafahEnabled: settings.fastingAshuraArafahEnabled,
   });
 
+  const duhaSchedule = calculateDuhaSchedule(prayerTimes.sunrise, prayerTimes.dhuhr, now);
+  const quietState = loadQuietModeState();
+  const quietEval = evaluateQuietMode(quietState, now);
+
   const adhanSource = getAdhanSource(settings.adhanReciter || 'makkah', 'dhuhr');
   const fajrAdhanSource = getAdhanSource(settings.fajrAdhanReciter || 'fajr_makkah', 'fajr');
   const duaSource = getDuaSource(settings.duaAudioReciter || 'shaarawy');
+
+  const preAdhanVoiceMode = settings.preAdhanVoiceMode || 'rotate';
+  const preAdhanVoice =
+    PRE_ADHAN_SHEIKH_VOICES.find((v) => v.id === preAdhanVoiceMode) ||
+    PRE_ADHAN_SHEIKH_VOICES[0];
+
+  const iqamaVoiceMode = settings.iqamaVoiceMode || 'rotate';
+  const iqamaVoice =
+    IQAMA_SHEIKH_VOICES.find((v) => v.id === iqamaVoiceMode) ||
+    IQAMA_SHEIKH_VOICES[IQAMA_SHEIKH_VOICES.length - 1];
 
   return {
     updatedAt: now.toISOString(),
@@ -405,6 +615,21 @@ export function buildWidgetBridgePayload(params: {
       reminderMessage: fastingInfo.reminderMessage,
       suhoorTimeStr: fastingInfo.suhoorTimeStr,
     },
+    duhaSunrise: {
+      sunriseStr: duhaSchedule.sunriseStr,
+      ishraqStartStr: duhaSchedule.ishraqStartStr,
+      bestDuhaStr: duhaSchedule.bestDuhaStr,
+      duhaEndStr: duhaSchedule.duhaEndStr,
+      statusLabelAr: duhaSchedule.statusLabelAr,
+    },
+    quietMode: {
+      isQuietNow: quietEval.isQuietNow,
+      statusLabelAr: quietEval.tileSubLabelAr,
+      manualActive: quietState.manualActive,
+      pauseUntilMs: quietState.pauseUntilMs,
+      exceptionPolicy: quietState.exceptionPolicy,
+      schedules: quietState.schedules,
+    },
     widgetSettings: widgetConfig,
     notificationSettings: {
       stickyEnabled: settings.stickyNotificationEnabled ?? true,
@@ -413,6 +638,13 @@ export function buildWidgetBridgePayload(params: {
     },
     audioSettings: {
       notificationsEnabled: settings.notificationsEnabled !== false,
+      prayerAdhanEnabled: {
+        fajr: settings.prayerAdhanEnabled?.fajr !== false,
+        dhuhr: settings.prayerAdhanEnabled?.dhuhr !== false,
+        asr: settings.prayerAdhanEnabled?.asr !== false,
+        maghrib: settings.prayerAdhanEnabled?.maghrib !== false,
+        isha: settings.prayerAdhanEnabled?.isha !== false,
+      },
       adhanReciter: settings.adhanReciter || 'makkah',
       fajrAdhanReciter: settings.fajrAdhanReciter || 'fajr_makkah',
       volume: typeof settings.volume === 'number' ? settings.volume : 1,
@@ -425,6 +657,26 @@ export function buildWidgetBridgePayload(params: {
       duaAssetUrl: duaSource.urls[0] || '/audio/dua-shaarawy.mp3',
       adhanReciterNameAr: adhanSource.nameAr,
       fajrAdhanReciterNameAr: fajrAdhanSource.nameAr,
+    },
+    preAdhanSettings: {
+      minutes: settings.preAdhanReminderMinutes ?? 10,
+      soundEnabled: settings.preAdhanSoundEnabled !== false,
+      voiceMode: preAdhanVoiceMode,
+      assetUrl: preAdhanVoice.urls[0] || '/audio/prayer-alert-mishary.mp3',
+      sheikhNameAr: preAdhanVoice.nameAr,
+    },
+    iqamaSettings: {
+      autoPlayEnabled: settings.iqamaAutoPlayEnabled !== false,
+      voiceMode: iqamaVoiceMode,
+      assetUrl: iqamaVoice.urls[0] || '/audio/iqama-classic.mp3',
+      sheikhNameAr: iqamaVoice.nameAr,
+      minutes: {
+        fajr: settings.iqamaMinutes?.fajr ?? 20,
+        dhuhr: settings.iqamaMinutes?.dhuhr ?? 15,
+        asr: settings.iqamaMinutes?.asr ?? 15,
+        maghrib: settings.iqamaMinutes?.maghrib ?? 10,
+        isha: settings.iqamaMinutes?.isha ?? 15,
+      },
     },
     backgroundReminders: {
       salawatEnabled: settings.salawatEnabled ?? true,
