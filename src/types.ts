@@ -159,6 +159,9 @@ export interface UserSettings {
   stickyNotificationEnabled?: boolean;
   adhanBannerNotificationEnabled?: boolean;
   notificationMosqueTheme?: 'auto' | 'nabawi' | 'kaaba' | 'azhar';
+  prayerOffsets?: Record<string, number>;
+  prayerAdhanEnabled?: Record<string, boolean>;
+  prayerReciters?: Record<string, string>;
 }
 
 export type AppThemeId = 'emerald' | 'indigo' | 'obsidian' | 'parchment';

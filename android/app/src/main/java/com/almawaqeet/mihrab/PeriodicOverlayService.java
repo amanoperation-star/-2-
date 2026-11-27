@@ -141,10 +141,7 @@ public class PeriodicOverlayService extends Service {
         TextView typeBadge = overlayView.findViewById(R.id.overlay_type_badge);
         TextView quoteTv = overlayView.findViewById(R.id.overlay_quote_text);
         TextView sourceTv = overlayView.findViewById(R.id.overlay_source_text);
-        TextView reflectionTv = overlayView.findViewById(R.id.overlay_reflection_text);
-        TextView closeIconBtn = overlayView.findViewById(R.id.overlay_btn_close_icon);
         TextView nextBtn = overlayView.findViewById(R.id.overlay_btn_next);
-        TextView copyBtn = overlayView.findViewById(R.id.overlay_btn_copy);
         TextView dismissBtn = overlayView.findViewById(R.id.overlay_btn_dismiss);
         View cardRoot = overlayView.findViewById(R.id.overlay_card_root);
 
@@ -159,44 +156,12 @@ public class PeriodicOverlayService extends Service {
         }
         if (quoteTv != null) quoteTv.setText(currentText);
         if (sourceTv != null) sourceTv.setText(currentSource);
-        if (reflectionTv != null) {
-            if (!currentReflection.trim().isEmpty()) {
-                reflectionTv.setText(currentReflection.trim());
-                reflectionTv.setVisibility(View.VISIBLE);
-            } else {
-                reflectionTv.setVisibility(View.GONE);
-            }
-        }
-        if (copyBtn != null) {
-            copyBtn.setText("نسخ النص");
-            copyBtn.setTextColor(0xFFE2E8F0);
-        }
 
-        if (closeIconBtn != null) {
-            closeIconBtn.setOnClickListener(v -> removeOverlayAndStop());
-        }
         if (dismissBtn != null) {
             dismissBtn.setOnClickListener(v -> removeOverlayAndStop());
         }
         if (nextBtn != null) {
             nextBtn.setOnClickListener(v -> loadNextFromPool());
-        }
-        if (copyBtn != null) {
-            copyBtn.setOnClickListener(v -> {
-                copyCurrentToClipboard();
-                copyBtn.setText("تم النسخ ✓");
-                copyBtn.setTextColor(0xFF6EE7B7);
-                if (resetCopyLabelRunnable != null) {
-                    mainHandler.removeCallbacks(resetCopyLabelRunnable);
-                }
-                resetCopyLabelRunnable = () -> {
-                    if (overlayView != null) {
-                        copyBtn.setText("نسخ النص");
-                        copyBtn.setTextColor(0xFFE2E8F0);
-                    }
-                };
-                mainHandler.postDelayed(resetCopyLabelRunnable, 2000L);
-            });
         }
         if (cardRoot != null) {
             cardRoot.setOnClickListener(v -> openInMainApp());
@@ -278,16 +243,10 @@ public class PeriodicOverlayService extends Service {
         ProgressBar progressBar = overlayView != null
             ? overlayView.findViewById(R.id.overlay_countdown_progress)
             : null;
-        TextView secondsTv = overlayView != null
-            ? overlayView.findViewById(R.id.overlay_countdown_seconds)
-            : null;
 
         if (progressBar != null) {
             progressBar.setMax((int) DURATION_MS);
             progressBar.setProgress((int) DURATION_MS);
-        }
-        if (secondsTv != null) {
-            secondsTv.setText("15 ث");
         }
 
         countDownTimer = new CountDownTimer(DURATION_MS, 50L) {
@@ -296,10 +255,6 @@ public class PeriodicOverlayService extends Service {
                 if (overlayView == null) return;
                 if (progressBar != null) {
                     progressBar.setProgress((int) Math.max(0L, millisUntilFinished));
-                }
-                if (secondsTv != null) {
-                    int sec = (int) Math.ceil(millisUntilFinished / 1000.0);
-                    secondsTv.setText(Math.max(1, sec) + " ث");
                 }
             }
 

@@ -168,7 +168,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* =====================================================================
           MOBILE & TABLET ROYAL MIHRAB RTL LAYOUT (< xl)
           ===================================================================== */}
-      <div className="xl:hidden max-w-3xl mx-auto flex flex-col gap-3">
+      <div className="xl:hidden max-w-3xl mx-auto flex flex-col gap-3" x-data="{ kaabaOpen: false, khatmaOpen: false }">
         {/* 1A. Top Identity Header: Logo + Title + Location + Settings */}
         <div className="flex items-center justify-between gap-2.5">
           <button
@@ -191,16 +191,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            title="الإعدادات"
-            aria-label="الإعدادات"
-            className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#071E17] border border-[#D4AF37]/65 text-[#F3D078] text-xs font-bold shadow-[0_0_12px_rgba(212,175,55,0.22)] hover:bg-[#0A241C] transition-colors flex items-center gap-1.5 shrink-0"
-          >
-            <Settings className="w-4 h-4" />
-            <span>الإعدادات</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigateToSection('times')}
+              title="الصفحة الرئيسية"
+              className="min-h-[44px] px-3 py-2 rounded-xl bg-[#071E17] border border-[#D4AF37]/45 text-[#F3D078] text-xs font-bold flex items-center gap-1 shadow-sm"
+            >
+              <span>🏠</span>
+              <span>الرئيسية</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title="الإعدادات"
+              aria-label="الإعدادات"
+              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#071E17] border border-[#D4AF37]/65 text-[#F3D078] text-xs font-bold shadow-[0_0_12px_rgba(212,175,55,0.22)] hover:bg-[#0A241C] transition-colors flex items-center gap-1.5 shrink-0"
+            >
+              <Settings className="w-4 h-4" />
+              <span>الإعدادات</span>
+            </button>
+          </div>
         </div>
 
         {/* 1B. Full Weather Strip */}
@@ -329,287 +340,336 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* 2. Grouped 3-Column Section Boxes with Subheadings (10 Sections) */}
-        <nav aria-label="أقسام التطبيق" className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-          {/* Box 1: المواقيت، الإقامة، متتبع الصلوات */}
-          <div className="rounded-2xl bg-[#071E17] border border-[#D4AF37]/35 p-2.5 space-y-2">
-            <h2 className="text-[11px] font-bold text-[#F3D078] px-1">
-              الصلاة والأوقات
-            </h2>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                onClick={() => navigateToSection('times')}
-                className={mobileTileClass(activeTab === 'times')}
-              >
-                <Clock className="w-4 h-4 text-[#D4AF37] shrink-0" />
-                <span className="text-[11px] leading-tight">المواقيت</span>
-              </button>
+        {/* 1.5. SIDE-BY-SIDE KAABA TRIGGER & MUSHAF KHATMA TRIGGER ROW */}
+        {(() => {
+          const [kaabaOpen, setKaabaOpen] = React.useState(false);
+          const [khatmaOpen, setKhatmaOpen] = React.useState(false);
 
-              {onOpenIqamaTab ? (
+          return (
+            <div className="space-y-2.5">
+              {/* Row of 2 buttons side-by-side */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* Kaaba Button */}
                 <button
                   type="button"
-                  onClick={onOpenIqamaTab}
-                  title="تعديل أوقات الإقامة وأصوات الشيوخ"
-                  className={mobileTileClass(false)}
+                  onClick={() => setKaabaOpen(!kaabaOpen)}
+                  className="rounded-2xl p-2.5 bg-gradient-to-br from-[#0D2920] via-[#071A14] to-[#0B241B] border border-[#F3D078]/40 shadow-[0_4px_16px_rgba(0,0,0,0.45)] flex flex-col justify-between text-right active:scale-[0.98] transition-all"
                 >
-                  <Timer className="w-4 h-4 text-[#F3D078] shrink-0" />
-                  <span className="text-[11px] leading-tight">الإقامة</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onOpenSettings}
-                  className={mobileTileClass(false)}
-                >
-                  <Timer className="w-4 h-4 text-[#F3D078] shrink-0" />
-                  <span className="text-[11px] leading-tight">الإقامة</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => navigateToSection('tracker')}
-                className={mobileTileClass(activeTab === 'tracker')}
-              >
-                <Award className="w-4 h-4 text-[#34D399] shrink-0" />
-                <span className="text-[11px] leading-tight">متتبع الصلوات</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Box 2: القبلة، الأذكار وحصن المسلم، خزائن النور */}
-          <div className="rounded-2xl bg-[#071E17] border border-[#D4AF37]/35 p-2.5 space-y-2">
-            <h2 className="text-[11px] font-bold text-[#F3D078] px-1">
-              العبادة والقرآن
-            </h2>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                onClick={() => navigateToSection('qibla')}
-                className={mobileTileClass(activeTab === 'qibla')}
-              >
-                <Compass className="w-4 h-4 text-[#34D399] shrink-0" />
-                <span className="text-[11px] leading-tight">القبلة</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigateToSection('adhkar')}
-                className={mobileTileClass(activeTab === 'adhkar')}
-              >
-                <Shield className="w-4 h-4 text-[#F3D078] shrink-0" />
-                <span className="text-[11px] leading-tight">الأذكار وحصن المسلم</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigateToSection('quran')}
-                className={mobileTileClass(activeTab === 'quran')}
-              >
-                <span className="text-sm leading-none text-[#F3D078]" aria-hidden="true">۞</span>
-                <span className="text-[11px] leading-tight">خزائن النور</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Box 3: المساعد الشرعي، زاد المسلم • القضاء والحفظ، وِرد الطريق */}
-          <div className="rounded-2xl bg-[#071E17] border border-[#D4AF37]/35 p-2.5 space-y-2">
-            <h2 className="text-[11px] font-bold text-[#F3D078] px-1">
-              الزاد والرحلة
-            </h2>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                onClick={() => navigateToSection('ai')}
-                className={mobileTileClass(activeTab === 'ai')}
-              >
-                <Sparkles className="w-4 h-4 text-[#F3D078] shrink-0" />
-                <span className="text-[11px] leading-tight">المساعد الشرعي</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigateToSection('companion')}
-                className={mobileTileClass(activeTab === 'companion')}
-              >
-                <Calendar className="w-4 h-4 text-[#34D399] shrink-0" />
-                <span className="text-[11px] leading-tight">زاد المسلم · القضاء والحفظ</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigateToSection('commute')}
-                className={mobileTileClass(activeTab === 'commute')}
-              >
-                <TrainFront className="w-4 h-4 text-[#34D399] shrink-0" />
-                <span className="text-[11px] leading-tight">وِرد الطريق</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Box 4: البيت المسلم */}
-          <div className="rounded-2xl bg-[#071E17] border border-[#D4AF37]/35 p-2.5 space-y-2">
-            <h2 className="text-[11px] font-bold text-[#F3D078] px-1">
-              الأسرة والمنزل
-            </h2>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button
-                type="button"
-                onClick={() => navigateToSection('family')}
-                className={`col-span-3 min-h-[54px] px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-3 text-right transition-all active:scale-[0.99] ${
-                  activeTab === 'family'
-                    ? 'bg-[#0A241C] border-[#D4AF37] text-[#F3D078] shadow-[0_0_14px_rgba(212,175,55,0.22)] font-bold'
-                    : 'bg-[#0A241C]/75 border-[#D4AF37]/20 text-slate-200 hover:border-[#D4AF37]/50 hover:text-[#F3D078]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-[#04130E] border border-[#D4AF37]/35 flex items-center justify-center shrink-0">
-                    <Home className="w-4 h-4 text-[#F3D078]" />
+                  <div className="flex items-center justify-between gap-1.5 w-full">
+                    {/* Kaaba Sculpture Icon */}
+                    <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-[#1A1D1F] to-[#0A0B0C] border border-[#F3D078]/70 flex flex-col justify-between p-1 shadow-md">
+                      <div className="w-full h-1 rounded-[1px] bg-gradient-to-l from-[#F8DF96] via-[#CFA632] to-[#997515] mt-0.5"></div>
+                      <div className="flex items-end justify-end px-0.5 pb-0.5">
+                        <span className="w-1.5 h-2 rounded-[1px] border border-[#F8DF96]/80 bg-[#CFA632]/25"></span>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-[#10B981]/15 border border-[#34D399]/40 text-[#34D399] text-[9px] font-extrabold">
+                      ١٠ أقسام
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-[#F3D078]">البيت المسلم</div>
-                    <div className="text-[11px] text-slate-300 truncate">
-                      نظام الأسرة وشاشة التلفاز وتحفيز الأطفال على الصلاة
+                  <div className="mt-2">
+                    <div className="font-amiri text-sm font-bold text-[#F3D078] leading-tight">أقسام مِحراب</div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-300 mt-0.5">
+                      <span className="truncate">{kaabaOpen ? 'مفتوح' : 'مقفول'}</span>
+                      <span className="font-extrabold text-[#F3D078]">{kaabaOpen ? 'إغلاق ▴' : 'فتح ▾'}</span>
                     </div>
                   </div>
-                </div>
-                <span className="text-xs font-bold text-[#34D399] shrink-0">دخول ›</span>
-              </button>
-            </div>
-          </div>
-        </nav>
+                </button>
 
-        {/* 3. Daily Khatma Companion Card (بطاقة مُرافق الختمة اليومية) */}
-        <section
-          aria-label="مُرافق الختمة اليومية"
-          className="rounded-2xl bg-[#071E17] border border-[#D4AF37]/45 p-3.5 space-y-3 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
-        >
-          {/* Title Row + Juz Badge + Reset */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <BookOpen className="w-4 h-4 text-[#F3D078] shrink-0" />
-              <h2 className="font-bold text-[#F3D078] font-amiri text-base truncate">
-                مُرافق الختمة اليومية
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="px-2.5 py-0.5 rounded-lg bg-[#0A241C] border border-[#34D399]/40 text-[#34D399] text-[11px] font-bold">
-                {khatmaSchedule.currentJuzName}
-              </span>
-              {khatmaSchedule.totalPagesCompleted > 0 && (
+                {/* Mushaf Khatma Button */}
                 <button
                   type="button"
-                  onClick={onStartNewKhatma}
-                  title="بدء ختمة جديدة من الجزء الأول"
-                  className="p-1.5 rounded-lg bg-[#0A241C] border border-[#D4AF37]/30 text-[#D4AF37] hover:border-[#F3D078] transition-colors"
+                  onClick={() => setKhatmaOpen(!khatmaOpen)}
+                  className="rounded-2xl p-2.5 bg-gradient-to-br from-[#0D2920] via-[#071A14] to-[#0B241B] border border-[#F3D078]/40 shadow-[0_4px_16px_rgba(0,0,0,0.45)] flex flex-col justify-between text-right active:scale-[0.98] transition-all"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <div className="flex items-center justify-between gap-1.5 w-full">
+                    {/* Mushaf / Book Icon */}
+                    <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-[#1A1D1F] to-[#0A0B0C] border border-[#F3D078]/70 flex items-center justify-center text-base shadow-md">
+                      📖
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-[#10B981]/15 border border-[#34D399]/40 text-[#34D399] text-[9px] font-extrabold">
+                      {khatmaSchedule.currentJuzName}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="font-amiri text-sm font-bold text-[#F3D078] leading-tight truncate">مُرافق الختمة</div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-300 mt-0.5">
+                      <span className="tabular-nums">{khatmaSchedule.dailyPercent}%</span>
+                      <span className="font-extrabold text-[#F3D078]">{khatmaOpen ? 'إغلاق ▴' : 'فتح ▾'}</span>
+                    </div>
+                  </div>
                 </button>
+              </div>
+
+              {/* Kaaba Sections Drawer (Collapsible) */}
+              {kaabaOpen && (
+                <nav aria-label="أقسام التطبيق" className="grid grid-cols-1 gap-2 bg-[#04110C]/95 border border-[#D4AF37]/35 rounded-2xl p-3 animate-fadeIn">
+                  {/* Box 1: الصلاة والأوقات */}
+                  <div className="rounded-xl bg-[#071E17] border border-[#D4AF37]/30 p-2 space-y-1.5">
+                    <h2 className="text-[11px] font-bold text-[#F3D078] px-1">الصلاة والأوقات</h2>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('times')}
+                        className={mobileTileClass(activeTab === 'times')}
+                      >
+                        <Clock className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                        <span className="text-[10px] leading-tight">المواقيت</span>
+                      </button>
+                      {onOpenIqamaTab ? (
+                        <button
+                          type="button"
+                          onClick={onOpenIqamaTab}
+                          className={mobileTileClass(false)}
+                        >
+                          <Timer className="w-4 h-4 text-[#F3D078] shrink-0" />
+                          <span className="text-[10px] leading-tight">الإقامة</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={onOpenSettings}
+                          className={mobileTileClass(false)}
+                        >
+                          <Timer className="w-4 h-4 text-[#F3D078] shrink-0" />
+                          <span className="text-[10px] leading-tight">الإقامة</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('tracker')}
+                        className={mobileTileClass(activeTab === 'tracker')}
+                      >
+                        <Award className="w-4 h-4 text-[#34D399] shrink-0" />
+                        <span className="text-[10px] leading-tight">متتبع الصلوات</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Box 2: العبادة والقرآن */}
+                  <div className="rounded-xl bg-[#071E17] border border-[#D4AF37]/30 p-2 space-y-1.5">
+                    <h2 className="text-[11px] font-bold text-[#F3D078] px-1">العبادة والقرآن</h2>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('qibla')}
+                        className={mobileTileClass(activeTab === 'qibla')}
+                      >
+                        <Compass className="w-4 h-4 text-[#34D399] shrink-0" />
+                        <span className="text-[10px] leading-tight">القبلة</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('adhkar')}
+                        className={mobileTileClass(activeTab === 'adhkar')}
+                      >
+                        <Shield className="w-4 h-4 text-[#F3D078] shrink-0" />
+                        <span className="text-[10px] leading-tight">الأذكار وحصن المسلم</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('quran')}
+                        className={mobileTileClass(activeTab === 'quran')}
+                      >
+                        <span className="text-sm leading-none text-[#F3D078]" aria-hidden="true">۞</span>
+                        <span className="text-[10px] leading-tight">خزائن النور</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Box 3: الزاد والرحلة */}
+                  <div className="rounded-xl bg-[#071E17] border border-[#D4AF37]/30 p-2 space-y-1.5">
+                    <h2 className="text-[11px] font-bold text-[#F3D078] px-1">الزاد والرحلة</h2>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('ai')}
+                        className={mobileTileClass(activeTab === 'ai')}
+                      >
+                        <Sparkles className="w-4 h-4 text-[#F3D078] shrink-0" />
+                        <span className="text-[10px] leading-tight">المساعد الشرعي</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('companion')}
+                        className={mobileTileClass(activeTab === 'companion')}
+                      >
+                        <Calendar className="w-4 h-4 text-[#34D399] shrink-0" />
+                        <span className="text-[10px] leading-tight">زاد المسلم · القضاء والحفظ</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigateToSection('commute')}
+                        className={mobileTileClass(activeTab === 'commute')}
+                      >
+                        <TrainFront className="w-4 h-4 text-[#34D399] shrink-0" />
+                        <span className="text-[10px] leading-tight">وِرد الطريق</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Box 4: الأسرة والمنزل */}
+                  <div className="rounded-xl bg-[#071E17] border border-[#D4AF37]/30 p-2 space-y-1.5">
+                    <h2 className="text-[11px] font-bold text-[#F3D078] px-1">الأسرة والمنزل</h2>
+                    <button
+                      type="button"
+                      onClick={() => navigateToSection('family')}
+                      className={`w-full min-h-[48px] px-3 py-2 rounded-xl border flex items-center justify-between gap-2 text-right transition-all ${
+                        activeTab === 'family'
+                          ? 'bg-[#0A241C] border-[#D4AF37] text-[#F3D078] font-bold'
+                          : 'bg-[#0A241C]/75 border-[#D4AF37]/20 text-slate-200 hover:border-[#D4AF37]/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-[#04130E] border border-[#D4AF37]/35 flex items-center justify-center shrink-0">
+                          <Home className="w-3.5 h-3.5 text-[#F3D078]" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-[#F3D078]">البيت المسلم</div>
+                          <div className="text-[10px] text-slate-300 truncate">نظام الأسرة وشاشة التلفاز وتحفيز الأطفال...</div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold text-[#34D399] shrink-0">دخول ›</span>
+                    </button>
+                  </div>
+                </nav>
+              )}
+
+              {/* Daily Khatma Companion Card (Collapsible) */}
+              {khatmaOpen && (
+                <section
+                  aria-label="مُرافق الختمة اليومية"
+                  className="rounded-2xl bg-[#071E17] border border-[#D4AF37]/45 p-3.5 space-y-3 shadow-[0_8px_24px_rgba(0,0,0,0.45)] animate-fadeIn"
+                >
+                  {/* Title Row + Juz Badge + Reset */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <BookOpen className="w-4 h-4 text-[#F3D078] shrink-0" />
+                      <h2 className="font-bold text-[#F3D078] font-amiri text-base truncate">
+                        مُرافق الختمة اليومية
+                      </h2>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="px-2.5 py-0.5 rounded-lg bg-[#0A241C] border border-[#34D399]/40 text-[#34D399] text-[11px] font-bold">
+                        {khatmaSchedule.currentJuzName}
+                      </span>
+                      {khatmaSchedule.totalPagesCompleted > 0 && (
+                        <button
+                          type="button"
+                          onClick={onStartNewKhatma}
+                          title="بدء ختمة جديدة من الجزء الأول"
+                          className="p-1.5 rounded-lg bg-[#0A241C] border border-[#D4AF37]/30 text-[#D4AF37] hover:border-[#F3D078] transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Today & Total Progress Indicators */}
+                  <div className="flex items-center justify-between gap-2 text-xs tabular-nums">
+                    <span className="text-slate-200">
+                      اليوم:{' '}
+                      <strong className="text-[#F3D078] font-bold">
+                        {khatmaSchedule.pagesCompletedToday}/{khatmaSchedule.dailyTargetPages} ص
+                      </strong>
+                    </span>
+                    <span className="text-slate-300">
+                      <strong className="text-[#34D399] font-bold">
+                        {khatmaSchedule.totalPagesCompleted}/{TOTAL_MUSHAF_PAGES} ({khatmaSchedule.overallPercent}%)
+                      </strong>
+                    </span>
+                  </div>
+
+                  {/* Progress Bar + Daily Percentage */}
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex-1 h-2.5 rounded-full bg-[#04130E] border border-[#D4AF37]/30 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-l from-[#F3D078] via-[#D4AF37] to-[#34D399] transition-all duration-300"
+                        style={{
+                          width: `${Math.max(
+                            khatmaSchedule.dailyPercent,
+                            khatmaSchedule.pagesCompletedToday > 0 ? 4 : 0
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs font-mono font-bold text-[#F3D078] tabular-nums shrink-0">
+                      {khatmaSchedule.dailyPercent}%
+                    </span>
+                  </div>
+
+                  {/* 5-Prayer Grid */}
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {KHATMA_PRAYER_ORDER.map((prayerKey) => {
+                      const wird = khatmaSchedule.wirdByPrayer[prayerKey];
+                      const label = getPrayerLabel(prayerKey);
+                      return (
+                        <div
+                          key={prayerKey}
+                          className={`rounded-xl border overflow-hidden flex flex-col transition-all ${
+                            wird.isCompleted
+                              ? 'bg-[#082E22] border-[#34D399]/65 text-emerald-100'
+                              : 'bg-[#0A241C] border-[#D4AF37]/25 text-slate-200'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onOpenWirdModal(prayerKey, label)}
+                            title={`قراءة وِرد ${label}: ${wird.summary}`}
+                            className="min-h-[34px] px-1 py-1.5 text-[11px] font-bold hover:text-[#F3D078] truncate transition-colors"
+                          >
+                            {label}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onTogglePrayerWird(prayerKey)}
+                            title={wird.isCompleted ? `تم إنجاز وِرد ${label}` : `تسجيل إنجاز وِرد ${label}`}
+                            aria-label={wird.isCompleted ? `تم إنجاز وِرد ${label}` : `تسجيل إنجاز وِرد ${label}`}
+                            className={`min-h-[28px] w-full border-t flex items-center justify-center transition-colors ${
+                              wird.isCompleted
+                                ? 'bg-[#34D399]/20 border-[#34D399]/40 text-[#34D399]'
+                                : 'border-[#D4AF37]/20 text-slate-400 hover:text-[#F3D078]'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5 stroke-[2.75]" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 30 Days / 60 Days Plan Switcher */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onSwitchKhatmaPlan(30)}
+                      className={`min-h-[40px] px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                        khatmaState.plan === 30
+                          ? 'bg-gradient-to-r from-[#D4AF37] via-[#F3D078] to-[#D4AF37] border-[#F3D078] text-[#04130E] shadow'
+                          : 'bg-[#04130E] border-[#D4AF37]/30 text-slate-200 hover:border-[#F3D078]/60'
+                      }`}
+                    >
+                      30 يوماً (4 صفحات)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSwitchKhatmaPlan(60)}
+                      className={`min-h-[40px] px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                        khatmaState.plan === 60
+                          ? 'bg-gradient-to-r from-[#D4AF37] via-[#F3D078] to-[#D4AF37] border-[#F3D078] text-[#04130E] shadow'
+                          : 'bg-[#04130E] border-[#D4AF37]/30 text-slate-200 hover:border-[#F3D078]/60'
+                      }`}
+                    >
+                      60 يوماً (صفحتان)
+                    </button>
+                  </div>
+                </section>
               )}
             </div>
-          </div>
-
-          {/* Today & Total Progress Indicators */}
-          <div className="flex items-center justify-between gap-2 text-xs tabular-nums">
-            <span className="text-slate-200">
-              اليوم:{' '}
-              <strong className="text-[#F3D078] font-bold">
-                {khatmaSchedule.pagesCompletedToday}/{khatmaSchedule.dailyTargetPages} ص
-              </strong>
-            </span>
-            <span className="text-slate-300">
-              <strong className="text-[#34D399] font-bold">
-                {khatmaSchedule.totalPagesCompleted}/{TOTAL_MUSHAF_PAGES} ({khatmaSchedule.overallPercent}%)
-              </strong>
-            </span>
-          </div>
-
-          {/* Progress Bar + Daily Percentage */}
-          <div className="flex items-center gap-2.5">
-            <div className="flex-1 h-2.5 rounded-full bg-[#04130E] border border-[#D4AF37]/30 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-l from-[#F3D078] via-[#D4AF37] to-[#34D399] transition-all duration-300"
-                style={{
-                  width: `${Math.max(
-                    khatmaSchedule.dailyPercent,
-                    khatmaSchedule.pagesCompletedToday > 0 ? 4 : 0
-                  )}%`,
-                }}
-              />
-            </div>
-            <span className="text-xs font-mono font-bold text-[#F3D078] tabular-nums shrink-0">
-              {khatmaSchedule.dailyPercent}%
-            </span>
-          </div>
-
-          {/* 5-Prayer Grid */}
-          <div className="grid grid-cols-5 gap-1.5">
-            {KHATMA_PRAYER_ORDER.map((prayerKey) => {
-              const wird = khatmaSchedule.wirdByPrayer[prayerKey];
-              const label = getPrayerLabel(prayerKey);
-              return (
-                <div
-                  key={prayerKey}
-                  className={`rounded-xl border overflow-hidden flex flex-col transition-all ${
-                    wird.isCompleted
-                      ? 'bg-[#082E22] border-[#34D399]/65 text-emerald-100'
-                      : 'bg-[#0A241C] border-[#D4AF37]/25 text-slate-200'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onOpenWirdModal(prayerKey, label)}
-                    title={`قراءة وِرد ${label}: ${wird.summary}`}
-                    className="min-h-[34px] px-1 py-1.5 text-[11px] font-bold hover:text-[#F3D078] truncate transition-colors"
-                  >
-                    {label}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onTogglePrayerWird(prayerKey)}
-                    title={wird.isCompleted ? `تم إنجاز وِرد ${label}` : `تسجيل إنجاز وِرد ${label}`}
-                    aria-label={wird.isCompleted ? `تم إنجاز وِرد ${label}` : `تسجيل إنجاز وِرد ${label}`}
-                    className={`min-h-[28px] w-full border-t flex items-center justify-center transition-colors ${
-                      wird.isCompleted
-                        ? 'bg-[#34D399]/20 border-[#34D399]/40 text-[#34D399]'
-                        : 'border-[#D4AF37]/20 text-slate-400 hover:text-[#F3D078]'
-                    }`}
-                  >
-                    <Check className="w-3.5 h-3.5 stroke-[2.75]" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 30 Days / 60 Days Plan Switcher */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => onSwitchKhatmaPlan(30)}
-              className={`min-h-[40px] px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                khatmaState.plan === 30
-                  ? 'bg-gradient-to-r from-[#D4AF37] via-[#F3D078] to-[#D4AF37] border-[#F3D078] text-[#04130E] shadow'
-                  : 'bg-[#04130E] border-[#D4AF37]/30 text-slate-200 hover:border-[#F3D078]/60'
-              }`}
-            >
-              30 يوماً (4 صفحات)
-            </button>
-            <button
-              type="button"
-              onClick={() => onSwitchKhatmaPlan(60)}
-              className={`min-h-[40px] px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                khatmaState.plan === 60
-                  ? 'bg-gradient-to-r from-[#D4AF37] via-[#F3D078] to-[#D4AF37] border-[#F3D078] text-[#04130E] shadow'
-                  : 'bg-[#04130E] border-[#D4AF37]/30 text-slate-200 hover:border-[#F3D078]/60'
-              }`}
-            >
-              60 يوماً (صفحتان)
-            </button>
-          </div>
-        </section>
+          );
+        })()}
       </div>
 
       {/* =====================================================================
