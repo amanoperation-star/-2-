@@ -56,6 +56,9 @@ interface NavbarProps {
   onTogglePrayerWird: (prayerKey: KhatmaPrayerKey) => void;
   onStartNewKhatma: () => void;
   onOpenWirdModal: (prayerKey: KhatmaPrayerKey, prayerNameAr: string) => void;
+  isPrayerTimesPageOpen?: boolean;
+  onOpenPrayerTimesPage?: () => void;
+  onNavigateHome?: () => void;
 }
 
 const KHATMA_PRAYER_LABELS: Record<KhatmaPrayerKey, string> = {
@@ -87,9 +90,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTogglePrayerWird,
   onStartNewKhatma,
   onOpenWirdModal,
+  isPrayerTimesPageOpen = false,
+  onOpenPrayerTimesPage,
+  onNavigateHome,
 }) => {
   const [playerState, setPlayerState] = useState<AudioPlayerState>('idle');
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [kaabaOpen, setKaabaOpen] = useState<boolean>(false);
+  const [khatmaOpen, setKhatmaOpen] = useState<boolean>(false);
   const activeThemeDef = getThemeDefinition(normalizeThemeId(settings.theme));
 
   const isFriday = new Date().getDay() === 5;
@@ -121,7 +129,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigateToSection = (
     tab: 'times' | 'tracker' | 'qibla' | 'adhkar' | 'quran' | 'ai' | 'companion' | 'commute' | 'family'
   ) => {
-    setActiveTab(tab);
+    if (tab === 'times' && onNavigateHome) {
+      onNavigateHome();
+    } else {
+      setActiveTab(tab);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleGoHome = () => {
+    if (onNavigateHome) {
+      onNavigateHome();
+    } else {
+      setActiveTab('times');
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -173,7 +194,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between gap-2.5">
           <button
             type="button"
-            onClick={() => navigateToSection('times')}
+            onClick={handleGoHome}
             title="العودة إلى الصفحة الرئيسية (المواقيت)"
             className="flex items-center gap-2.5 text-right rounded-xl focus:outline-none focus:ring-2 focus:ring-[#F3D078]/60 min-w-0"
           >
@@ -194,9 +215,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => navigateToSection('times')}
-              title="الصفحة الرئيسية"
-              className="min-h-[44px] px-3 py-2 rounded-xl bg-[#071E17] border border-[#D4AF37]/45 text-[#F3D078] text-xs font-bold flex items-center gap-1 shadow-sm"
+              onClick={handleGoHome}
+              title="العودة إلى الصفحة الرئيسية"
+              className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1 shadow-sm transition-all ${
+                activeTab === 'times' && !isPrayerTimesPageOpen
+                  ? 'bg-[#0A241C] border-[#F6D884] text-[#F6D884] shadow-[0_0_12px_rgba(246,216,132,0.22)]'
+                  : 'bg-[#071E17] border-[#D4AF37]/45 text-[#F3D078] hover:bg-[#0A241C]'
+              }`}
             >
               <span>🏠</span>
               <span>الرئيسية</span>
@@ -341,14 +366,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* 1.5. SIDE-BY-SIDE KAABA TRIGGER & MUSHAF KHATMA TRIGGER ROW */}
-        {(() => {
-          const [kaabaOpen, setKaabaOpen] = React.useState(false);
-          const [khatmaOpen, setKhatmaOpen] = React.useState(false);
-
-          return (
-            <div className="space-y-2.5">
-              {/* Row of 2 buttons side-by-side */}
-              <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-2.5">
+          {/* Row of 2 buttons side-by-side */}
+          <div className="grid grid-cols-2 gap-2">
                 {/* Kaaba Button */}
                 <button
                   type="button"
@@ -667,9 +687,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </section>
               )}
-            </div>
-          );
-        })()}
+        </div>
       </div>
 
       {/* =====================================================================
@@ -833,9 +851,37 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Center Zone: Desktop Navigation Links */}
           <nav className="flex items-center justify-center gap-1 bg-[#031612]/85 p-1 rounded-2xl border border-[#e5b869]/25 overflow-x-auto w-full scrollbar-none shadow-inner">
             <button
+              type="button"
+              onClick={handleGoHome}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
+                activeTab === 'times' && !isPrayerTimesPageOpen
+                  ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
+                  : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
+              }`}
+            >
+              <span>🏠</span>
+              <span>الرئيسية</span>
+            </button>
+
+            {onOpenPrayerTimesPage && (
+              <button
+                type="button"
+                onClick={onOpenPrayerTimesPage}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
+                  isPrayerTimesPageOpen
+                    ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
+                    : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-[#e5b869]" />
+                <span>فتح صفحة المواقيت</span>
+              </button>
+            )}
+
+            <button
               onClick={() => navigateToSection('times')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap shrink-0 ${
-                activeTab === 'times'
+                activeTab === 'times' && !isPrayerTimesPageOpen
                   ? 'bg-gradient-to-r from-[#e5b869]/25 via-emerald-700/40 to-teal-800/45 text-[#fbbf24] border border-[#e5b869]/55 shadow-[0_0_14px_rgba(229,184,105,0.2)] font-bold'
                   : 'text-slate-300 hover:text-[#fbbf24] hover:bg-[#072a22]/60 border border-transparent'
               }`}

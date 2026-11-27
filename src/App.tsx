@@ -20,6 +20,7 @@ import { IstikharaHajahModal } from './components/IstikharaHajahModal';
 import { WidgetStudioModal } from './components/WidgetStudioModal';
 import { SpiritualSplashOverlay } from './components/SpiritualSplashOverlay';
 import { PrayerWidgetPreview } from './components/PrayerWidgetPreview';
+import { PrayerTimesControlPage } from './components/PrayerTimesControlPage';
 import {
   WIDGET_SIZES,
   WIDGET_THEMES,
@@ -82,7 +83,7 @@ import {
   togglePrayerSunnahCompleted,
 } from './utils/sunnahRawatibData';
 import { CityLocation, UserSettings, PrayerTimeData, AppThemeId, PrayerName } from './types';
-import { CITIES, calculatePrayerTimes } from './utils/prayerCalculator';
+import { CITIES, applyPrayerTimeOffsets, calculatePrayerTimes } from './utils/prayerCalculator';
 import { adhanPlayer, getDuaSource, SalawatVoiceProfile, PreAdhanVoiceProfile, IqamaVoiceProfile } from './utils/audioAdhan';
 import { LIVE_BACKGROUNDS, getSmartBackground, isCurrentTimeDay } from './utils/backgroundsData';
 import {
@@ -447,7 +448,57 @@ export default function App() {
         | 'kaaba'
         | 'azhar';
     })(),
+    prayerOffsets: (() => {
+      if (typeof window === 'undefined') return {};
+      try {
+        const raw = localStorage.getItem('mihrab_prayer_offsets');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch {
+        // ignore invalid json
+      }
+      return {};
+    })(),
+    prayerAdhanEnabled: (() => {
+      const defaults = { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true };
+      if (typeof window === 'undefined') return defaults;
+      try {
+        const raw = localStorage.getItem('mihrab_prayer_adhan_enabled');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            return {
+              fajr: parsed.fajr !== false,
+              dhuhr: parsed.dhuhr !== false,
+              asr: parsed.asr !== false,
+              maghrib: parsed.maghrib !== false,
+              isha: parsed.isha !== false,
+            };
+          }
+        }
+      } catch {
+        // ignore invalid json
+      }
+      return defaults;
+    })(),
+    prayerReciters: (() => {
+      if (typeof window === 'undefined') return {};
+      try {
+        const raw = localStorage.getItem('mihrab_prayer_reciters');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch {
+        // ignore invalid json
+      }
+      return {};
+    })(),
   });
+
+  const [isPrayerTimesPageOpen, setIsPrayerTimesPageOpen] = useState(false);
 
   const [autoThemeManualPause, setAutoThemeManualPause] = useState<boolean>(false);
   const [autoThemeOverrideNotice, setAutoThemeOverrideNotice] = useState<{
@@ -540,8 +591,12 @@ export default function App() {
     profile: IqamaVoiceProfile;
     prayerNameAr?: string;
   } | null>(null);
-  const [prayerTimes, setPrayerTimes] = useState<PrayerTimeData>(() =>
+  const [basePrayerTimes, setBasePrayerTimes] = useState<PrayerTimeData>(() =>
     calculatePrayerTimes(new Date(), CITIES[0].lat, CITIES[0].lng, CITIES[0].timezone, 'egypt', 'standard')
+  );
+  const prayerTimes = React.useMemo(
+    () => applyPrayerTimeOffsets(basePrayerTimes, settings.prayerOffsets),
+    [basePrayerTimes, settings.prayerOffsets]
   );
   const [khatmaState, setKhatmaState] = useState<KhatmaState>(() => loadKhatmaState());
   const [selectedWirdModal, setSelectedWirdModal] = useState<{
@@ -957,6 +1012,10 @@ export default function App() {
       setIsStandbyModeOpen(false);
       return true;
     }
+    if (isPrayerTimesPageOpen) {
+      setIsPrayerTimesPageOpen(false);
+      return true;
+    }
     return false;
   }, [
     fullScreenAdhanState.isOpen,
@@ -970,6 +1029,7 @@ export default function App() {
     forcedCheckinPrayer,
     isPeriodicPopupOpen,
     isStandbyModeOpen,
+    isPrayerTimesPageOpen,
   ]);
 
   useTvRemoteNavigation({
@@ -1013,7 +1073,7 @@ export default function App() {
       settings.calculationMethod,
       settings.asrMethod
     );
-    setPrayerTimes(times);
+    setBasePrayerTimes(times);
   }, [currentLocation, settings.calculationMethod, settings.asrMethod]);
 
   // Handle PWA Home Screen shortcut ?shortcut=wird on initial load & strip transient launch params
@@ -1801,6 +1861,15 @@ export default function App() {
       ) {
         localStorage.setItem('notification_mosque_theme', newSettings.notificationMosqueTheme);
       }
+      if (newSettings.prayerOffsets) {
+        localStorage.setItem('mihrab_prayer_offsets', JSON.stringify(newSettings.prayerOffsets));
+      }
+      if (newSettings.prayerAdhanEnabled) {
+        localStorage.setItem('mihrab_prayer_adhan_enabled', JSON.stringify(newSettings.prayerAdhanEnabled));
+      }
+      if (newSettings.prayerReciters) {
+        localStorage.setItem('mihrab_prayer_reciters', JSON.stringify(newSettings.prayerReciters));
+      }
       return updated;
     });
   };
@@ -2027,7 +2096,10 @@ export default function App() {
         {/* Navbar */}
         <Navbar
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={(tab) => {
+            setIsPrayerTimesPageOpen(false);
+            setActiveTab(tab);
+          }}
           currentLocation={currentLocation}
           settings={settings}
           autoThemeStatusBadge={
@@ -2052,6 +2124,17 @@ export default function App() {
           }}
           onOpenIstikharaHajah={() => setIsIstikharaHajahOpen(true)}
           onOpenWidgetsStudio={() => setIsWidgetStudioOpen(true)}
+          isPrayerTimesPageOpen={isPrayerTimesPageOpen}
+          onOpenPrayerTimesPage={() => {
+            setActiveTab('times');
+            setIsPrayerTimesPageOpen(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onNavigateHome={() => {
+            setIsPrayerTimesPageOpen(false);
+            setActiveTab('times');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         />
 
         {/* Main Content Area */}
@@ -2073,7 +2156,21 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'times' && (
+          {activeTab === 'times' && isPrayerTimesPageOpen && (
+            <PrayerTimesControlPage
+              basePrayerTimes={basePrayerTimes}
+              currentLocation={currentLocation}
+              settings={settings}
+              onUpdateSettings={handleUpdateSettings}
+              onNavigateHome={() => {
+                setIsPrayerTimesPageOpen(false);
+                setActiveTab('times');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+          )}
+
+          {activeTab === 'times' && !isPrayerTimesPageOpen && (
             <PrayerTimesCard
               prayerTimes={prayerTimes}
               currentLocation={currentLocation}
@@ -2097,6 +2194,10 @@ export default function App() {
                 handleOpenFullScreenAdhanModal(prayerKey, prayerNameAr, false)
               }
               isGlobalFullScreenAdhanOpen={fullScreenAdhanState.isOpen}
+              onOpenPrayerTimesPage={() => {
+                setIsPrayerTimesPageOpen(true);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
             />
           )}
 

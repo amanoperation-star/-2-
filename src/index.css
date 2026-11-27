@@ -2,28 +2,28 @@
 
 :root,
 [data-theme="emerald"] {
-  --theme-bg: #03120f;
-  --theme-bg-via: #05231d;
-  --theme-bg-to: #08362d;
-  --theme-header: rgba(3, 18, 15, 0.9);
-  --theme-card-from: rgba(4, 31, 26, 0.95);
-  --theme-card-via: rgba(7, 46, 38, 0.9);
-  --theme-card-to: rgba(3, 20, 16, 0.95);
-  --theme-card-border: rgba(229, 184, 105, 0.4);
-  --theme-inner: #031713;
-  --theme-inner-soft: #062d24;
-  --theme-accent: #e5b869;
-  --theme-accent-bright: #fbbf24;
-  --theme-secondary: #10b981;
+  --theme-bg: #05140F;
+  --theme-bg-via: #061A13;
+  --theme-bg-to: #08231A;
+  --theme-header: rgba(5, 20, 15, 0.94);
+  --theme-card-from: rgba(7, 30, 23, 0.96);
+  --theme-card-via: rgba(10, 39, 30, 0.92);
+  --theme-card-to: rgba(5, 20, 15, 0.96);
+  --theme-card-border: rgba(207, 166, 50, 0.42);
+  --theme-inner: #061A13;
+  --theme-inner-soft: #0A271E;
+  --theme-accent: #F6D884;
+  --theme-accent-bright: #CFA632;
+  --theme-secondary: #34D399;
   --theme-status-bg: rgba(6, 78, 59, 0.75);
-  --theme-status-text: #6ee7b7;
-  --theme-status-border: rgba(16, 185, 129, 0.6);
+  --theme-status-text: #34D399;
+  --theme-status-border: rgba(52, 211, 153, 0.55);
   --theme-text-primary: #f8fafc;
   --theme-text-secondary: #cbd5e1;
   --theme-text-muted: #94a3b8;
-  --theme-wash: linear-gradient(160deg, rgba(3, 18, 15, 0.88) 0%, rgba(5, 36, 29, 0.72) 50%, rgba(8, 54, 45, 0.88) 100%);
-  --theme-radial-glow: radial-gradient(circle at 50% 15%, rgba(229, 184, 105, 0.09) 0%, transparent 60%);
-  --theme-bottom-fade: linear-gradient(to top, rgba(3, 18, 15, 0.95), transparent, rgba(3, 18, 15, 0.6));
+  --theme-wash: linear-gradient(160deg, rgba(5, 20, 15, 0.92) 0%, rgba(7, 30, 23, 0.76) 50%, rgba(5, 20, 15, 0.92) 100%);
+  --theme-radial-glow: radial-gradient(circle at 50% 15%, rgba(246, 216, 132, 0.09) 0%, transparent 60%);
+  --theme-bottom-fade: linear-gradient(to top, rgba(5, 20, 15, 0.96), transparent, rgba(5, 20, 15, 0.65));
   color-scheme: dark;
 }
 

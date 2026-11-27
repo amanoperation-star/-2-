@@ -2125,3 +2125,91 @@ class AdhanPlayerManager {
 }
 
 export const adhanPlayer = new AdhanPlayerManager();
+
+export interface AppSheikhOption {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  khushuTagAr?: string;
+  category: 'fajr' | 'regular';
+  isFajrSpecial?: boolean;
+}
+
+export interface AppSheikhsRegistry {
+  fajr: AppSheikhOption[];
+  regular: AppSheikhOption[];
+}
+
+export function buildAppSheikhsRegistry(): AppSheikhsRegistry {
+  return {
+    fajr: Object.values(FAJR_ADHAN_SOURCES).map((src) => ({
+      id: src.id,
+      nameAr: src.nameAr,
+      nameEn: src.nameEn,
+      khushuTagAr: src.khushuTagAr,
+      category: 'fajr',
+      isFajrSpecial: Boolean(src.isFajrSpecial),
+    })),
+    regular: Object.values(ADHAN_SOURCES).map((src) => ({
+      id: src.id,
+      nameAr: src.nameAr,
+      nameEn: src.nameEn,
+      khushuTagAr: src.khushuTagAr,
+      category: 'regular',
+      isFajrSpecial: false,
+    })),
+  };
+}
+
+export function syncAppSheikhsToWindow(): AppSheikhsRegistry {
+  const registry = buildAppSheikhsRegistry();
+  if (typeof window !== 'undefined') {
+    const win = window as unknown as { APP_SHEIKHS?: AppSheikhsRegistry };
+    if (!win.APP_SHEIKHS) {
+      win.APP_SHEIKHS = registry;
+    }
+  }
+  return registry;
+}
+
+export function getAppSheikhsFromWindow(): AppSheikhsRegistry {
+  if (typeof window === 'undefined') {
+    return { fajr: [], regular: [] };
+  }
+  const win = window as unknown as {
+    APP_SHEIKHS?: AppSheikhsRegistry | AppSheikhOption[];
+  };
+  const raw = win.APP_SHEIKHS;
+  if (!raw) {
+    return { fajr: [], regular: [] };
+  }
+  if (Array.isArray(raw)) {
+    const fajr = raw.filter((s) => s.category === 'fajr' || s.isFajrSpecial || s.id.startsWith('fajr_'));
+    const regular = raw.filter((s) => s.category !== 'fajr' && !s.isFajrSpecial && !s.id.startsWith('fajr_'));
+    return {
+      fajr: fajr.length > 0 ? fajr : raw,
+      regular: regular.length > 0 ? regular : raw,
+    };
+  }
+  return {
+    fajr: Array.isArray(raw.fajr) ? raw.fajr : [],
+    regular: Array.isArray(raw.regular) ? raw.regular : [],
+  };
+}
+
+export function resolvePrayerReciter(
+  settings: { adhanReciter?: string; fajrAdhanReciter?: string; prayerReciters?: Record<string, string> },
+  prayerKey: string
+): string {
+  const perPrayer = settings.prayerReciters?.[prayerKey];
+  if (perPrayer && (ADHAN_SOURCES[perPrayer] || FAJR_ADHAN_SOURCES[perPrayer])) {
+    return perPrayer;
+  }
+  if (prayerKey === 'fajr') {
+    return settings.fajrAdhanReciter || 'fajr_makkah';
+  }
+  return settings.adhanReciter || 'makkah';
+}
+
+syncAppSheikhsToWindow();
+

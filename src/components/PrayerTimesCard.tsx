@@ -23,6 +23,7 @@ import {
   Vibrate,
   X,
   Plane,
+  Sliders,
 } from 'lucide-react';
 import { PrayerTimeData, CityLocation, UserSettings, PrayerName } from '../types';
 import {
@@ -31,6 +32,7 @@ import {
   ADHAN_SOURCES,
   PreAdhanVoiceProfile,
   IqamaVoiceProfile,
+  resolvePrayerReciter,
 } from '../utils/audioAdhan';
 import { backgroundService } from '../utils/backgroundService';
 import { FullScreenAdhanModal } from './FullScreenAdhanModal';
@@ -42,7 +44,7 @@ import { JumuahSunanCard } from './JumuahSunanCard';
 import { LastThirdNightModal } from './LastThirdNightModal';
 import { SujudSahwModal } from './SujudSahwModal';
 import { SelectedSurahModalData, SurahReaderModal } from './SurahReaderModal';
-import { calculateNightThirds, calculatePrayerTimes } from '../utils/prayerCalculator';
+import { applyPrayerTimeOffsets, calculateNightThirds, calculatePrayerTimes } from '../utils/prayerCalculator';
 import { loadJumuahSalawatProgress } from '../utils/jumuahData';
 import {
   KhatmaPrayerKey,
@@ -88,6 +90,7 @@ interface PrayerTimesCardProps {
   onOpenTravelTab?: () => void;
   onOpenFullScreenAdhan?: (prayerKey: PrayerName, prayerNameAr?: string) => void;
   isGlobalFullScreenAdhanOpen?: boolean;
+  onOpenPrayerTimesPage?: () => void;
 }
 
 interface PrayerInfo {
@@ -175,6 +178,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   onOpenTravelTab,
   onOpenFullScreenAdhan,
   isGlobalFullScreenAdhanOpen = false,
+  onOpenPrayerTimesPage,
 }) => {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [nextPrayerKey, setNextPrayerKey] = useState<PrayerName>('fajr');
@@ -533,10 +537,16 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       });
 
       if (matchingPrayer) {
+        const isPrayerAdhanActive = settings.prayerAdhanEnabled?.[matchingPrayer.key] !== false;
         const displayMatchName =
           (now.getDay() === 5 || jumuahPreviewMode) && matchingPrayer.key === 'dhuhr'
             ? 'الجمعة'
             : matchingPrayer.nameAr;
+
+        if (!isPrayerAdhanActive) {
+          // Prayer is set to silent in Prayer Times Control Page
+          return;
+        }
 
         if (meetingModeEnabled) {
           adhanPlayer.stop();
@@ -639,7 +649,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       adhanPlayer.stop();
     } else {
       const isFajr = nextPrayerKey === 'fajr';
-      const reciter = isFajr ? (settings.fajrAdhanReciter || 'fajr_makkah') : settings.adhanReciter;
+      const reciter = resolvePrayerReciter(settings, nextPrayerKey);
       adhanPlayer.playAdhan(reciter, nextPrayerKey, isFajr && settings.fajrBoostVolume);
     }
   };
@@ -816,7 +826,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
   const tomorrowPrayerTimes = useMemo(() => {
     const tomorrow = new Date(currentTime);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    return calculatePrayerTimes(
+    const rawTomorrow = calculatePrayerTimes(
       tomorrow,
       currentLocation.lat,
       currentLocation.lng,
@@ -824,6 +834,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       settings.calculationMethod,
       settings.asrMethod
     );
+    return applyPrayerTimeOffsets(rawTomorrow, settings.prayerOffsets);
   }, [
     todayDateKey,
     currentLocation.lat,
@@ -831,6 +842,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     currentLocation.timezone,
     settings.calculationMethod,
     settings.asrMethod,
+    settings.prayerOffsets,
   ]);
 
   const todayFajrMinutes = timeToMinutes(prayerTimes.fajr);
@@ -1173,6 +1185,47 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
           </div>
         </button>
       )}
+
+      {/* Quick Action Bar to Open Prayer Times Control Page */}
+      {onOpenPrayerTimesPage && (() => {
+        const activeAdhanCount = (['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).filter(
+          (k) => settings.prayerAdhanEnabled?.[k] !== false
+        ).length;
+        return (
+          <div
+            dir="rtl"
+            className="rounded-2xl border border-[#CFA632]/45 bg-gradient-to-l from-[#0B261C]/95 via-[#071D15]/95 to-[#05140F]/95 px-4 py-3 shadow-[0_10px_28px_rgba(0,0,0,0.4)] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[#04130E] border border-[#F6D884]/45 flex items-center justify-center text-[#F6D884] shrink-0">
+                <Sliders className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-amiri text-base font-bold text-[#F6D884]">
+                    ضبط المواقيت وشيوخ الأذان
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#34D399]/15 border border-[#34D399]/40 text-[#34D399] text-[11px] font-bold tabular-nums">
+                    {toArabicDigits(activeAdhanCount)} من {toArabicDigits(5)} يؤذّن
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 truncate">
+                  تشغيل/كتم الأذان لكل صلاة، ربط شيوخ التطبيق، وتعديل الوقت بالدقيقة
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenPrayerTimesPage}
+              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#F6D884] via-[#CFA632] to-[#B8891E] text-[#05140F] font-black text-xs sm:text-sm shadow-[0_6px_18px_rgba(207,166,50,0.3)] hover:brightness-105 active:scale-[0.98] transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>فتح صفحة المواقيت</span>
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Hero Banner / Next Prayer Architectural Sanctuary Frame */}
       <div
@@ -1926,6 +1979,12 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
                     مضت بحمد الله
                   </div>
                 )}
+                {prayer.key !== 'sunrise' && settings.prayerAdhanEnabled?.[prayer.key] === false && (
+                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-950/70 border border-rose-500/40 text-rose-200 text-[10px] font-bold mb-1">
+                    <span>🔇</span>
+                    <span>صامت</span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-center">
                   <div
@@ -2003,7 +2062,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
                         adhanPlayer.stop();
                       } else {
                         const isFajr = prayer.key === 'fajr';
-                        const reciter = isFajr ? settings.fajrAdhanReciter || 'fajr_makkah' : settings.adhanReciter;
+                        const reciter = resolvePrayerReciter(settings, prayer.key);
                         adhanPlayer.playAdhan(reciter, prayer.key, isFajr && settings.fajrBoostVolume);
                       }
                     }}

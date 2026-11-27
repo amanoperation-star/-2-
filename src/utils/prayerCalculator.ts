@@ -145,6 +145,46 @@ export function calculatePrayerTimes(
   };
 }
 
+export function applyOffsetToTimeStr(timeStr: string, offsetMinutes: number = 0): string {
+  if (!timeStr || !timeStr.includes(':')) return timeStr;
+  const [hRaw, mRaw] = timeStr.split(':').map(Number);
+  if (Number.isNaN(hRaw) || Number.isNaN(mRaw)) return timeStr;
+  const safeOffset = Math.round(Number(offsetMinutes) || 0);
+  if (safeOffset === 0) {
+    return `${hRaw.toString().padStart(2, '0')}:${mRaw.toString().padStart(2, '0')}`;
+  }
+  const total = (((hRaw * 60 + mRaw + safeOffset) % (24 * 60)) + 24 * 60) % (24 * 60);
+  const nh = Math.floor(total / 60);
+  const nm = total % 60;
+  return `${nh.toString().padStart(2, '0')}:${nm.toString().padStart(2, '0')}`;
+}
+
+export function computeTimeOffsetMinutes(baseTimeStr: string, targetTimeStr: string): number {
+  const [bH, bM] = (baseTimeStr || '').split(':').map(Number);
+  const [tH, tM] = (targetTimeStr || '').split(':').map(Number);
+  if (Number.isNaN(bH) || Number.isNaN(bM) || Number.isNaN(tH) || Number.isNaN(tM)) return 0;
+  let diff = tH * 60 + tM - (bH * 60 + bM);
+  if (diff > 720) diff -= 1440;
+  if (diff < -720) diff += 1440;
+  return diff;
+}
+
+export function applyPrayerTimeOffsets(
+  baseTimes: PrayerTimeData,
+  offsets?: Record<string, number>
+): PrayerTimeData {
+  if (!offsets) return baseTimes;
+  return {
+    ...baseTimes,
+    fajr: applyOffsetToTimeStr(baseTimes.fajr, offsets.fajr ?? 0),
+    sunrise: applyOffsetToTimeStr(baseTimes.sunrise, offsets.sunrise ?? 0),
+    dhuhr: applyOffsetToTimeStr(baseTimes.dhuhr, offsets.dhuhr ?? 0),
+    asr: applyOffsetToTimeStr(baseTimes.asr, offsets.asr ?? 0),
+    maghrib: applyOffsetToTimeStr(baseTimes.maghrib, offsets.maghrib ?? 0),
+    isha: applyOffsetToTimeStr(baseTimes.isha, offsets.isha ?? 0),
+  };
+}
+
 // Qibla direction calculation from given lat/lng to Kaaba (21.3891 N, 39.8579 E)
 export function calculateQiblaDirection(lat: number, lng: number): number {
   const kaabaLat = 21.3891;

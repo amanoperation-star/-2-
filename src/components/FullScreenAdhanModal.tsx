@@ -19,7 +19,7 @@ import {
   Play,
 } from 'lucide-react';
 import { CityLocation, UserSettings, PrayerName } from '../types';
-import { adhanPlayer, getAdhanSource, getDuaSource, AudioPlayerState, ActiveAudioType } from '../utils/audioAdhan';
+import { adhanPlayer, getAdhanSource, getDuaSource, AudioPlayerState, ActiveAudioType, resolvePrayerReciter } from '../utils/audioAdhan';
 import { AnimatedAdhanBackdrop } from './AnimatedAdhanBackdrop';
 import { AdhanMotionStyle, getOrderedAdhanScenes } from '../utils/adhanScenesData';
 
@@ -174,9 +174,7 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
 
     const activeSettings = settingsRef.current;
     const isFajr = prayerKey === 'fajr';
-    const reciterToPlay = isFajr
-      ? activeSettings.fajrAdhanReciter || 'fajr_makkah'
-      : activeSettings.adhanReciter || 'makkah';
+    const reciterToPlay = resolvePrayerReciter(activeSettings, prayerKey);
     const boost = isFajr && activeSettings.fajrBoostVolume;
 
     adhanPlayer.stop();
