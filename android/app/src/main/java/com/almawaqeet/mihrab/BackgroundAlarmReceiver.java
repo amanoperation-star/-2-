@@ -84,12 +84,12 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
 
         if (ACTION_PRE_ADHAN_ALARM.equals(action)) {
-            handlePreAdhanAlarm(context, intent);
+            handlePreAdhanAlarm(context, intent, false);
             return;
         }
 
         if (ACTION_IQAMA_ALARM.equals(action)) {
-            handleIqamaAlarm(context, intent);
+            handleIqamaAlarm(context, intent, false);
             return;
         }
 
@@ -142,6 +142,27 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             Intent fake = new Intent(ACTION_LAST_THIRD_ALARM);
             fake.putExtra("target_epoch_ms", System.currentTimeMillis());
             handleLastThirdAlarm(context, fake, true);
+        } else if ("iqama".equals(type)) {
+            PrayerNotificationHelper.NotificationState st =
+                PrayerNotificationHelper.buildNotificationState(context);
+            Intent fake = new Intent(ACTION_IQAMA_ALARM);
+            fake.putExtra("prayer_key", st.nextPrayerKey);
+            fake.putExtra("prayer_name", st.nextPrayerNameAr);
+            fake.putExtra("city_name", st.cityNameAr);
+            fake.putExtra("mosque_theme", st.mosqueTheme);
+            fake.putExtra("target_epoch_ms", System.currentTimeMillis());
+            handleIqamaAlarm(context, fake, true);
+        } else if ("pre_adhan".equals(type)) {
+            PrayerNotificationHelper.NotificationState st =
+                PrayerNotificationHelper.buildNotificationState(context);
+            Intent fake = new Intent(ACTION_PRE_ADHAN_ALARM);
+            fake.putExtra("prayer_key", st.nextPrayerKey);
+            fake.putExtra("prayer_name", st.nextPrayerNameAr);
+            fake.putExtra("reminder_minutes", 10);
+            fake.putExtra("city_name", st.cityNameAr);
+            fake.putExtra("mosque_theme", st.mosqueTheme);
+            fake.putExtra("target_epoch_ms", System.currentTimeMillis());
+            handlePreAdhanAlarm(context, fake, true);
         }
     }
 
@@ -161,6 +182,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
     }
 
     private static void handleAdhanAlarm(Context context, Intent intent, boolean isTest) {
+        acquireBroadcastHandoffWakeLock(context);
         SharedPreferences widgetPrefs = context.getSharedPreferences(
             PrayerWidgetHelper.PREFS_NAME,
             Context.MODE_PRIVATE
@@ -205,6 +227,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
 
         boolean notificationsEnabled = true;
+        boolean adhanBannerEnabled = true;
         boolean meetingMode = false;
         boolean fajrBoost = true;
         boolean autoDua = true;
@@ -215,6 +238,10 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         String reciterNameAr = "";
 
         if (root != null) {
+            JSONObject notifSettings = root.optJSONObject("notificationSettings");
+            if (notifSettings != null) {
+                adhanBannerEnabled = notifSettings.optBoolean("adhanBannerEnabled", true);
+            }
             JSONObject audio = root.optJSONObject("audioSettings");
             if (audio != null) {
                 notificationsEnabled = audio.optBoolean("notificationsEnabled", true);
@@ -243,6 +270,19 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
 
         // If user is actively viewing Mihrab right now (not locked/closed), hand off to React FullScreenAdhanModal
         if (!isTest && MainActivity.isAppInForeground) {
+            if (adhanBannerEnabled) {
+                PrayerNotificationHelper.showAdhanFullScreenNotification(
+                    context,
+                    prayerKey,
+                    prayerNameAr,
+                    prayerTime12,
+                    cityNameAr,
+                    meetingMode ? "وضع الاجتماع نشط (تنبيه صامت)" : reciterNameAr,
+                    mosqueTheme,
+                    false,
+                    false
+                );
+            }
             MainActivity.dispatchForegroundAdhanEvent(prayerKey, prayerNameAr);
             PrayerWidgetHelper.updateAllWidgets(context);
             PrayerNotificationHelper.refreshOngoingNotification(context);
@@ -287,6 +327,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             try {
                 ContextCompat.startForegroundService(context, serviceIntent);
             } catch (Exception ignored) {
+                triggerGentleVibration(context);
                 PrayerNotificationHelper.showAdhanFullScreenNotification(
                     context,
                     prayerKey,
@@ -300,12 +341,12 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
                 );
             }
 
-            // If testing directly or device screen is unlocked/interactive, also bring AdhanAlarmActivity forward cleanly
-            if (isTest) {
+            // If testing directly or overlay permission allows background activity start, bring AdhanAlarmActivity forward
+            if (isTest || WidgetBridgePlugin.canDrawOverlays(context)) {
                 try {
                     Intent fullIntent = new Intent(context, AdhanAlarmActivity.class);
                     fullIntent.putExtra("prayer_key", prayerKey);
-                    fullIntent.putExtra("prayer_name", prayerNameAr);
+                    fullIntent.putExtra("prayer_name", isTest ? ("معاينة " + prayerNameAr) : prayerNameAr);
                     fullIntent.putExtra("prayer_time12", prayerTime12);
                     fullIntent.putExtra("city_name", cityNameAr);
                     fullIntent.putExtra("reciter_name", reciterNameAr);
@@ -317,7 +358,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
                     );
                     context.startActivity(fullIntent);
                 } catch (Exception ignored) {
-                    // fullScreenIntent notification will still present it cleanly
+                    // fullScreenIntent / heads-up notification will still present it cleanly
                 }
             }
         }
@@ -330,6 +371,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
     }
 
     private static void handleSalawatAlarm(Context context, boolean isTest) {
+        acquireBroadcastHandoffWakeLock(context);
         SharedPreferences widgetPrefs = context.getSharedPreferences(
             PrayerWidgetHelper.PREFS_NAME,
             Context.MODE_PRIVATE
@@ -579,7 +621,8 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         new SalawatPreset("makkah_classic", "إقامة الحرمين المأثورة", "", "/audio/iqama-classic.mp3"),
     };
 
-    private static void handlePreAdhanAlarm(Context context, Intent intent) {
+    private static void handlePreAdhanAlarm(Context context, Intent intent, boolean isTest) {
+        acquireBroadcastHandoffWakeLock(context);
         SharedPreferences widgetPrefs = context.getSharedPreferences(
             PrayerWidgetHelper.PREFS_NAME,
             Context.MODE_PRIVATE
@@ -595,7 +638,9 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
 
         long targetEpochMs = intent.getLongExtra("target_epoch_ms", 0L);
-        BackgroundReminderScheduler.scheduleNextPreAdhanAfter(context, targetEpochMs);
+        if (!isTest) {
+            BackgroundReminderScheduler.scheduleNextPreAdhanAfter(context, targetEpochMs);
+        }
 
         String prayerKey = intent.getStringExtra("prayer_key");
         String prayerNameAr = intent.getStringExtra("prayer_name");
@@ -606,15 +651,17 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         if (prayerNameAr == null || prayerNameAr.isEmpty()) prayerNameAr = "الصلاة";
         if (cityNameAr == null || cityNameAr.isEmpty()) cityNameAr = "القاهرة";
 
-        SharedPreferences statePrefs = context.getSharedPreferences(
-            BackgroundReminderScheduler.STATE_PREFS,
-            Context.MODE_PRIVATE
-        );
-        String dedupeKey = prayerKey + "_" + targetEpochMs;
-        if (targetEpochMs > 0L && dedupeKey.equals(statePrefs.getString(KEY_LAST_PRE_ADHAN_FIRED_KEY, ""))) {
-            return;
+        if (!isTest) {
+            SharedPreferences statePrefs = context.getSharedPreferences(
+                BackgroundReminderScheduler.STATE_PREFS,
+                Context.MODE_PRIVATE
+            );
+            String dedupeKey = prayerKey + "_" + targetEpochMs;
+            if (targetEpochMs > 0L && dedupeKey.equals(statePrefs.getString(KEY_LAST_PRE_ADHAN_FIRED_KEY, ""))) {
+                return;
+            }
+            statePrefs.edit().putString(KEY_LAST_PRE_ADHAN_FIRED_KEY, dedupeKey).apply();
         }
-        statePrefs.edit().putString(KEY_LAST_PRE_ADHAN_FIRED_KEY, dedupeKey).apply();
 
         boolean notificationsEnabled = true;
         boolean meetingMode = false;
@@ -637,13 +684,16 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
 
         if (
-            (!notificationsEnabled && !soundEnabled)
-                || isQuietModeSuppressingPrayer(root, prayerKey, System.currentTimeMillis())
+            !isTest
+                && (
+                    (!notificationsEnabled && !soundEnabled)
+                        || isQuietModeSuppressingPrayer(root, prayerKey, System.currentTimeMillis())
+                )
         ) {
             return;
         }
 
-        if (MainActivity.isAppInForeground) {
+        if (!isTest && MainActivity.isAppInForeground) {
             return;
         }
 
@@ -654,7 +704,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             KEY_PRE_ADHAN_ROTATE_IDX
         );
 
-        if (meetingMode || !soundEnabled) {
+        if ((meetingMode || !soundEnabled) && !isTest) {
             if (meetingMode) {
                 triggerGentleVibration(context);
             }
@@ -683,7 +733,8 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         try {
             ContextCompat.startForegroundService(context, serviceIntent);
         } catch (Exception ignored) {
-            if (notificationsEnabled) {
+            triggerGentleVibration(context);
+            if (notificationsEnabled || isTest) {
                 PrayerNotificationHelper.showPreAdhanNotification(
                     context,
                     prayerNameAr,
@@ -695,7 +746,8 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
     }
 
-    private static void handleIqamaAlarm(Context context, Intent intent) {
+    private static void handleIqamaAlarm(Context context, Intent intent, boolean isTest) {
+        acquireBroadcastHandoffWakeLock(context);
         SharedPreferences widgetPrefs = context.getSharedPreferences(
             PrayerWidgetHelper.PREFS_NAME,
             Context.MODE_PRIVATE
@@ -710,7 +762,9 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             // ignore
         }
 
-        BackgroundReminderScheduler.scheduleNextIqama(context);
+        if (!isTest) {
+            BackgroundReminderScheduler.scheduleNextIqama(context);
+        }
 
         String prayerKey = intent.getStringExtra("prayer_key");
         String prayerNameAr = intent.getStringExtra("prayer_name");
@@ -723,15 +777,17 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         if (cityNameAr == null || cityNameAr.isEmpty()) cityNameAr = "القاهرة";
         if (mosqueTheme == null || mosqueTheme.isEmpty()) mosqueTheme = "auto";
 
-        SharedPreferences statePrefs = context.getSharedPreferences(
-            BackgroundReminderScheduler.STATE_PREFS,
-            Context.MODE_PRIVATE
-        );
-        String dedupeKey = prayerKey + "_" + targetEpochMs;
-        if (targetEpochMs > 0L && dedupeKey.equals(statePrefs.getString(KEY_LAST_IQAMA_FIRED_KEY, ""))) {
-            return;
+        if (!isTest) {
+            SharedPreferences statePrefs = context.getSharedPreferences(
+                BackgroundReminderScheduler.STATE_PREFS,
+                Context.MODE_PRIVATE
+            );
+            String dedupeKey = prayerKey + "_" + targetEpochMs;
+            if (targetEpochMs > 0L && dedupeKey.equals(statePrefs.getString(KEY_LAST_IQAMA_FIRED_KEY, ""))) {
+                return;
+            }
+            statePrefs.edit().putString(KEY_LAST_IQAMA_FIRED_KEY, dedupeKey).apply();
         }
-        statePrefs.edit().putString(KEY_LAST_IQAMA_FIRED_KEY, dedupeKey).apply();
 
         boolean notificationsEnabled = true;
         boolean meetingMode = false;
@@ -754,13 +810,16 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         }
 
         if (
-            (!notificationsEnabled && !autoPlayEnabled)
-                || isQuietModeSuppressingPrayer(root, prayerKey, System.currentTimeMillis())
+            !isTest
+                && (
+                    (!notificationsEnabled && !autoPlayEnabled)
+                        || isQuietModeSuppressingPrayer(root, prayerKey, System.currentTimeMillis())
+                )
         ) {
             return;
         }
 
-        if (MainActivity.isAppInForeground) {
+        if (!isTest && MainActivity.isAppInForeground) {
             return;
         }
 
@@ -771,11 +830,12 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             KEY_IQAMA_ROTATE_IDX
         );
 
-        if (meetingMode || !autoPlayEnabled) {
+        if ((meetingMode || !autoPlayEnabled) && !isTest) {
             if (meetingMode) {
                 triggerGentleVibration(context);
             }
             if (notificationsEnabled && PrayerNotificationHelper.hasNotificationPermission(context)) {
+                PrayerNotificationHelper.cancelIqamaNotification(context);
                 androidx.core.app.NotificationManagerCompat.from(context).notify(
                     PrayerNotificationHelper.IQAMA_NOTIFICATION_ID,
                     PrayerNotificationHelper.buildIqamaNotification(
@@ -794,7 +854,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         Intent serviceIntent = new Intent(context, MihrabAudioService.class);
         serviceIntent.setAction(MihrabAudioService.ACTION_PLAY_IQAMA);
         serviceIntent.putExtra("prayer_key", prayerKey);
-        serviceIntent.putExtra("prayer_name", prayerNameAr);
+        serviceIntent.putExtra("prayer_name", isTest ? ("معاينة " + prayerNameAr) : prayerNameAr);
         serviceIntent.putExtra("city_name", cityNameAr);
         serviceIntent.putExtra("sheikh_name", preset.sheikhNameAr);
         serviceIntent.putExtra("mosque_theme", mosqueTheme);
@@ -805,13 +865,15 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         try {
             ContextCompat.startForegroundService(context, serviceIntent);
         } catch (Exception ignored) {
-            if (notificationsEnabled && PrayerNotificationHelper.hasNotificationPermission(context)) {
+            triggerGentleVibration(context);
+            if ((notificationsEnabled || isTest) && PrayerNotificationHelper.hasNotificationPermission(context)) {
+                PrayerNotificationHelper.cancelIqamaNotification(context);
                 androidx.core.app.NotificationManagerCompat.from(context).notify(
                     PrayerNotificationHelper.IQAMA_NOTIFICATION_ID,
                     PrayerNotificationHelper.buildIqamaNotification(
                         context,
                         prayerKey,
-                        prayerNameAr,
+                        isTest ? ("معاينة " + prayerNameAr) : prayerNameAr,
                         cityNameAr,
                         preset.sheikhNameAr,
                         mosqueTheme
@@ -822,6 +884,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
     }
 
     private static void handleLastThirdAlarm(Context context, Intent intent, boolean isTest) {
+        acquireBroadcastHandoffWakeLock(context);
         SharedPreferences widgetPrefs = context.getSharedPreferences(
             PrayerWidgetHelper.PREFS_NAME,
             Context.MODE_PRIVATE
@@ -1038,6 +1101,22 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
 
     private static SalawatPreset resolveSalawatPreset(Context context, String voiceMode) {
         return resolveRotatingPreset(context, voiceMode, SALAWAT_PRESETS, KEY_SALAWAT_ROTATE_IDX);
+    }
+
+    private static void acquireBroadcastHandoffWakeLock(Context context) {
+        try {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                PowerManager.WakeLock wl = pm.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "mihrab:alarm_handoff"
+                );
+                wl.setReferenceCounted(false);
+                wl.acquire(8_000L);
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
     }
 
     private static void triggerGentleVibration(Context context) {

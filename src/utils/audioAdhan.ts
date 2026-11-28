@@ -338,6 +338,8 @@ export const DUA_SOURCES: Record<string, AdhanAudioSource> = {
     nameEn: 'Sheikh Mishary Rashid Alafasy (Dua After Adhan)',
     urls: [
       '/audio/dua-alafasy.mp3',
+      '/audio/dua-shaarawy.mp3',
+      '/audio/dua-after-adhan.mp3',
     ],
   },
   ghamdi_dua: {
@@ -347,6 +349,8 @@ export const DUA_SOURCES: Record<string, AdhanAudioSource> = {
     urls: [
       '/audio/dua-ghamdi.mp3',
       'https://archive.org/download/ad3ya-ghamedi_up-by-ayoub-islam/Adkr67.mp3',
+      '/audio/dua-shaarawy.mp3',
+      '/audio/dua-after-adhan.mp3',
     ],
   },
   durayhim_dua: {
@@ -358,6 +362,8 @@ export const DUA_SOURCES: Record<string, AdhanAudioSource> = {
       'https://archive.org/download/2_20250602_20250602_1135/adkar_be3d_adan/4.mp3',
       'https://www.hisnmuslim.com/audio/ar/25.mp3',
       'https://ar.assabile.com/media/dua/025.mp3',
+      '/audio/dua-shaarawy.mp3',
+      '/audio/dua-after-adhan.mp3',
     ],
   },
   sharif: {
@@ -1097,16 +1103,22 @@ class AdhanPlayerManager {
 
       for (const el of elementsToPrime) {
         if (!el) continue;
-        // Skip priming elements currently playing real audio
-        if (!el.paused && el.src && !el.src.startsWith('data:audio/wav')) continue;
+        // Skip priming elements currently loading or playing real audio
+        const isMainBusy =
+          el === this.audio &&
+          (this.state === 'loading' || this.state === 'playing') &&
+          (this.activeType === 'adhan' || this.activeType === 'dua' || this.activeType === 'adhkar');
+        if (isMainBusy || (!el.paused && el.src && !el.src.startsWith('data:audio/wav'))) continue;
         try {
           el.src = silentWav;
           el.load();
           const playPromise = el.play();
           if (playPromise !== undefined) {
             await playPromise;
-            el.pause();
-            el.currentTime = 0;
+            if (!isMainBusy && el.src.startsWith('data:audio/wav')) {
+              el.pause();
+              el.currentTime = 0;
+            }
           }
         } catch {
           // ignore individual element prime error
@@ -1857,6 +1869,11 @@ class AdhanPlayerManager {
       }
     } catch (err: unknown) {
       if (nonce !== this.audioPlayNonce) return;
+      const errName = err instanceof Error ? err.name : '';
+      if (errName === 'NotAllowedError') {
+        this.setState('paused', this.activeType);
+        return;
+      }
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.warn(`Failed loading audio url [${rawUrl}]:`, errorMsg);
       this.handleUrlFailure(errorMsg);

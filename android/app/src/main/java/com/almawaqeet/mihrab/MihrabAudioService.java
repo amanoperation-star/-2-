@@ -14,6 +14,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.app.ServiceCompat;
 
 public class MihrabAudioService extends Service {
@@ -28,7 +29,12 @@ public class MihrabAudioService extends Service {
     private PowerManager.WakeLock wakeLock;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private Runnable stopSafetyRunnable;
+    private int activePlaybackToken = 0;
     private String currentMode = "";
+    private String currentPrayerKey = "dhuhr";
+    private String currentPrayerNameAr = "الصلاة";
+    private String currentCityNameAr = "مواقيت الصلاة";
+    private String currentMosqueTheme = "auto";
     private boolean autoDuaAfterAdhan = false;
     private String pendingDuaAssetPath = "";
     private float currentVolume = 1.0f;
@@ -51,6 +57,10 @@ public class MihrabAudioService extends Service {
             return START_NOT_STICKY;
         }
 
+        activePlaybackToken++;
+        mainHandler.removeCallbacksAndMessages(null);
+        stopSafetyRunnable = null;
+
         if (ACTION_PLAY_ADHAN.equals(action)) {
             currentMode = "adhan";
             String prayerKey = intent.getStringExtra("prayer_key");
@@ -61,14 +71,20 @@ public class MihrabAudioService extends Service {
             String mosqueTheme = intent.getStringExtra("mosque_theme");
             boolean useFullScreen = intent.getBooleanExtra("use_fullscreen_intent", true);
 
+            currentPrayerKey = prayerKey != null ? prayerKey : "dhuhr";
+            currentPrayerNameAr = prayerNameAr != null ? prayerNameAr : "الصلاة";
+            currentCityNameAr = cityNameAr != null ? cityNameAr : "مواقيت الصلاة";
+            currentMosqueTheme = mosqueTheme != null ? mosqueTheme : "auto";
+
+            PrayerNotificationHelper.cancelAdhanNotification(this);
             Notification notification = PrayerNotificationHelper.buildAdhanForegroundNotification(
                 this,
-                prayerKey != null ? prayerKey : "dhuhr",
-                prayerNameAr != null ? prayerNameAr : "الصلاة",
+                currentPrayerKey,
+                currentPrayerNameAr,
                 prayerTime12 != null ? prayerTime12 : "",
-                cityNameAr != null ? cityNameAr : "مواقيت الصلاة",
+                currentCityNameAr,
                 reciterNameAr != null ? reciterNameAr : "",
-                mosqueTheme != null ? mosqueTheme : "auto",
+                currentMosqueTheme,
                 useFullScreen
             );
             promoteForeground(PrayerNotificationHelper.ADHAN_ALERT_NOTIFICATION_ID, notification);
@@ -121,6 +137,7 @@ public class MihrabAudioService extends Service {
             pendingDuaAssetPath = "";
             currentVolume = Math.max(0.15f, Math.min(1.0f, intent.getFloatExtra("volume", 1.0f)));
 
+            PrayerNotificationHelper.cancelPreAdhanNotification(this);
             Notification notification = PrayerNotificationHelper.buildPreAdhanNotification(
                 this,
                 prayerNameAr != null ? prayerNameAr : "الصلاة",
@@ -149,6 +166,7 @@ public class MihrabAudioService extends Service {
             pendingDuaAssetPath = "";
             currentVolume = Math.max(0.15f, Math.min(1.0f, intent.getFloatExtra("volume", 1.0f)));
 
+            PrayerNotificationHelper.cancelIqamaNotification(this);
             Notification notification = PrayerNotificationHelper.buildIqamaNotification(
                 this,
                 prayerKey != null ? prayerKey : "dhuhr",
@@ -203,6 +221,7 @@ public class MihrabAudioService extends Service {
     }
 
     private void promoteForeground(int notificationId, Notification notification) {
+        PrayerNotificationHelper.ensureChannels(this);
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceCompat.startForeground(
@@ -288,6 +307,7 @@ public class MihrabAudioService extends Service {
         Runnable onCustomComplete
     ) {
         if (assetRelativePath == null || assetRelativePath.isEmpty()) return false;
+        final int expectedToken = activePlaybackToken;
         AssetFileDescriptor afd = null;
         try {
             afd = getAssets().openFd(assetRelativePath);
@@ -304,26 +324,34 @@ public class MihrabAudioService extends Service {
             afd = null;
 
             player.setOnCompletionListener(mp -> {
+                if (expectedToken != activePlaybackToken) {
+                    return;
+                }
                 if (onCustomComplete != null) {
                     onCustomComplete.run();
                 } else if (
                     allowAutoDuaOnComplete
                         && "adhan".equals(currentMode)
                         && autoDuaAfterAdhan
-                        && pendingDuaAssetPath != null
-                        && !pendingDuaAssetPath.isEmpty()
                 ) {
                     autoDuaAfterAdhan = false;
-                    String duaPath = pendingDuaAssetPath;
+                    final String rawDuaPath = pendingDuaAssetPath;
                     pendingDuaAssetPath = "";
-                    playAssetWithFallback(duaPath, "public/audio/dua-shaarawy.mp3", AudioAttributes.USAGE_MEDIA, false);
+                    mainHandler.postDelayed(() -> {
+                        if (expectedToken != activePlaybackToken) {
+                            return;
+                        }
+                        startDuaAfterAdhanPlayback(rawDuaPath);
+                    }, 350L);
                 } else {
                     stopSelfCleanly(false);
                 }
             });
 
             player.setOnErrorListener((mp, what, extra) -> {
-                stopSelfCleanly(false);
+                if (expectedToken == activePlaybackToken) {
+                    stopSelfCleanly(false);
+                }
                 return true;
             });
 
@@ -342,6 +370,40 @@ public class MihrabAudioService extends Service {
             }
             return false;
         }
+    }
+
+    private void startDuaAfterAdhanPlayback(String rawDuaPath) {
+        currentMode = "dua";
+        acquireTimedWakeLock(4 * 60 * 1000L);
+        scheduleSafetyStop(4 * 60 * 1000L, false);
+
+        try {
+            if (PrayerNotificationHelper.hasNotificationPermission(this)) {
+                Notification duaNotification = PrayerNotificationHelper.buildDuaAfterAdhanNotification(
+                    this,
+                    currentPrayerKey,
+                    currentPrayerNameAr,
+                    currentCityNameAr,
+                    currentMosqueTheme
+                );
+                NotificationManagerCompat.from(this).notify(
+                    PrayerNotificationHelper.ADHAN_ALERT_NOTIFICATION_ID,
+                    duaNotification
+                );
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        String normalizedDua = normalizePublicAssetPath(rawDuaPath);
+        if (normalizedDua == null || normalizedDua.isEmpty()) {
+            normalizedDua = "public/audio/dua-shaarawy.mp3";
+        }
+        String fallbackDua = "public/audio/dua-shaarawy.mp3".equals(normalizedDua)
+            ? "public/audio/dua-after-adhan.mp3"
+            : "public/audio/dua-shaarawy.mp3";
+
+        playAssetWithFallback(normalizedDua, fallbackDua, AudioAttributes.USAGE_ALARM, false);
     }
 
     private String normalizePublicAssetPath(String rawPath) {
@@ -365,6 +427,7 @@ public class MihrabAudioService extends Service {
             if (am != null) {
                 boolean isAlarmMode =
                     "adhan".equals(currentMode)
+                        || "dua".equals(currentMode)
                         || "iqama".equals(currentMode)
                         || "pre_adhan".equals(currentMode)
                         || "last_third".equals(currentMode);
@@ -430,10 +493,9 @@ public class MihrabAudioService extends Service {
     }
 
     private void stopSelfCleanly(boolean removeNotification) {
-        if (stopSafetyRunnable != null) {
-            mainHandler.removeCallbacks(stopSafetyRunnable);
-            stopSafetyRunnable = null;
-        }
+        activePlaybackToken++;
+        mainHandler.removeCallbacksAndMessages(null);
+        stopSafetyRunnable = null;
         releaseMediaPlayer();
         releaseWakeLock();
         try {
@@ -451,10 +513,9 @@ public class MihrabAudioService extends Service {
 
     @Override
     public void onDestroy() {
-        if (stopSafetyRunnable != null) {
-            mainHandler.removeCallbacks(stopSafetyRunnable);
-            stopSafetyRunnable = null;
-        }
+        activePlaybackToken++;
+        mainHandler.removeCallbacksAndMessages(null);
+        stopSafetyRunnable = null;
         releaseMediaPlayer();
         releaseWakeLock();
         super.onDestroy();

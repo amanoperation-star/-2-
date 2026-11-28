@@ -2443,32 +2443,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* 2. Real Sheikh Voices for Iqama & Auto-Play */}
               <div className="p-5 md:p-6 rounded-3xl bg-[#03201a]/85 border border-[#e5b869]/40 space-y-5 shadow-lg text-right">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleIqamaPreview(iqamaVoiceMode, 'العصر')}
-                    className={`text-xs px-4 py-2.5 rounded-xl border font-bold flex items-center gap-1.5 transition-all ${
-                      (playerState === 'playing' || playerState === 'loading') && activeAudioType === 'iqama'
-                        ? 'bg-rose-600 border-rose-500 text-white'
-                        : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
-                    }`}
-                  >
-                    {playerState === 'loading' && activeAudioType === 'iqama' ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>جاري تحضير الصوت...</span>
-                      </>
-                    ) : playerState === 'playing' && activeAudioType === 'iqama' ? (
-                      <>
-                        <Square className="w-3.5 h-3.5 fill-current" />
-                        <span>إيقاف صوت الإقامة</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>تجربة صوت الإقامة الآن</span>
-                      </>
+                  <div className="flex items-center flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleIqamaPreview(iqamaVoiceMode, 'العصر')}
+                      className={`text-xs px-4 py-2.5 rounded-xl border font-bold flex items-center gap-1.5 transition-all ${
+                        (playerState === 'playing' || playerState === 'loading') && activeAudioType === 'iqama'
+                          ? 'bg-rose-600 border-rose-500 text-white'
+                          : 'bg-[#052921] border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e]'
+                      }`}
+                    >
+                      {playerState === 'loading' && activeAudioType === 'iqama' ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>جاري تحضير الصوت...</span>
+                        </>
+                      ) : playerState === 'playing' && activeAudioType === 'iqama' ? (
+                        <>
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                          <span>إيقاف صوت الإقامة</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>تجربة صوت الإقامة الآن</span>
+                        </>
+                      )}
+                    </button>
+                    {isNativeAndroidApp() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void testNativeBackgroundAlarm('iqama');
+                        }}
+                        className="text-xs px-3.5 py-2.5 rounded-xl border font-bold flex items-center gap-1.5 bg-[#052921] border-emerald-400/40 text-emerald-300 hover:bg-[#07382e] transition-all"
+                      >
+                        <BellRing className="w-3.5 h-3.5" />
+                        <span>اختبار إشعار وصوت الإقامة بالخلفية</span>
+                      </button>
                     )}
-                  </button>
+                  </div>
 
                   <div className="flex items-center gap-2 text-[#fbbf24] font-bold text-base font-amiri">
                     <span className="text-lg">أصوات إقامة الصلاة (أصوات شيوخ حقيقية من الحرمين)</span>
@@ -3473,6 +3487,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </>
                       )}
                     </button>
+                    {isNativeAndroidApp() && (
+                      <button
+                        type="button"
+                        onClick={() => void testNativeBackgroundAlarm('pre_adhan')}
+                        className="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#d4af37] text-slate-950 font-black text-xs shadow hover:brightness-105 transition-all flex items-center justify-center gap-2"
+                      >
+                        <BellRing className="w-3.5 h-3.5 shrink-0" />
+                        <span>معاينة إشعار وتنبيه الصلاة على الشاشة</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* 5. Morning & Evening Adhkar Test */}
@@ -4040,28 +4064,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* 3. Audio, Muezzin & Pre-Adhan Preparation */}
           <div className="p-5 rounded-2xl bg-[#03201a]/85 border border-[#e5b869]/35 space-y-4 shadow-lg">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handleTestPreAdhanChime(preAdhanVoiceMode)}
-                className="text-xs px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] flex items-center gap-1.5 font-bold transition-all"
-              >
-                {playerState === 'loading' && activeAudioType === 'pre_adhan_reminder' ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>جاري التحضير...</span>
-                  </>
-                ) : playerState === 'playing' && activeAudioType === 'pre_adhan_reminder' ? (
-                  <>
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    <span>إيقاف تنبيه الصلاة</span>
-                  </>
-                ) : (
-                  <>
-                    <span>تجربة تنبيه الصلاة بصوت الشيخ</span>
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                  </>
+              <div className="flex items-center flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTestPreAdhanChime(preAdhanVoiceMode)}
+                  className="text-xs px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] flex items-center gap-1.5 font-bold transition-all"
+                >
+                  {playerState === 'loading' && activeAudioType === 'pre_adhan_reminder' ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>جاري التحضير...</span>
+                    </>
+                  ) : playerState === 'playing' && activeAudioType === 'pre_adhan_reminder' ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>إيقاف تنبيه الصلاة</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>تجربة تنبيه الصلاة بصوت الشيخ</span>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                    </>
+                  )}
+                </button>
+                {isNativeAndroidApp() && (
+                  <button
+                    type="button"
+                    onClick={() => void testNativeBackgroundAlarm('pre_adhan')}
+                    className="text-xs px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#d4af37] text-slate-950 font-black flex items-center gap-1.5 shadow hover:brightness-105 transition-all"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span>معاينة إشعار وتنبيه الصلاة على الشاشة</span>
+                  </button>
                 )}
-              </button>
+              </div>
 
               <div className="flex items-center gap-2 text-[#fbbf24] font-bold text-base font-amiri">
                 <BellRing className="w-5 h-5 text-[#fbbf24]" />

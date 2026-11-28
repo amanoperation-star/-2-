@@ -267,8 +267,20 @@ public final class PrayerWidgetHelper {
 
         for (int widgetId : appWidgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_prayer_mihrab_arch);
-            Bundle options = manager.getAppWidgetOptions(widgetId);
-            bindArchWidgetViews(context, views, model, options);
+            try {
+                Bundle options = manager.getAppWidgetOptions(widgetId);
+                bindArchWidgetViews(context, views, model, options);
+            } catch (Throwable ignored) {
+                views = new RemoteViews(context.getPackageName(), R.layout.widget_prayer_mihrab_arch);
+                views.setTextViewText(R.id.widget_city, model.cityNameAr);
+                views.setTextViewText(R.id.widget_next_name, model.nextPrayerNameAr);
+                views.setTextViewText(R.id.widget_next_time, model.nextPrayerTime12);
+                bindCountdown(views, model);
+                views.setOnClickPendingIntent(
+                    R.id.widget_root,
+                    createShortcutActivityIntent(context, "times", REQUEST_CODE_LAUNCH_APP)
+                );
+            }
             manager.updateAppWidget(widgetId, views);
         }
 
@@ -363,9 +375,6 @@ public final class PrayerWidgetHelper {
         int actionBgRes = isLight
             ? R.drawable.widget_arch_action_light
             : R.drawable.widget_arch_action_dark;
-        int progressDrawableRes = isLight
-            ? R.drawable.widget_arch_progress_light
-            : R.drawable.widget_arch_progress_dark;
 
         views.setInt(R.id.widget_arch_fasting_strip, "setBackgroundResource", subcardBgRes);
         views.setInt(R.id.widget_arch_day_card, "setBackgroundResource", subcardBgRes);
@@ -383,8 +392,22 @@ public final class PrayerWidgetHelper {
             model.isQuietNow ? R.drawable.widget_arch_action_active : actionBgRes
         );
 
-        views.setInt(R.id.widget_arch_elapsed_progress, "setProgressDrawable", progressDrawableRes);
-        views.setInt(R.id.widget_arch_day_progress, "setProgressDrawable", progressDrawableRes);
+        views.setViewVisibility(
+            R.id.widget_arch_elapsed_progress,
+            isLight ? View.GONE : View.VISIBLE
+        );
+        views.setViewVisibility(
+            R.id.widget_arch_elapsed_progress_light,
+            isLight ? View.VISIBLE : View.GONE
+        );
+        views.setViewVisibility(
+            R.id.widget_arch_day_progress,
+            isLight ? View.GONE : View.VISIBLE
+        );
+        views.setViewVisibility(
+            R.id.widget_arch_day_progress_light,
+            isLight ? View.VISIBLE : View.GONE
+        );
 
         // Theme typography palette
         int primaryColor = isLight ? Color.parseColor("#0F3D2E") : Color.parseColor("#FFFFFF");
@@ -474,7 +497,12 @@ public final class PrayerWidgetHelper {
         }
 
         bindCountdown(views, model);
-        views.setProgressBar(R.id.widget_arch_elapsed_progress, 100, model.elapsedPercent, false);
+        views.setProgressBar(
+            isLight ? R.id.widget_arch_elapsed_progress_light : R.id.widget_arch_elapsed_progress,
+            100,
+            model.elapsedPercent,
+            false
+        );
 
         // Hijri & Rawatib/Wird row
         boolean showMetaRow = model.showHijriDate || model.showSunnahWird;
@@ -517,7 +545,12 @@ public final class PrayerWidgetHelper {
                 model.rawatibCompleted + "/" + model.rawatibTarget + " · " + model.wirdPercent + "%"
             );
             views.setTextViewText(R.id.widget_arch_day_pct, model.dayProgressPercent + "%");
-            views.setProgressBar(R.id.widget_arch_day_progress, 100, model.dayProgressPercent, false);
+            views.setProgressBar(
+                isLight ? R.id.widget_arch_day_progress_light : R.id.widget_arch_day_progress,
+                100,
+                model.dayProgressPercent,
+                false
+            );
         } else {
             views.setViewVisibility(R.id.widget_arch_day_card, View.GONE);
         }
@@ -676,7 +709,7 @@ public final class PrayerWidgetHelper {
             if (maxHdp <= 0) maxHdp = 380;
 
             float aspect = Math.max(1.05f, Math.min(1.85f, (float) maxHdp / (float) minWdp));
-            int outW = 280;
+            int outW = 220;
             int outH = Math.round(outW * aspect);
 
             BitmapFactory.Options boundsOpts = new BitmapFactory.Options();
@@ -765,7 +798,7 @@ public final class PrayerWidgetHelper {
             canvas.drawRect(0f, 0f, outW, outH, scrimPaint);
 
             return output;
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
             return null;
         }
     }
@@ -795,7 +828,7 @@ public final class PrayerWidgetHelper {
                 canvas.drawArc(oval, -90f, (clamped / 100f) * 360f, false, arcPaint);
             }
             return bmp;
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
             return null;
         }
     }

@@ -194,13 +194,12 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
         setAudioProgress(pct);
       },
       onAdhanEnded: () => {
-        if (isSimulation) {
-          return;
-        }
         const latestSettings = settingsRef.current;
-        if (latestSettings.autoDuaAfterAdhan) {
+        if (latestSettings.autoDuaAfterAdhan !== false) {
           setStage('dua');
           void adhanPlayer.playDua(getDuaSource(latestSettings.duaAudioReciter).id);
+        } else if (isSimulation) {
+          triggerAutoClose();
         }
       },
       onDuaEnded: () => {
@@ -248,9 +247,7 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
     setAutoCloseCountdown(null);
     if (stage === 'adhan') {
       const isFajr = prayerKey === 'fajr';
-      const reciterToPlay = isFajr
-        ? settings.fajrAdhanReciter || 'fajr_makkah'
-        : settings.adhanReciter || 'makkah';
+      const reciterToPlay = resolvePrayerReciter(settings, prayerKey);
       void adhanPlayer.playAdhan(reciterToPlay, prayerKey, isFajr && settings.fajrBoostVolume, {
         disableAutoDua: true,
       });
@@ -406,6 +403,16 @@ export const FullScreenAdhanModal: React.FC<FullScreenAdhanModalProps> = ({
           >
             <FastForward className="w-4 h-4 fill-current" />
             <span>دعاء ما بعد الأذان</span>
+          </button>
+        )}
+
+        {stage === 'dua' && playerState === 'paused' && (
+          <button
+            onClick={handleReplay}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-950/50 hover:scale-105 transition-all"
+          >
+            <Play className="w-4 h-4 fill-current" />
+            <span>تشغيل الدعاء</span>
           </button>
         )}
 

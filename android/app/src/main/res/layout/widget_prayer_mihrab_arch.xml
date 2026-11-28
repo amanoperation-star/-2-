@@ -4,7 +4,6 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_arch_bg_emerald"
-    android:clipToOutline="true"
     android:layoutDirection="rtl">
 
     <!-- Masked Mosque Backdrop Image (Pre-clipped to Mihrab arch & dimmed with theme scrim) -->
@@ -148,7 +147,7 @@
             android:textSize="22sp"
             android:textStyle="bold" />
 
-        <!-- 6. Elapsed Time Progress Bar -->
+        <!-- 6. Elapsed Time Progress Bar (Dark & Light variants for RemoteViews compatibility) -->
         <ProgressBar
             android:id="@+id/widget_arch_elapsed_progress"
             style="?android:attr/progressBarStyleHorizontal"
@@ -158,6 +157,17 @@
             android:max="100"
             android:progress="45"
             android:progressDrawable="@drawable/widget_arch_progress_dark" />
+
+        <ProgressBar
+            android:id="@+id/widget_arch_elapsed_progress_light"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="5dp"
+            android:layout_marginTop="4dp"
+            android:max="100"
+            android:progress="45"
+            android:progressDrawable="@drawable/widget_arch_progress_light"
+            android:visibility="gone" />
 
         <!-- 7. Hijri Date + Sunnah/Wird Summary Row -->
         <LinearLayout
@@ -323,6 +333,17 @@
                     android:max="100"
                     android:progress="0"
                     android:progressDrawable="@drawable/widget_arch_progress_dark" />
+
+                <ProgressBar
+                    android:id="@+id/widget_arch_day_progress_light"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="5dp"
+                    android:layout_marginTop="4dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/widget_arch_progress_light"
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
 
@@ -482,7 +503,7 @@
 
         <!-- Flexible Spacer to anchor bottom action bar -->
         <View
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
 

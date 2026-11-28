@@ -67,9 +67,11 @@ import {
 import { useTvRemoteNavigation } from './hooks/useTvRemoteNavigation';
 import {
   consumeNativeLaunchAction,
+  getNativeNotificationPermission,
   getNativeWidgetInteractiveState,
   isLikelyAndroidTvDevice,
   isNativeAndroidApp,
+  requestNativeNotificationPermission,
   subscribeNativeBackButton,
   subscribeNativeResume,
 } from './utils/nativeAndroidBridge';
@@ -208,7 +210,10 @@ export default function App() {
     autoDayNightBackground: true, // Default to true: day mosque for daytime, night mosque for night!
     backgroundOpacity: 65,
     backgroundBlur: 0,
-    autoDuaAfterAdhan: true,
+    autoDuaAfterAdhan:
+      typeof window !== 'undefined' && localStorage.getItem('auto_dua_after_adhan') !== null
+        ? localStorage.getItem('auto_dua_after_adhan') === 'true'
+        : true,
     duaAudioReciter: (() => {
       if (typeof window === 'undefined') return 'shaarawy';
       const saved = localStorage.getItem('dua_audio_reciter');
@@ -1473,9 +1478,37 @@ export default function App() {
     };
   }, [prayerTimes, handleOpenFullScreenAdhanModal]);
 
+  const nativeNotifPromptedRef = React.useRef(false);
+  useEffect(() => {
+    if (
+      !isNativeAndroidApp() ||
+      settings.notificationsEnabled === false ||
+      nativeNotifPromptedRef.current
+    ) {
+      return;
+    }
+    nativeNotifPromptedRef.current = true;
+    const timer = window.setTimeout(() => {
+      void getNativeNotificationPermission().then((status) => {
+        if (!status.requiresPrompt) return;
+        void requestNativeNotificationPermission().then((res) => {
+          if (res.granted) {
+            syncWidgetDataBridge({
+              prayerTimes,
+              currentLocation,
+              settings,
+              widgetConfig,
+            });
+          }
+        });
+      });
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [settings.notificationsEnabled, prayerTimes, currentLocation, settings, widgetConfig]);
+
   // Widget Data Bridge: syncs unified JSON in localStorage & dispatches 'mihrabWidgetSync'
   useEffect(() => {
-    if (!widgetConfig.autoSync) return;
+    if (!widgetConfig.autoSync && !isNativeAndroidApp()) return;
     const runBridgeSync = () => {
       syncWidgetDataBridge({
         prayerTimes,
@@ -2135,7 +2168,7 @@ export default function App() {
         } else if (settings.iqamaAutoPlayEnabled !== false) {
           handleTestIqama(undefined, evt.prayerNameAr, true);
         }
-        if (settings.notificationsEnabled !== false && !isNativeAndroidApp()) {
+        if (settings.notificationsEnabled !== false) {
           backgroundService.sendPrayerNotification(
             `قد قامت الصلاة · إقامة صلاة ${evt.prayerNameAr}`,
             `${currentLocation.nameAr} • حان وقت إقامة الصلاة الآن`,
@@ -2233,6 +2266,9 @@ export default function App() {
       }
       if (newSettings.preAdhanVoiceMode) {
         localStorage.setItem('pre_adhan_voice_mode', newSettings.preAdhanVoiceMode);
+      }
+      if (typeof newSettings.autoDuaAfterAdhan === 'boolean') {
+        localStorage.setItem('auto_dua_after_adhan', String(newSettings.autoDuaAfterAdhan));
       }
       if (newSettings.duaAudioReciter) {
         localStorage.setItem('dua_audio_reciter', getDuaSource(newSettings.duaAudioReciter).id);

@@ -351,7 +351,22 @@ public final class BackgroundReminderScheduler {
         );
 
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am != null) {
+        if (am == null) return;
+
+        try {
+            Intent showIntent = new Intent(context, MainActivity.class);
+            showIntent.putExtra("mihrab_shortcut_route", "times");
+            PendingIntent showPi = PendingIntent.getActivity(
+                context,
+                REQ_SHOW_CLOCK_APP,
+                showIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            AlarmManager.AlarmClockInfo clockInfo = new AlarmManager.AlarmClockInfo(matchedTriggerEpoch, showPi);
+            am.setAlarmClock(clockInfo, pi);
+        } catch (SecurityException secEx) {
+            scheduleAllowWhileIdleFallback(am, matchedTriggerEpoch, pi, canScheduleExactAlarms(context));
+        } catch (Exception ignored) {
             scheduleAllowWhileIdleFallback(am, matchedTriggerEpoch, pi, canScheduleExactAlarms(context));
         }
     }
@@ -446,7 +461,22 @@ public final class BackgroundReminderScheduler {
         );
 
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am != null) {
+        if (am == null) return;
+
+        try {
+            Intent showIntent = new Intent(context, MainActivity.class);
+            showIntent.putExtra("mihrab_shortcut_route", "times");
+            PendingIntent showPi = PendingIntent.getActivity(
+                context,
+                REQ_SHOW_CLOCK_APP,
+                showIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            AlarmManager.AlarmClockInfo clockInfo = new AlarmManager.AlarmClockInfo(matchedIqamaEpoch, showPi);
+            am.setAlarmClock(clockInfo, pi);
+        } catch (SecurityException secEx) {
+            scheduleAllowWhileIdleFallback(am, matchedIqamaEpoch, pi, canScheduleExactAlarms(context));
+        } catch (Exception ignored) {
             scheduleAllowWhileIdleFallback(am, matchedIqamaEpoch, pi, canScheduleExactAlarms(context));
         }
     }

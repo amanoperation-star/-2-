@@ -27,14 +27,18 @@ import org.json.JSONObject;
 
 public final class PrayerNotificationHelper {
     public static final String CHANNEL_ONGOING_ID = "mihrab_ongoing_prayer_channel";
-    public static final String CHANNEL_ADHAN_ID = "mihrab_adhan_alert_channel";
+    public static final String CHANNEL_ADHAN_ID = "mihrab_adhan_heads_up_v2";
+    private static final String LEGACY_CHANNEL_ADHAN_ID = "mihrab_adhan_alert_channel";
     public static final String CHANNEL_SALAWAT_ID = "mihrab_salawat_heads_up_v2";
     private static final String LEGACY_CHANNEL_SALAWAT_ID = "mihrab_salawat_channel";
     public static final String CHANNEL_PERIODIC_ID = "mihrab_periodic_reminder_channel";
     public static final String CHANNEL_PERIODIC_SILENT_ID = "mihrab_periodic_reminder_silent_channel";
-    public static final String CHANNEL_PRE_ADHAN_ID = "mihrab_pre_adhan_channel";
-    public static final String CHANNEL_IQAMA_ID = "mihrab_iqama_channel";
+    public static final String CHANNEL_PRE_ADHAN_ID = "mihrab_pre_adhan_heads_up_v2";
+    private static final String LEGACY_CHANNEL_PRE_ADHAN_ID = "mihrab_pre_adhan_channel";
+    public static final String CHANNEL_IQAMA_ID = "mihrab_iqama_heads_up_v2";
+    private static final String LEGACY_CHANNEL_IQAMA_ID = "mihrab_iqama_channel";
     public static final String CHANNEL_LAST_THIRD_ID = "mihrab_last_third_heads_up_v1";
+    public static final String CHANNEL_GENERAL_ALERT_ID = "mihrab_general_prayer_alerts_v1";
     public static final String ACTION_ADHAN_TRANSITION = "com.almawaqeet.mihrab.ACTION_ADHAN_TRANSITION";
 
     public static final int ONGOING_NOTIFICATION_ID = 5101;
@@ -44,6 +48,7 @@ public final class PrayerNotificationHelper {
     public static final int PRE_ADHAN_NOTIFICATION_ID = 5105;
     public static final int IQAMA_NOTIFICATION_ID = 5106;
     public static final int LAST_THIRD_NOTIFICATION_ID = 5107;
+    public static final int GENERAL_ALERT_NOTIFICATION_ID = 5108;
 
     private static final int REQUEST_CODE_NOTIF_LAUNCH = 5201;
     private static final int REQUEST_CODE_ADHAN_LAUNCH = 5202;
@@ -59,6 +64,7 @@ public final class PrayerNotificationHelper {
     private static final int REQUEST_CODE_IQAMA_STOP = 5212;
     private static final int REQUEST_CODE_LAST_THIRD_LAUNCH = 5213;
     private static final int REQUEST_CODE_LAST_THIRD_STOP = 5214;
+    private static final int REQUEST_CODE_GENERAL_ALERT_LAUNCH = 5215;
 
     private PrayerNotificationHelper() {}
 
@@ -91,6 +97,15 @@ public final class PrayerNotificationHelper {
         ongoing.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(ongoing);
 
+        try {
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_ADHAN_ID);
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_SALAWAT_ID);
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_PRE_ADHAN_ID);
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_IQAMA_ID);
+        } catch (Exception ignored) {
+            // ignore legacy channel cleanup errors
+        }
+
         NotificationChannel adhan = new NotificationChannel(
             CHANNEL_ADHAN_ID,
             "تنبيهات دخول وقت الأذان",
@@ -99,14 +114,11 @@ public final class PrayerNotificationHelper {
         adhan.setDescription("إشعار بارز وشاشة الأذان عند دخول وقت الصلاة حتى مع إغلاق التطبيق");
         adhan.setSound(null, null); // Real Adhan audio is played by MihrabAudioService
         adhan.enableVibration(true);
+        adhan.setVibrationPattern(new long[] { 0L, 250L, 120L, 250L });
+        adhan.enableLights(true);
+        adhan.setBypassDnd(true);
         adhan.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(adhan);
-
-        try {
-            manager.deleteNotificationChannel(LEGACY_CHANNEL_SALAWAT_ID);
-        } catch (Exception ignored) {
-            // ignore legacy channel cleanup errors
-        }
 
         NotificationChannel salawat = new NotificationChannel(
             CHANNEL_SALAWAT_ID,
@@ -149,9 +161,11 @@ public final class PrayerNotificationHelper {
             "تنبيهات الاستعداد قبل الأذان",
             NotificationManager.IMPORTANCE_HIGH
         );
-        preAdhan.setDescription("تنبيه بصوت المشايخ قبل دخول وقت الصلاة للاستعداد والوضوء");
-        preAdhan.setSound(null, null);
+        preAdhan.setDescription("تنبيه على الشاشة وبصوت المشايخ قبل دخول وقت الصلاة للاستعداد والوضوء");
+        preAdhan.setSound(null, null); // Sheikh reminder audio is played by MihrabAudioService
         preAdhan.enableVibration(true);
+        preAdhan.setVibrationPattern(new long[] { 0L, 180L, 100L, 180L });
+        preAdhan.enableLights(true);
         preAdhan.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(preAdhan);
 
@@ -163,6 +177,9 @@ public final class PrayerNotificationHelper {
         iqama.setDescription("نداء الإقامة التلقائي في موعده الدقيق بعد الأذان");
         iqama.setSound(null, null);
         iqama.enableVibration(true);
+        iqama.setVibrationPattern(new long[] { 0L, 220L, 120L, 220L });
+        iqama.enableLights(true);
+        iqama.setBypassDnd(true);
         iqama.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(iqama);
 
@@ -178,6 +195,18 @@ public final class PrayerNotificationHelper {
         lastThird.setShowBadge(false);
         lastThird.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(lastThird);
+
+        NotificationChannel generalAlert = new NotificationChannel(
+            CHANNEL_GENERAL_ALERT_ID,
+            "تنبيهات الصلاة والأذكار والوتر",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        generalAlert.setDescription("تنبيهات منبثقة على الشاشة لمواعيد الصلاة والوتر والسحور والأذكار");
+        generalAlert.enableVibration(true);
+        generalAlert.setVibrationPattern(new long[] { 0L, 140L });
+        generalAlert.enableLights(true);
+        generalAlert.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        manager.createNotificationChannel(generalAlert);
     }
 
     public static void refreshOngoingNotification(Context context) {
@@ -446,9 +475,14 @@ public final class PrayerNotificationHelper {
                 .setContentTitle(title)
                 .setContentText(body)
                 .setSubText(mosque.titleAr)
+                .setTicker(title)
+                .setWhen(System.currentTimeMillis())
+                .setShowWhen(true)
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setOnlyAlertOnce(false)
                 .setAutoCancel(true)
                 .setContentIntent(fullScreenPi)
                 .addAction(R.drawable.ic_stat_mihrab, "فتح شاشة الأذان", fullScreenPi)
@@ -466,6 +500,12 @@ public final class PrayerNotificationHelper {
                     .bigLargeIcon((Bitmap) null)
                     .setBigContentTitle(title)
                     .setSummaryText(body)
+            );
+        } else {
+            builder.setStyle(
+                new NotificationCompat.BigTextStyle()
+                    .bigText(body)
+                    .setBigContentTitle(title)
             );
         }
 
@@ -487,6 +527,7 @@ public final class PrayerNotificationHelper {
         ensureChannels(context);
 
         try {
+            cancelAdhanNotification(context);
             Notification notification = buildAdhanForegroundNotification(
                 context,
                 prayerKey,
@@ -501,6 +542,76 @@ public final class PrayerNotificationHelper {
         } catch (Exception ignored) {
             // ignore
         }
+    }
+
+    public static Notification buildDuaAfterAdhanNotification(
+        Context context,
+        String prayerKey,
+        String prayerNameAr,
+        String cityNameAr,
+        String mosqueTheme
+    ) {
+        ensureChannels(context);
+        MosqueVisual mosque = resolveMosqueVisual(mosqueTheme, prayerKey);
+        Bitmap mosqueBitmap = decodeSafeNotificationBitmap(context, mosque.drawableResId);
+
+        Intent fullScreenIntent = new Intent(context, AdhanAlarmActivity.class);
+        fullScreenIntent.putExtra("prayer_key", prayerKey);
+        fullScreenIntent.putExtra("prayer_name", prayerNameAr);
+        fullScreenIntent.putExtra("city_name", cityNameAr);
+        fullScreenIntent.putExtra("mosque_theme", mosqueTheme);
+        fullScreenIntent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        );
+        PendingIntent fullScreenPi = PendingIntent.getActivity(
+            context,
+            REQUEST_CODE_ADHAN_FULLSCREEN,
+            fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Intent stopIntent = new Intent(context, BackgroundAlarmReceiver.class);
+        stopIntent.setAction(BackgroundAlarmReceiver.ACTION_STOP_AUDIO_SERVICE);
+        PendingIntent stopPi = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_ADHAN_STOP,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String title = "دعاء ما بعد الأذان";
+        String body = "اللَّهُمَّ رَبَّ هَذِهِ الدَّعْوَةِ التَّامَّةِ وَالصَّلَاةِ الْقَائِمَةِ آتِ مُحَمَّدًا الْوَسِيلَةَ وَالْفَضِيلَةَ";
+
+        NotificationCompat.Builder builder =
+            new NotificationCompat.Builder(context, CHANNEL_ADHAN_ID)
+                .setSmallIcon(R.drawable.ic_stat_mihrab)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setSubText("عقب أذان " + (prayerNameAr != null && !prayerNameAr.isEmpty() ? prayerNameAr : "الصلاة"))
+                .setTicker(title)
+                .setWhen(System.currentTimeMillis())
+                .setShowWhen(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setOnlyAlertOnce(true)
+                .setAutoCancel(true)
+                .setContentIntent(fullScreenPi)
+                .addAction(R.drawable.ic_stat_mihrab, "إيقاف الصوت", stopPi);
+
+        if (mosqueBitmap != null) {
+            builder.setLargeIcon(mosqueBitmap);
+        }
+        builder.setStyle(
+            new NotificationCompat.BigTextStyle()
+                .bigText(body)
+                .setBigContentTitle(title)
+        );
+
+        return builder.build();
     }
 
     public static Notification buildSalawatNotification(
@@ -543,6 +654,7 @@ public final class PrayerNotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(launchPi)
@@ -618,6 +730,7 @@ public final class PrayerNotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(launchPi)
@@ -681,8 +794,10 @@ public final class PrayerNotificationHelper {
             .setShowWhen(true)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body.toString()).setBigContentTitle(title))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(launchPi)
             .addAction(R.drawable.ic_stat_mihrab, "إيقاف الصوت", stopPi)
@@ -699,6 +814,7 @@ public final class PrayerNotificationHelper {
         if (context == null || !hasNotificationPermission(context)) return;
         ensureChannels(context);
         try {
+            cancelPreAdhanNotification(context);
             NotificationManagerCompat.from(context).notify(
                 PRE_ADHAN_NOTIFICATION_ID,
                 buildPreAdhanNotification(
@@ -748,14 +864,74 @@ public final class PrayerNotificationHelper {
             .setContentTitle(title)
             .setContentText(body.toString())
             .setSubText(mosque.titleAr)
+            .setTicker(title)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body.toString()).setBigContentTitle(title))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(launchPi)
             .addAction(R.drawable.ic_stat_mihrab, "إيقاف الصوت", stopPi)
             .build();
+    }
+
+    public static void showGeneralPrayerNotification(
+        Context context,
+        String title,
+        String body,
+        String prayerKey,
+        String mosqueTheme
+    ) {
+        if (context == null || !hasNotificationPermission(context)) return;
+        ensureChannels(context);
+        try {
+            PendingIntent launchPi = createLaunchPendingIntent(
+                context,
+                REQUEST_CODE_GENERAL_ALERT_LAUNCH
+            );
+            MosqueVisual mosque = resolveMosqueVisual(mosqueTheme, prayerKey != null ? prayerKey : "dhuhr");
+            Bitmap mosqueBitmap = decodeSafeNotificationBitmap(context, mosque.drawableResId);
+
+            String safeTitle = (title != null && !title.isEmpty()) ? title : "تنبيه مواقيت الصلاة";
+            String safeBody = (body != null && !body.isEmpty()) ? body : mosque.titleAr;
+
+            NotificationCompat.Builder builder =
+                new NotificationCompat.Builder(context, CHANNEL_GENERAL_ALERT_ID)
+                    .setSmallIcon(R.drawable.ic_stat_mihrab)
+                    .setContentTitle(safeTitle)
+                    .setContentText(safeBody)
+                    .setSubText(mosque.titleAr)
+                    .setTicker(safeTitle)
+                    .setWhen(System.currentTimeMillis())
+                    .setShowWhen(true)
+                    .setStyle(
+                        new NotificationCompat.BigTextStyle()
+                            .bigText(safeBody)
+                            .setBigContentTitle(safeTitle)
+                    )
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setOnlyAlertOnce(false)
+                    .setAutoCancel(true)
+                    .setContentIntent(launchPi);
+
+            if (mosqueBitmap != null) {
+                builder.setLargeIcon(mosqueBitmap);
+            }
+
+            NotificationManagerCompat.from(context).cancel(GENERAL_ALERT_NOTIFICATION_ID);
+            NotificationManagerCompat.from(context).notify(
+                GENERAL_ALERT_NOTIFICATION_ID,
+                builder.build()
+            );
+        } catch (Exception ignored) {
+            // ignore OEM notification errors
+        }
     }
 
     public static void showPeriodicReminderNotification(

@@ -711,6 +711,21 @@ export const NotificationShadeSettingsCard: React.FC<NotificationShadeSettingsCa
             <button
               type="button"
               onClick={() => {
+                void testNativeBackgroundAlarm('pre_adhan').then(() => {
+                  setFeedbackMsg(
+                    'تم تشغيل تنبيه الاستعداد للصلاة مع إشعار الشاشة — اسحب الشريط العلوي للمعاينة.'
+                  );
+                });
+              }}
+              className="min-h-[40px] px-3 py-2 rounded-xl bg-[#073329] border border-[#e5b869]/40 text-amber-200 text-xs font-bold flex items-center gap-1.5"
+            >
+              <BellRing className="w-3.5 h-3.5" />
+              <span>تجربة تنبيه الاستعداد قبل الصلاة</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 void testNativeBackgroundAlarm('periodic').then(() => {
                   setFeedbackMsg('تم إرسال إشعار الآية/الحديث الدوري إلى الشريط العلوي للمعاينة.');
                 });

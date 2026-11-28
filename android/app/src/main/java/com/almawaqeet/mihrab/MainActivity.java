@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(WidgetBridgePlugin.class);
         super.onCreate(savedInstanceState);
+        PrayerNotificationHelper.ensureChannels(this);
         activeInstance = new WeakReference<>(this);
 
         handleShortcutIntent(getIntent());

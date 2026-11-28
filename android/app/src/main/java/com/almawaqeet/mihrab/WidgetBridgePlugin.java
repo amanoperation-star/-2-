@@ -349,6 +349,28 @@ public class WidgetBridgePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void showGeneralPrayerNotificationNow(PluginCall call) {
+        Context context = getContext();
+        String title = call.getString("title", "تنبيه مواقيت الصلاة");
+        String body = call.getString("body", "");
+        String prayerKey = call.getString("prayerKey", "dhuhr");
+        String mosqueTheme = call.getString("mosqueTheme", "auto");
+        PrayerNotificationHelper.showGeneralPrayerNotification(
+            context,
+            title,
+            body,
+            prayerKey,
+            mosqueTheme
+        );
+
+        boolean granted = PrayerNotificationHelper.hasNotificationPermission(context);
+        JSObject res = new JSObject();
+        res.put("shown", granted);
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
     public void showLastThirdNotificationNow(PluginCall call) {
         Context context = getContext();
         String verseText = call.getString("verseText", "");

@@ -55,6 +55,15 @@ interface WidgetBridgePluginInterface {
     shown: boolean;
     granted: boolean;
   }>;
+  showGeneralPrayerNotificationNow(options: {
+    title: string;
+    body: string;
+    prayerKey?: string;
+    mosqueTheme?: NotificationMosqueTheme;
+  }): Promise<{
+    shown: boolean;
+    granted: boolean;
+  }>;
   getBackgroundReliabilityStatus(): Promise<NativeBackgroundReliabilityStatus>;
   requestExactAlarmPermission(): Promise<{ opened: boolean; granted: boolean }>;
   requestFullScreenIntentPermission(): Promise<{ opened: boolean; granted: boolean }>;
@@ -62,7 +71,7 @@ interface WidgetBridgePluginInterface {
   requestOverlayPermission(): Promise<{ opened: boolean; granted: boolean }>;
   openAppDetailsSettings(): Promise<{ opened: boolean }>;
   testBackgroundAlarmNow(options: {
-    type: 'adhan' | 'salawat' | 'periodic' | 'last_third';
+    type: 'adhan' | 'salawat' | 'periodic' | 'last_third' | 'iqama' | 'pre_adhan';
   }): Promise<{
     triggered: boolean;
   }>;
@@ -259,6 +268,23 @@ export async function sendNativeLastThirdNotification(params: {
   }
 }
 
+export async function sendNativeGeneralPrayerNotification(params: {
+  title: string;
+  body: string;
+  prayerKey?: string;
+  mosqueTheme?: NotificationMosqueTheme;
+}): Promise<boolean> {
+  if (!isNativeAndroidApp()) {
+    return false;
+  }
+  try {
+    const res = await WidgetBridge.showGeneralPrayerNotificationNow(params);
+    return Boolean(res?.shown);
+  } catch {
+    return false;
+  }
+}
+
 export async function requestPinNativeAndroidWidget(
   size: 'lock_pill' | 'small' | 'medium' | 'large' | 'arch'
 ): Promise<{ supported: boolean; requested: boolean }> {
@@ -404,7 +430,7 @@ export async function openNativeAppInfoSettings(): Promise<{ opened: boolean }> 
 }
 
 export async function testNativeBackgroundAlarm(
-  type: 'adhan' | 'salawat' | 'periodic' | 'last_third'
+  type: 'adhan' | 'salawat' | 'periodic' | 'last_third' | 'iqama' | 'pre_adhan'
 ): Promise<{ triggered: boolean }> {
   if (!isNativeAndroidApp()) return { triggered: false };
   try {

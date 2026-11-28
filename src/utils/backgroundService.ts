@@ -1,6 +1,9 @@
 // Service for Screen Wake Lock API and Browser Web Notifications
 import {
+  getNativeNotificationPermission,
   isNativeAndroidApp,
+  requestNativeNotificationPermission,
+  sendNativeGeneralPrayerNotification,
   sendNativeLastThirdNotification,
   sendNativePreAdhanNotification,
   sendNativeSalawatNotification,
@@ -85,8 +88,17 @@ class BackgroundService {
     return this.isWakeLockActive;
   }
 
-  // Request Web Notification permission
+  // Request Web or Native Android Notification permission
   public async requestNotificationPermission(): Promise<boolean> {
+    if (isNativeAndroidApp()) {
+      const current = await getNativeNotificationPermission();
+      if (current.granted) {
+        return true;
+      }
+      const requested = await requestNativeNotificationPermission();
+      return Boolean(requested.granted);
+    }
+
     if (!('Notification' in window)) {
       return false;
     }
@@ -138,10 +150,6 @@ class BackgroundService {
     prayerKey: string = 'dhuhr',
     forceTest: boolean = false
   ): void {
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-      return;
-    }
-
     const todayStr = new Date().toDateString();
     const notificationKey = `${todayStr}-${prayerNameAr}`;
 
@@ -164,6 +172,21 @@ class BackgroundService {
           prayerNameAr.startsWith('موعد')
         ? prayerNameAr
         : `حان الآن موعد أذان ${prayerNameAr}`;
+
+    if (isNativeAndroidApp()) {
+      void sendNativeGeneralPrayerNotification({
+        title,
+        body: `${cityName} · ${mosque.titleAr}`,
+        prayerKey,
+        mosqueTheme,
+      });
+      return;
+    }
+
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+      return;
+    }
+
     const tag = forceTest ? `adhan-test-${Date.now()}` : `adhan-${prayerKey}-${prayerNameAr}`;
     const options: NotificationOptions & { image?: string; renotify?: boolean } = {
       body: `${cityName} · ${mosque.titleAr}`,
