@@ -84,6 +84,7 @@
                 <action android:name="com.almawaqeet.mihrab.ACTION_IQAMA_ALARM" />
                 <action android:name="com.almawaqeet.mihrab.ACTION_SALAWAT_ALARM" />
                 <action android:name="com.almawaqeet.mihrab.ACTION_PERIODIC_REMINDER_ALARM" />
+                <action android:name="com.almawaqeet.mihrab.ACTION_LAST_THIRD_ALARM" />
                 <action android:name="com.almawaqeet.mihrab.ACTION_STOP_AUDIO_SERVICE" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />

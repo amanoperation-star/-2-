@@ -23,6 +23,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
     public static final String ACTION_IQAMA_ALARM = "com.almawaqeet.mihrab.ACTION_IQAMA_ALARM";
     public static final String ACTION_SALAWAT_ALARM = "com.almawaqeet.mihrab.ACTION_SALAWAT_ALARM";
     public static final String ACTION_PERIODIC_REMINDER_ALARM = "com.almawaqeet.mihrab.ACTION_PERIODIC_REMINDER_ALARM";
+    public static final String ACTION_LAST_THIRD_ALARM = "com.almawaqeet.mihrab.ACTION_LAST_THIRD_ALARM";
     public static final String ACTION_STOP_AUDIO_SERVICE = "com.almawaqeet.mihrab.ACTION_STOP_AUDIO_SERVICE";
 
     private static final String KEY_SALAWAT_ROTATE_IDX = "salawat_rotate_idx";
@@ -32,6 +33,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
     private static final String KEY_LAST_ADHAN_FIRED_KEY = "last_adhan_fired_epoch_key";
     private static final String KEY_LAST_PRE_ADHAN_FIRED_KEY = "last_pre_adhan_fired_epoch_key";
     private static final String KEY_LAST_IQAMA_FIRED_KEY = "last_iqama_fired_epoch_key";
+    private static final String KEY_LAST_THIRD_FIRED_KEY = "last_third_fired_epoch_key";
 
     private static final SalawatPreset[] SALAWAT_PRESETS = new SalawatPreset[] {
         new SalawatPreset(
@@ -101,6 +103,11 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             return;
         }
 
+        if (ACTION_LAST_THIRD_ALARM.equals(action)) {
+            handleLastThirdAlarm(context, intent, false);
+            return;
+        }
+
         if (
             Intent.ACTION_BOOT_COMPLETED.equals(action)
                 || Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(action)
@@ -131,6 +138,10 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
             handleSalawatAlarm(context, true);
         } else if ("periodic".equals(type)) {
             handlePeriodicReminderAlarm(context, true);
+        } else if ("last_third".equals(type)) {
+            Intent fake = new Intent(ACTION_LAST_THIRD_ALARM);
+            fake.putExtra("target_epoch_ms", System.currentTimeMillis());
+            handleLastThirdAlarm(context, fake, true);
         }
     }
 
@@ -146,6 +157,7 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
         PrayerNotificationHelper.cancelSalawatNotification(context);
         PrayerNotificationHelper.cancelPreAdhanNotification(context);
         PrayerNotificationHelper.cancelIqamaNotification(context);
+        PrayerNotificationHelper.cancelLastThirdNotification(context);
     }
 
     private static void handleAdhanAlarm(Context context, Intent intent, boolean isTest) {
@@ -804,6 +816,140 @@ public class BackgroundAlarmReceiver extends BroadcastReceiver {
                         preset.sheikhNameAr,
                         mosqueTheme
                     )
+                );
+            }
+        }
+    }
+
+    private static void handleLastThirdAlarm(Context context, Intent intent, boolean isTest) {
+        SharedPreferences widgetPrefs = context.getSharedPreferences(
+            PrayerWidgetHelper.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        String rawJson = widgetPrefs.getString(PrayerWidgetHelper.KEY_PAYLOAD_JSON, null);
+        JSONObject root = null;
+        try {
+            if (rawJson != null && !rawJson.isEmpty()) {
+                root = new JSONObject(rawJson);
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+
+        if (!isTest) {
+            BackgroundReminderScheduler.scheduleNextLastThird(context);
+        }
+
+        long targetEpochMs = intent.getLongExtra("target_epoch_ms", 0L);
+        String fajrTime12 = intent.getStringExtra("fajr_time12");
+        if (!isTest && targetEpochMs > 0L) {
+            SharedPreferences statePrefs = context.getSharedPreferences(
+                BackgroundReminderScheduler.STATE_PREFS,
+                Context.MODE_PRIVATE
+            );
+            String dedupeKey = "last_third_" + targetEpochMs;
+            if (dedupeKey.equals(statePrefs.getString(KEY_LAST_THIRD_FIRED_KEY, ""))) {
+                return;
+            }
+            statePrefs.edit().putString(KEY_LAST_THIRD_FIRED_KEY, dedupeKey).apply();
+        }
+
+        boolean enabled = true;
+        boolean notificationsEnabled = true;
+        boolean meetingMode = false;
+        float volume = 0.95f;
+
+        String verseText = "﴿ تَتَجَافَىٰ جُنُوبُهُمْ عَنِ الْمَضَاجِعِ يَدْعُونَ رَبَّهُمْ خَوْفًا وَطَمَعًا وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ ﴾";
+        String verseSurah = "سورة السجدة • الآية ١٦";
+        String reciterNameAr = "الشيخ ناصر القطامي";
+        String[] assetPaths = new String[] { "/audio/qiyam/qatami/032016.mp3" };
+        String fallbackAsset = "/audio/qiyam/qatami/032016.mp3";
+
+        if (root != null) {
+            JSONObject audio = root.optJSONObject("audioSettings");
+            if (audio != null) {
+                notificationsEnabled = audio.optBoolean("notificationsEnabled", true);
+                meetingMode = audio.optBoolean("meetingModeEnabled", false);
+                volume = (float) audio.optDouble("volume", 0.95);
+            }
+            JSONObject lastThird = root.optJSONObject("lastThirdSettings");
+            if (lastThird != null) {
+                enabled = lastThird.optBoolean("enabled", true);
+                String tVerse = lastThird.optString("verseText", "");
+                if (!tVerse.isEmpty()) verseText = tVerse;
+                String tSurah = lastThird.optString("verseSurah", "");
+                if (!tSurah.isEmpty()) verseSurah = tSurah;
+                String tReciter = lastThird.optString("reciterNameAr", "");
+                if (!tReciter.isEmpty()) reciterNameAr = tReciter;
+                String tFallback = lastThird.optString("fallbackAssetPath", "");
+                if (!tFallback.isEmpty()) fallbackAsset = tFallback;
+                JSONArray pathsJson = lastThird.optJSONArray("verseAssetPaths");
+                if (pathsJson != null && pathsJson.length() > 0) {
+                    List<String> list = new ArrayList<>();
+                    for (int i = 0; i < pathsJson.length(); i++) {
+                        String p = pathsJson.optString(i, "");
+                        if (!p.isEmpty()) list.add(p);
+                    }
+                    if (!list.isEmpty()) {
+                        assetPaths = list.toArray(new String[0]);
+                    }
+                }
+            }
+        }
+
+        if (!isTest && (!enabled || isQuietModeSuppressingGeneral(root, System.currentTimeMillis()))) {
+            return;
+        }
+
+        // If user is already inside Mihrab right now (and not testing background behavior), let React show toast & audio cleanly
+        if (!isTest && MainActivity.isAppInForeground) {
+            if (notificationsEnabled) {
+                PrayerNotificationHelper.showLastThirdNotification(
+                    context,
+                    verseText,
+                    verseSurah,
+                    reciterNameAr,
+                    fajrTime12
+                );
+            }
+            return;
+        }
+
+        if (meetingMode && !isTest) {
+            triggerGentleVibration(context);
+            if (notificationsEnabled) {
+                PrayerNotificationHelper.showLastThirdNotification(
+                    context,
+                    verseText,
+                    verseSurah,
+                    "وضع الاجتماع الصامت",
+                    fajrTime12
+                );
+            }
+            return;
+        }
+
+        Intent serviceIntent = new Intent(context, MihrabAudioService.class);
+        serviceIntent.setAction(MihrabAudioService.ACTION_PLAY_LAST_THIRD_VERSE);
+        serviceIntent.putExtra("verse_text", verseText);
+        serviceIntent.putExtra("verse_surah", verseSurah);
+        serviceIntent.putExtra("reciter_name", reciterNameAr);
+        serviceIntent.putExtra("fajr_time12", fajrTime12 != null ? fajrTime12 : "");
+        serviceIntent.putExtra("asset_paths", assetPaths);
+        serviceIntent.putExtra("asset_path", assetPaths[0]);
+        serviceIntent.putExtra("fallback_asset_path", fallbackAsset);
+        serviceIntent.putExtra("volume", volume);
+
+        try {
+            ContextCompat.startForegroundService(context, serviceIntent);
+        } catch (Exception ignored) {
+            if (notificationsEnabled || isTest) {
+                PrayerNotificationHelper.showLastThirdNotification(
+                    context,
+                    verseText,
+                    verseSurah,
+                    reciterNameAr,
+                    fajrTime12
                 );
             }
         }

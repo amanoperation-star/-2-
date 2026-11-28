@@ -28,11 +28,13 @@ import org.json.JSONObject;
 public final class PrayerNotificationHelper {
     public static final String CHANNEL_ONGOING_ID = "mihrab_ongoing_prayer_channel";
     public static final String CHANNEL_ADHAN_ID = "mihrab_adhan_alert_channel";
-    public static final String CHANNEL_SALAWAT_ID = "mihrab_salawat_channel";
+    public static final String CHANNEL_SALAWAT_ID = "mihrab_salawat_heads_up_v2";
+    private static final String LEGACY_CHANNEL_SALAWAT_ID = "mihrab_salawat_channel";
     public static final String CHANNEL_PERIODIC_ID = "mihrab_periodic_reminder_channel";
     public static final String CHANNEL_PERIODIC_SILENT_ID = "mihrab_periodic_reminder_silent_channel";
     public static final String CHANNEL_PRE_ADHAN_ID = "mihrab_pre_adhan_channel";
     public static final String CHANNEL_IQAMA_ID = "mihrab_iqama_channel";
+    public static final String CHANNEL_LAST_THIRD_ID = "mihrab_last_third_heads_up_v1";
     public static final String ACTION_ADHAN_TRANSITION = "com.almawaqeet.mihrab.ACTION_ADHAN_TRANSITION";
 
     public static final int ONGOING_NOTIFICATION_ID = 5101;
@@ -41,6 +43,7 @@ public final class PrayerNotificationHelper {
     public static final int PERIODIC_NOTIFICATION_ID = 5104;
     public static final int PRE_ADHAN_NOTIFICATION_ID = 5105;
     public static final int IQAMA_NOTIFICATION_ID = 5106;
+    public static final int LAST_THIRD_NOTIFICATION_ID = 5107;
 
     private static final int REQUEST_CODE_NOTIF_LAUNCH = 5201;
     private static final int REQUEST_CODE_ADHAN_LAUNCH = 5202;
@@ -54,6 +57,8 @@ public final class PrayerNotificationHelper {
     private static final int REQUEST_CODE_PRE_ADHAN_STOP = 5210;
     private static final int REQUEST_CODE_IQAMA_LAUNCH = 5211;
     private static final int REQUEST_CODE_IQAMA_STOP = 5212;
+    private static final int REQUEST_CODE_LAST_THIRD_LAUNCH = 5213;
+    private static final int REQUEST_CODE_LAST_THIRD_STOP = 5214;
 
     private PrayerNotificationHelper() {}
 
@@ -97,14 +102,21 @@ public final class PrayerNotificationHelper {
         adhan.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(adhan);
 
+        try {
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_SALAWAT_ID);
+        } catch (Exception ignored) {
+            // ignore legacy channel cleanup errors
+        }
+
         NotificationChannel salawat = new NotificationChannel(
             CHANNEL_SALAWAT_ID,
             "التذكير الصوتي بالصلاة على النبي ﷺ",
-            NotificationManager.IMPORTANCE_DEFAULT
+            NotificationManager.IMPORTANCE_HIGH
         );
-        salawat.setDescription("إشعار وتشغيل صوت الصلاة على النبي ﷺ بصوت المشايخ أثناء إغلاق التطبيق");
+        salawat.setDescription("يظهر كإشعار منبثق على الشاشة مع تشغيل صوت الصلاة على النبي ﷺ بصوت المشايخ حتى أثناء استخدام أي تطبيق");
         salawat.setSound(null, null); // Real Sheikh recitation is played by MihrabAudioService
-        salawat.enableVibration(false);
+        salawat.enableVibration(true);
+        salawat.setVibrationPattern(new long[] { 0L, 90L });
         salawat.setShowBadge(false);
         salawat.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(salawat);
@@ -153,6 +165,19 @@ public final class PrayerNotificationHelper {
         iqama.enableVibration(true);
         iqama.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         manager.createNotificationChannel(iqama);
+
+        NotificationChannel lastThird = new NotificationChannel(
+            CHANNEL_LAST_THIRD_ID,
+            "تنبيهات دخول الثلث الأخير من الليل",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        lastThird.setDescription("إشعار على الشاشة وتلاوة آية القيام تلقائياً عند دخول الثلث الأخير من الليل حتى أثناء فتح أي تطبيق");
+        lastThird.setSound(null, null); // Qiyam recitation audio is played automatically by MihrabAudioService
+        lastThird.enableVibration(true);
+        lastThird.setVibrationPattern(new long[] { 0L, 120L });
+        lastThird.setShowBadge(false);
+        lastThird.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        manager.createNotificationChannel(lastThird);
     }
 
     public static void refreshOngoingNotification(Context context) {
@@ -217,6 +242,15 @@ public final class PrayerNotificationHelper {
         if (context == null) return;
         try {
             NotificationManagerCompat.from(context).cancel(IQAMA_NOTIFICATION_ID);
+        } catch (Exception ignored) {
+            // ignore
+        }
+    }
+
+    public static void cancelLastThirdNotification(Context context) {
+        if (context == null) return;
+        try {
+            NotificationManagerCompat.from(context).cancel(LAST_THIRD_NOTIFICATION_ID);
         } catch (Exception ignored) {
             // ignore
         }
@@ -506,9 +540,10 @@ public final class PrayerNotificationHelper {
                     .bigText(bodyText + "\n" + summary)
                     .setBigContentTitle(title)
             )
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setContentIntent(launchPi)
             .addAction(R.drawable.ic_stat_mihrab, "إيقاف الصوت", stopPi)
@@ -523,9 +558,87 @@ public final class PrayerNotificationHelper {
         if (context == null || !hasNotificationPermission(context)) return;
         ensureChannels(context);
         try {
+            cancelSalawatNotification(context);
             NotificationManagerCompat.from(context).notify(
                 SALAWAT_NOTIFICATION_ID,
                 buildSalawatNotification(context, sheikhNameAr, formulaAr)
+            );
+        } catch (Exception ignored) {
+            // ignore OEM notification errors
+        }
+    }
+
+    public static Notification buildLastThirdNotification(
+        Context context,
+        String verseText,
+        String surah,
+        String reciterNameAr,
+        String fajrTime12
+    ) {
+        ensureChannels(context);
+        PendingIntent launchPi = createLaunchPendingIntent(context, REQUEST_CODE_LAST_THIRD_LAUNCH);
+
+        Intent stopIntent = new Intent(context, BackgroundAlarmReceiver.class);
+        stopIntent.setAction(BackgroundAlarmReceiver.ACTION_STOP_AUDIO_SERVICE);
+        PendingIntent stopPi = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_LAST_THIRD_STOP,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String reciter = (reciterNameAr != null && !reciterNameAr.isEmpty())
+            ? reciterNameAr
+            : "الشيخ ناصر القطامي";
+        String title = "🌙 دخول الثلث الأخير من الليل · " + reciter;
+        String verse = (verseText != null && !verseText.isEmpty())
+            ? verseText
+            : "﴿ تَتَجَافَىٰ جُنُوبُهُمْ عَنِ الْمَضَاجِعِ يَدْعُونَ رَبَّهُمْ خَوْفًا وَطَمَعًا وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ ﴾";
+        String surahLabel = (surah != null && !surah.isEmpty())
+            ? surah
+            : "سورة السجدة • الآية ١٦";
+        String meta = surahLabel;
+        if (fajrTime12 != null && !fajrTime12.isEmpty()) {
+            meta += " · أذان الفجر " + fajrTime12;
+        }
+
+        return new NotificationCompat.Builder(context, CHANNEL_LAST_THIRD_ID)
+            .setSmallIcon(R.drawable.ic_stat_mihrab)
+            .setContentTitle(title)
+            .setContentText(verse)
+            .setSubText(meta)
+            .setTicker(title)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            .setStyle(
+                new NotificationCompat.BigTextStyle()
+                    .bigText(verse + "\n" + meta)
+                    .setBigContentTitle(title)
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(false)
+            .setAutoCancel(true)
+            .setContentIntent(launchPi)
+            .addAction(R.drawable.ic_stat_mihrab, "إيقاف الصوت", stopPi)
+            .build();
+    }
+
+    public static void showLastThirdNotification(
+        Context context,
+        String verseText,
+        String surah,
+        String reciterNameAr,
+        String fajrTime12
+    ) {
+        if (context == null || !hasNotificationPermission(context)) return;
+        ensureChannels(context);
+        try {
+            cancelLastThirdNotification(context);
+            NotificationManagerCompat.from(context).notify(
+                LAST_THIRD_NOTIFICATION_ID,
+                buildLastThirdNotification(context, verseText, surah, reciterNameAr, fajrTime12)
             );
         } catch (Exception ignored) {
             // ignore OEM notification errors

@@ -27,6 +27,7 @@ public final class BackgroundReminderScheduler {
     private static final int REQ_SHOW_CLOCK_APP = 6104;
     private static final int REQ_PRE_ADHAN = 6105;
     private static final int REQ_IQAMA = 6106;
+    private static final int REQ_LAST_THIRD = 6107;
 
     private BackgroundReminderScheduler() {}
 
@@ -51,6 +52,7 @@ public final class BackgroundReminderScheduler {
             scheduleNextPrayerAdhan(context, root);
             scheduleNextPreAdhan(context, root, 0L);
             scheduleNextIqama(context, root);
+            scheduleNextLastThird(context, root);
             scheduleSalawatFromRoot(context, root, false);
             schedulePeriodicFromRoot(context, root, false);
         } catch (Exception ignored) {
@@ -87,6 +89,21 @@ public final class BackgroundReminderScheduler {
         if (rawJson == null || rawJson.isEmpty()) return;
         try {
             scheduleNextIqama(context, new JSONObject(rawJson));
+        } catch (Exception ignored) {
+            // ignore
+        }
+    }
+
+    public static void scheduleNextLastThird(Context context) {
+        if (context == null) return;
+        SharedPreferences widgetPrefs = context.getSharedPreferences(
+            PrayerWidgetHelper.PREFS_NAME,
+            Context.MODE_PRIVATE
+        );
+        String rawJson = widgetPrefs.getString(PrayerWidgetHelper.KEY_PAYLOAD_JSON, null);
+        if (rawJson == null || rawJson.isEmpty()) return;
+        try {
+            scheduleNextLastThird(context, new JSONObject(rawJson));
         } catch (Exception ignored) {
             // ignore
         }
@@ -431,6 +448,137 @@ public final class BackgroundReminderScheduler {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am != null) {
             scheduleAllowWhileIdleFallback(am, matchedIqamaEpoch, pi, canScheduleExactAlarms(context));
+        }
+    }
+
+    private static String findScheduleTime24(JSONArray schedule, String prayerKey, String fallback) {
+        if (schedule != null) {
+            for (int i = 0; i < schedule.length(); i++) {
+                JSONObject item = schedule.optJSONObject(i);
+                if (item != null && prayerKey.equals(item.optString("key", ""))) {
+                    String t = item.optString("time24", "");
+                    if (!t.isEmpty()) return t;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    private static String findScheduleTime12(JSONArray schedule, String prayerKey, String fallback) {
+        if (schedule != null) {
+            for (int i = 0; i < schedule.length(); i++) {
+                JSONObject item = schedule.optJSONObject(i);
+                if (item != null && prayerKey.equals(item.optString("key", ""))) {
+                    String t = item.optString("time12", "");
+                    if (!t.isEmpty()) return t;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    private static void scheduleNextLastThird(Context context, JSONObject root) {
+        JSONObject lastThird = root.optJSONObject("lastThirdSettings");
+        boolean enabled = lastThird == null || lastThird.optBoolean("enabled", true);
+        if (!enabled) {
+            cancelAlarm(context, BackgroundAlarmReceiver.ACTION_LAST_THIRD_ALARM, REQ_LAST_THIRD);
+            return;
+        }
+
+        String mode = lastThird != null ? lastThird.optString("mode", "astronomical") : "astronomical";
+        int beforeFajrMins = lastThird != null ? Math.max(5, lastThird.optInt("beforeFajrMinutes", 30)) : 30;
+        String customTime = lastThird != null ? lastThird.optString("customTime", "03:00") : "03:00";
+
+        long nowMs = System.currentTimeMillis();
+        String nowDateKey = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(nowMs));
+        String tomorrowDateKey = root.optString("tomorrowDateKey", "");
+        JSONArray todaySchedule = root.optJSONArray("todaySchedule");
+        JSONArray tomorrowSchedule = root.optJSONArray("tomorrowSchedule");
+
+        JSONArray activeSchedule = todaySchedule;
+        JSONArray nextSchedule = tomorrowSchedule != null ? tomorrowSchedule : todaySchedule;
+        if (!tomorrowDateKey.isEmpty() && tomorrowDateKey.equals(nowDateKey) && tomorrowSchedule != null) {
+            activeSchedule = tomorrowSchedule;
+            nextSchedule = tomorrowSchedule;
+        } else if (activeSchedule == null) {
+            activeSchedule = root.optJSONArray("dailyPrayers");
+            nextSchedule = activeSchedule;
+        }
+
+        String fallbackMaghrib = lastThird != null ? lastThird.optString("maghribTime24", "18:00") : "18:00";
+        String fallbackFajr = lastThird != null ? lastThird.optString("fajrTime24", "05:00") : "05:00";
+        String todayMaghrib24 = findScheduleTime24(activeSchedule, "maghrib", fallbackMaghrib);
+        String nextMaghrib24 = findScheduleTime24(nextSchedule, "maghrib", todayMaghrib24);
+        String todayFajr24 = findScheduleTime24(activeSchedule, "fajr", fallbackFajr);
+        String nextFajr24 = findScheduleTime24(nextSchedule, "fajr", todayFajr24);
+        String fajrTime12 = findScheduleTime12(nextSchedule, "fajr", findScheduleTime12(activeSchedule, "fajr", ""));
+
+        Calendar nowCal = Calendar.getInstance();
+        nowCal.setTimeInMillis(nowMs);
+
+        long matchedTriggerEpoch = 0L;
+        int[] nightOffsets = new int[] { -1, 0, 1 };
+        for (int nightOffset : nightOffsets) {
+            String mTime = (nightOffset >= 1) ? nextMaghrib24 : todayMaghrib24;
+            String fTime = (nightOffset >= 0) ? nextFajr24 : todayFajr24;
+
+            long maghribEpoch = PrayerNotificationHelper.parseTimeTodayEpoch(nowCal, mTime, nightOffset);
+            long fajrEpoch = PrayerNotificationHelper.parseTimeTodayEpoch(nowCal, fTime, nightOffset + 1);
+            if (maghribEpoch <= 0L || fajrEpoch <= maghribEpoch) continue;
+
+            long triggerEpoch;
+            if ("before_fajr".equals(mode)) {
+                triggerEpoch = fajrEpoch - beforeFajrMins * 60_000L;
+            } else if ("custom".equals(mode)) {
+                triggerEpoch = PrayerNotificationHelper.parseTimeTodayEpoch(nowCal, customTime, nightOffset);
+                if (triggerEpoch < maghribEpoch) {
+                    triggerEpoch += 24L * 60L * 60L * 1000L;
+                }
+            } else {
+                long nightDurationMs = fajrEpoch - maghribEpoch;
+                triggerEpoch = maghribEpoch + (2L * nightDurationMs) / 3L;
+            }
+
+            if (triggerEpoch > nowMs + 1000L && (matchedTriggerEpoch == 0L || triggerEpoch < matchedTriggerEpoch)) {
+                matchedTriggerEpoch = triggerEpoch;
+            }
+        }
+
+        if (matchedTriggerEpoch <= nowMs) {
+            cancelAlarm(context, BackgroundAlarmReceiver.ACTION_LAST_THIRD_ALARM, REQ_LAST_THIRD);
+            return;
+        }
+
+        Intent intent = new Intent(context, BackgroundAlarmReceiver.class);
+        intent.setAction(BackgroundAlarmReceiver.ACTION_LAST_THIRD_ALARM);
+        intent.putExtra("target_epoch_ms", matchedTriggerEpoch);
+        intent.putExtra("fajr_time12", fajrTime12);
+
+        PendingIntent pi = PendingIntent.getBroadcast(
+            context,
+            REQ_LAST_THIRD,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+
+        try {
+            Intent showIntent = new Intent(context, MainActivity.class);
+            showIntent.putExtra("mihrab_shortcut_route", "times");
+            PendingIntent showPi = PendingIntent.getActivity(
+                context,
+                REQ_SHOW_CLOCK_APP,
+                showIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            AlarmManager.AlarmClockInfo clockInfo = new AlarmManager.AlarmClockInfo(matchedTriggerEpoch, showPi);
+            am.setAlarmClock(clockInfo, pi);
+        } catch (SecurityException secEx) {
+            scheduleAllowWhileIdleFallback(am, matchedTriggerEpoch, pi, canScheduleExactAlarms(context));
+        } catch (Exception ignored) {
+            scheduleAllowWhileIdleFallback(am, matchedTriggerEpoch, pi, canScheduleExactAlarms(context));
         }
     }
 

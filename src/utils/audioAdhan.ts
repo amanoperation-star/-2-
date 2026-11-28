@@ -867,8 +867,9 @@ class AdhanPlayerManager {
   private suppressNextAutoDua: boolean = false;
   private qiyamAudio: HTMLAudioElement | null = null;
   private qiyamPlayNonce: number = 0;
-  private qiyamUrls: string[] = [];
-  private qiyamUrlIndex: number = 0;
+  private qiyamUrlSets: string[][] = [];
+  private qiyamChunkIndex: number = 0;
+  private qiyamFallbackText: string = '';
   private qiyamOnEndedCallback: (() => void) | null = null;
 
   constructor() {
@@ -1082,6 +1083,7 @@ class AdhanPlayerManager {
       if (!this.preAdhanAudio) this.initPreAdhanAudioElement();
       if (!this.iqamaAudio) this.initIqamaAudioElement();
       if (!this.salawatAudio) this.initSalawatAudioElement();
+      if (!this.qiyamAudio) this.initQiyamAudioElement();
 
       const silentWav =
         'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
@@ -1090,6 +1092,7 @@ class AdhanPlayerManager {
         this.preAdhanAudio,
         this.iqamaAudio,
         this.salawatAudio,
+        this.qiyamAudio,
       ];
 
       for (const el of elementsToPrime) {
@@ -1983,6 +1986,9 @@ class AdhanPlayerManager {
     if (this.iqamaAudio) {
       this.iqamaAudio.muted = this.isMutedState;
     }
+    if (this.qiyamAudio) {
+      this.qiyamAudio.muted = this.isMutedState;
+    }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window && this.isMutedState) {
       window.speechSynthesis.cancel();
     }
@@ -2081,10 +2087,17 @@ class AdhanPlayerManager {
     this.qiyamAudio = new Audio();
     this.qiyamAudio.preload = 'auto';
 
+    this.qiyamAudio.addEventListener('play', () => {
+      if (this.activeType === 'qiyam_verse' && this.qiyamAudio?.src && !this.qiyamAudio.src.startsWith('data:audio/wav')) {
+        this.setState('playing', 'qiyam_verse');
+      }
+    });
+
     this.qiyamAudio.addEventListener('ended', () => {
       if (this.activeType !== 'qiyam_verse') return;
-      if (this.qiyamUrlIndex + 1 < this.qiyamUrls.length) {
-        this.qiyamUrlIndex++;
+      if (this.qiyamAudio?.src?.startsWith('data:audio/wav')) return;
+      if (this.qiyamChunkIndex + 1 < this.qiyamUrlSets.length) {
+        this.qiyamChunkIndex++;
         void this.playNextQiyamChunk(this.qiyamPlayNonce);
       } else {
         this.setState('idle', 'none');
@@ -2093,7 +2106,8 @@ class AdhanPlayerManager {
     });
 
     this.qiyamAudio.addEventListener('error', () => {
-      if (this.activeType === 'qiyam_verse') {
+      if (this.qiyamAudio?.src?.startsWith('data:audio/wav')) return;
+      if (this.activeType === 'qiyam_verse' && this.state === 'playing') {
         this.setState('idle', 'none');
       }
     });
@@ -2101,36 +2115,97 @@ class AdhanPlayerManager {
 
   private async playNextQiyamChunk(nonce: number): Promise<'playing' | 'blocked' | 'error'> {
     if (!this.qiyamAudio || nonce !== this.qiyamPlayNonce) return 'error';
-    const url = this.qiyamUrls[this.qiyamUrlIndex];
-    if (!url) return 'error';
+    const candidateUrls = this.qiyamUrlSets[this.qiyamChunkIndex];
+    if (!candidateUrls || candidateUrls.length === 0) return 'error';
 
-    try {
-      this.qiyamAudio.pause();
-      this.qiyamAudio.src = url;
-      this.qiyamAudio.load();
-      await this.qiyamAudio.play();
-      if (nonce !== this.qiyamPlayNonce) return 'error';
-      this.isUnlocked = true;
-      this.setState('playing', 'qiyam_verse');
-      return 'playing';
-    } catch (err: unknown) {
-      if (nonce !== this.qiyamPlayNonce) return 'error';
-      const errName = err instanceof Error ? err.name : '';
-      if (errName === 'NotAllowedError') {
-        this.setState('paused', 'qiyam_verse');
-        return 'blocked';
+    let sawBlocked = false;
+
+    for (const rawUrl of candidateUrls) {
+      if (nonce !== this.qiyamPlayNonce || !this.qiyamAudio) return 'error';
+      try {
+        const resolvedUrl = await resolvePlayableAudioUrl(rawUrl);
+        if (nonce !== this.qiyamPlayNonce || !this.qiyamAudio) return 'error';
+        this.qiyamAudio.pause();
+        this.qiyamAudio.currentTime = 0;
+        this.qiyamAudio.src = resolvedUrl;
+        this.qiyamAudio.load();
+        await this.qiyamAudio.play();
+        if (nonce !== this.qiyamPlayNonce) return 'error';
+        this.isUnlocked = true;
+        this.setState('playing', 'qiyam_verse');
+        return 'playing';
+      } catch (err: unknown) {
+        if (nonce !== this.qiyamPlayNonce) return 'error';
+        const errName = err instanceof Error ? err.name : '';
+        if (errName === 'NotAllowedError') {
+          sawBlocked = true;
+          break;
+        }
+        console.warn(`Qiyam verse candidate failed [${rawUrl}]:`, err);
       }
-      this.setState('error', 'none');
-      return 'error';
     }
+
+    if (sawBlocked) {
+      this.setState('paused', 'qiyam_verse');
+      return 'blocked';
+    }
+
+    // All MP3 candidates failed — speak cleanly with Arabic Web Speech API if available
+    if (
+      this.qiyamFallbackText &&
+      typeof window !== 'undefined' &&
+      'speechSynthesis' in window
+    ) {
+      try {
+        window.speechSynthesis.cancel();
+        const cleanVerseText = this.qiyamFallbackText.replace(/[﴿﴾۝۩]/g, '').trim();
+        const utterance = new SpeechSynthesisUtterance(cleanVerseText);
+        utterance.lang = 'ar-SA';
+        utterance.rate = 0.82;
+        utterance.pitch = 1.0;
+        utterance.volume = this.isMutedState ? 0 : 1.0;
+        const voices = window.speechSynthesis.getVoices();
+        const arabicVoice = voices.find(
+          (v) => v.lang.toLowerCase().startsWith('ar') || v.name.toLowerCase().includes('arabic')
+        );
+        if (arabicVoice) {
+          utterance.voice = arabicVoice;
+        }
+        this.setState('playing', 'qiyam_verse');
+        utterance.onend = () => {
+          if (nonce === this.qiyamPlayNonce) {
+            this.setState('idle', 'none');
+            this.qiyamOnEndedCallback?.();
+          }
+        };
+        utterance.onerror = () => {
+          if (nonce === this.qiyamPlayNonce) {
+            this.setState('idle', 'none');
+          }
+        };
+        window.speechSynthesis.speak(utterance);
+        return 'playing';
+      } catch {
+        // fall through to gentle alarm fallback
+      }
+    }
+
+    this.setState('error', 'none');
+    return 'error';
   }
 
   public async playQiyamRecitation(
-    urls: string[],
+    urlsOrSets: string[] | string[][],
     volume: number = 0.85,
-    onEnded?: () => void
+    onEnded?: () => void,
+    fallbackText?: string
   ): Promise<'playing' | 'blocked' | 'error'> {
-    if (typeof window === 'undefined' || urls.length === 0) return 'error';
+    if (typeof window === 'undefined' || urlsOrSets.length === 0) return 'error';
+    const normalizedSets: string[][] = Array.isArray(urlsOrSets[0])
+      ? (urlsOrSets as string[][]).filter((s) => s.length > 0)
+      : (urlsOrSets as string[]).map((u) => [u]);
+    if (normalizedSets.length === 0) return 'error';
+
     this.stop();
     if (!this.qiyamAudio) {
       this.initQiyamAudioElement();
@@ -2139,8 +2214,9 @@ class AdhanPlayerManager {
 
     this.qiyamPlayNonce++;
     const nonce = this.qiyamPlayNonce;
-    this.qiyamUrls = urls;
-    this.qiyamUrlIndex = 0;
+    this.qiyamUrlSets = normalizedSets;
+    this.qiyamChunkIndex = 0;
+    this.qiyamFallbackText = fallbackText || '';
     this.qiyamOnEndedCallback = onEnded || null;
     this.activeType = 'qiyam_verse';
     this.setState('loading', 'qiyam_verse');
@@ -2151,6 +2227,9 @@ class AdhanPlayerManager {
   }
 
   public pauseQiyamRecitation(): void {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
     if (this.qiyamAudio && this.activeType === 'qiyam_verse') {
       this.qiyamAudio.pause();
       this.setState('paused', 'qiyam_verse');
@@ -2159,14 +2238,22 @@ class AdhanPlayerManager {
 
   public async resumeQiyamRecitation(): Promise<'playing' | 'blocked' | 'error'> {
     if (!this.qiyamAudio) return 'error';
+    if (!this.qiyamAudio.src || this.qiyamAudio.src.startsWith('data:audio/wav')) {
+      if (this.qiyamUrlSets.length > 0) {
+        this.activeType = 'qiyam_verse';
+        return this.playNextQiyamChunk(this.qiyamPlayNonce);
+      }
+      return 'error';
+    }
     this.activeType = 'qiyam_verse';
     try {
       await this.qiyamAudio.play();
       this.isUnlocked = true;
       this.setState('playing', 'qiyam_verse');
       return 'playing';
-    } catch {
-      return 'blocked';
+    } catch (err: unknown) {
+      const errName = err instanceof Error ? err.name : '';
+      return errName === 'NotAllowedError' ? 'blocked' : 'error';
     }
   }
 

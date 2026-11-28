@@ -349,6 +349,28 @@ public class WidgetBridgePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void showLastThirdNotificationNow(PluginCall call) {
+        Context context = getContext();
+        String verseText = call.getString("verseText", "");
+        String surah = call.getString("surah", "");
+        String reciterNameAr = call.getString("reciterNameAr", "");
+        String fajrTime12 = call.getString("fajrTime12", "");
+        PrayerNotificationHelper.showLastThirdNotification(
+            context,
+            verseText,
+            surah,
+            reciterNameAr,
+            fajrTime12
+        );
+
+        boolean granted = PrayerNotificationHelper.hasNotificationPermission(context);
+        JSObject res = new JSObject();
+        res.put("shown", granted);
+        res.put("granted", granted);
+        call.resolve(res);
+    }
+
+    @PluginMethod
     public void requestPinWidget(PluginCall call) {
         String size = call.getString("size", "medium");
         Context context = getContext();

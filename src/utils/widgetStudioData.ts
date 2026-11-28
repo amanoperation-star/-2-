@@ -24,6 +24,11 @@ import {
 import { PERIODIC_VERSES_AND_HADITHS } from './islamicData';
 import { calculateDuhaSchedule } from './duhaSunriseData';
 import { QuietModeState, evaluateQuietMode, loadQuietModeState } from './quietModeData';
+import {
+  QIYAM_RECITERS,
+  getQiyamVerseLocalAssetPaths,
+  pickTonightQiyamSelection,
+} from './lastThirdNightData';
 import makkahHaramImg from '../assets/images/adhan_makkah_haram_1795705254443.jpg';
 import madinahNabawiImg from '../assets/images/adhan_madinah_nabawi_1795705254283.jpg';
 import aqsaQudsImg from '../assets/images/adhan_aqsa_quds_1795705255663.jpg';
@@ -157,6 +162,24 @@ export interface WidgetBridgePayload {
       maghrib: number;
       isha: number;
     };
+  };
+  lastThirdSettings?: {
+    enabled: boolean;
+    mode: 'astronomical' | 'before_fajr' | 'custom';
+    beforeFajrMinutes: number;
+    customTime: string;
+    fadeInAlarm: boolean;
+    autoOpen: boolean;
+    maghribTime24: string;
+    fajrTime24: string;
+    reciterId: string;
+    reciterNameAr: string;
+    verseId: string;
+    verseText: string;
+    verseSurah: string;
+    verseReflection: string;
+    verseAssetPaths: string[];
+    fallbackAssetPath: string;
   };
   backgroundReminders: {
     salawatEnabled: boolean;
@@ -593,6 +616,18 @@ export function buildWidgetBridgePayload(params: {
     IQAMA_SHEIKH_VOICES.find((v) => v.id === iqamaVoiceMode) ||
     IQAMA_SHEIKH_VOICES[IQAMA_SHEIKH_VOICES.length - 1];
 
+  const todayDateKeyStr = now.toDateString();
+  const nextNightFajr24 =
+    parseMinutes(prayerTimes.fajr) > Math.floor(currentSeconds / 60)
+      ? prayerTimes.fajr
+      : tomorrowTimes.fajr;
+  const tonightQiyam = pickTonightQiyamSelection(`${todayDateKeyStr}-${nextNightFajr24}`);
+  const tonightQiyamReciter = QIYAM_RECITERS[tonightQiyam.reciterId] || QIYAM_RECITERS.qatami;
+  const tonightQiyamAssetPaths = getQiyamVerseLocalAssetPaths(
+    tonightQiyam.verse,
+    tonightQiyamReciter.id
+  );
+
   return {
     updatedAt: now.toISOString(),
     cityId: currentLocation.id,
@@ -692,6 +727,24 @@ export function buildWidgetBridgePayload(params: {
         maghrib: settings.iqamaMinutes?.maghrib ?? 10,
         isha: settings.iqamaMinutes?.isha ?? 15,
       },
+    },
+    lastThirdSettings: {
+      enabled: settings.lastThirdNightEnabled !== false,
+      mode: settings.lastThirdNightMode || 'astronomical',
+      beforeFajrMinutes: settings.lastThirdBeforeFajrMinutes ?? 30,
+      customTime: settings.lastThirdNightCustomTime || '03:00',
+      fadeInAlarm: settings.lastThirdFadeInAlarm !== false,
+      autoOpen: Boolean(settings.lastThirdAutoOpen),
+      maghribTime24: prayerTimes.maghrib,
+      fajrTime24: nextNightFajr24,
+      reciterId: tonightQiyamReciter.id,
+      reciterNameAr: tonightQiyamReciter.nameAr,
+      verseId: tonightQiyam.verse.id,
+      verseText: tonightQiyam.verse.verse,
+      verseSurah: tonightQiyam.verse.surah,
+      verseReflection: tonightQiyam.verse.reflection,
+      verseAssetPaths: tonightQiyamAssetPaths,
+      fallbackAssetPath: '/audio/qiyam/qatami/032016.mp3',
     },
     backgroundReminders: {
       salawatEnabled: settings.salawatEnabled ?? true,

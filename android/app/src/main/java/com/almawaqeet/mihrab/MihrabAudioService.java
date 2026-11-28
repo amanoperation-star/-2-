@@ -21,6 +21,7 @@ public class MihrabAudioService extends Service {
     public static final String ACTION_PLAY_SALAWAT = "com.almawaqeet.mihrab.SERVICE_PLAY_SALAWAT";
     public static final String ACTION_PLAY_PRE_ADHAN = "com.almawaqeet.mihrab.SERVICE_PLAY_PRE_ADHAN";
     public static final String ACTION_PLAY_IQAMA = "com.almawaqeet.mihrab.SERVICE_PLAY_IQAMA";
+    public static final String ACTION_PLAY_LAST_THIRD_VERSE = "com.almawaqeet.mihrab.SERVICE_PLAY_LAST_THIRD_VERSE";
     public static final String ACTION_STOP = "com.almawaqeet.mihrab.SERVICE_STOP";
 
     private MediaPlayer mediaPlayer;
@@ -94,6 +95,7 @@ public class MihrabAudioService extends Service {
             pendingDuaAssetPath = "";
             currentVolume = Math.max(0.15f, Math.min(1.0f, intent.getFloatExtra("volume", 0.9f)));
 
+            PrayerNotificationHelper.cancelSalawatNotification(this);
             Notification notification = PrayerNotificationHelper.buildSalawatNotification(
                 this,
                 sheikhName,
@@ -163,6 +165,39 @@ public class MihrabAudioService extends Service {
             return START_NOT_STICKY;
         }
 
+        if (ACTION_PLAY_LAST_THIRD_VERSE.equals(action)) {
+            currentMode = "last_third";
+            String verseText = intent.getStringExtra("verse_text");
+            String surah = intent.getStringExtra("verse_surah");
+            String reciterNameAr = intent.getStringExtra("reciter_name");
+            String fajrTime12 = intent.getStringExtra("fajr_time12");
+            String[] assetPaths = intent.getStringArrayExtra("asset_paths");
+            String primaryAsset = intent.getStringExtra("asset_path");
+            String fallbackAsset = intent.getStringExtra("fallback_asset_path");
+            autoDuaAfterAdhan = false;
+            pendingDuaAssetPath = "";
+            currentVolume = Math.max(0.15f, Math.min(1.0f, intent.getFloatExtra("volume", 0.95f)));
+
+            PrayerNotificationHelper.cancelLastThirdNotification(this);
+            Notification notification = PrayerNotificationHelper.buildLastThirdNotification(
+                this,
+                verseText,
+                surah,
+                reciterNameAr,
+                fajrTime12
+            );
+            promoteForeground(PrayerNotificationHelper.LAST_THIRD_NOTIFICATION_ID, notification);
+
+            acquireTimedWakeLock(2 * 60 * 1000L);
+            scheduleSafetyStop(110 * 1000L, false);
+            if (assetPaths != null && assetPaths.length > 0) {
+                playPlaylistWithFallback(assetPaths, 0, fallbackAsset, AudioAttributes.USAGE_ALARM);
+            } else {
+                playAssetWithFallback(primaryAsset, fallbackAsset, AudioAttributes.USAGE_ALARM, false);
+            }
+            return START_NOT_STICKY;
+        }
+
         stopSelfCleanly(false);
         return START_NOT_STICKY;
     }
@@ -202,12 +237,46 @@ public class MihrabAudioService extends Service {
             normalizedFallback = "public/audio/adhan-makkah.mp3";
         }
 
-        if (tryStartLocalAsset(normalizedPrimary, usage, allowAutoDuaOnComplete)) {
+        if (tryStartLocalAsset(normalizedPrimary, usage, allowAutoDuaOnComplete, null)) {
             return;
         }
 
         // Fall back to guaranteed bundled offline MP3
-        if (!tryStartLocalAsset(normalizedFallback, usage, allowAutoDuaOnComplete)) {
+        if (!tryStartLocalAsset(normalizedFallback, usage, allowAutoDuaOnComplete, null)) {
+            stopSelfCleanly(false);
+        }
+    }
+
+    private void playPlaylistWithFallback(
+        String[] assetPaths,
+        int index,
+        String fallbackAssetPath,
+        int usage
+    ) {
+        releaseMediaPlayer();
+        if (assetPaths == null || index >= assetPaths.length) {
+            stopSelfCleanly(false);
+            return;
+        }
+
+        String normalized = normalizePublicAssetPath(assetPaths[index]);
+        Runnable onCompleteNext = (index + 1 < assetPaths.length)
+            ? () -> playPlaylistWithFallback(assetPaths, index + 1, fallbackAssetPath, usage)
+            : null;
+
+        if (tryStartLocalAsset(normalized, usage, false, onCompleteNext)) {
+            return;
+        }
+
+        if (index == 0) {
+            String normalizedFallback = normalizePublicAssetPath(fallbackAssetPath);
+            if (normalizedFallback == null || normalizedFallback.isEmpty()) {
+                normalizedFallback = "public/audio/qiyam/qatami/032016.mp3";
+            }
+            if (!tryStartLocalAsset(normalizedFallback, usage, false, null)) {
+                stopSelfCleanly(false);
+            }
+        } else {
             stopSelfCleanly(false);
         }
     }
@@ -215,7 +284,8 @@ public class MihrabAudioService extends Service {
     private boolean tryStartLocalAsset(
         String assetRelativePath,
         int usage,
-        boolean allowAutoDuaOnComplete
+        boolean allowAutoDuaOnComplete,
+        Runnable onCustomComplete
     ) {
         if (assetRelativePath == null || assetRelativePath.isEmpty()) return false;
         AssetFileDescriptor afd = null;
@@ -234,7 +304,9 @@ public class MihrabAudioService extends Service {
             afd = null;
 
             player.setOnCompletionListener(mp -> {
-                if (
+                if (onCustomComplete != null) {
+                    onCustomComplete.run();
+                } else if (
                     allowAutoDuaOnComplete
                         && "adhan".equals(currentMode)
                         && autoDuaAfterAdhan
@@ -294,7 +366,8 @@ public class MihrabAudioService extends Service {
                 boolean isAlarmMode =
                     "adhan".equals(currentMode)
                         || "iqama".equals(currentMode)
-                        || "pre_adhan".equals(currentMode);
+                        || "pre_adhan".equals(currentMode)
+                        || "last_third".equals(currentMode);
                 am.requestAudioFocus(
                     null,
                     isAlarmMode ? AudioManager.STREAM_ALARM : AudioManager.STREAM_MUSIC,

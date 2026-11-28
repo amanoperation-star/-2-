@@ -9,6 +9,9 @@ import {
   VolumeX,
   BellRing,
   Play,
+  Pause,
+  RefreshCw,
+  ArrowLeft,
   ChevronDown,
 } from 'lucide-react';
 import { LastThirdNightTheme, NightThirdsInfo, UserSettings } from '../types';
@@ -19,8 +22,13 @@ import {
   POST_WITR_ADHKAR,
   TahajjudRakatPlan,
   QiyamStreakState,
+  QIYAM_NIGHT_VERSES,
+  QIYAM_RECITERS,
+  QiyamReciterId,
+  buildQiyamVerseAudioUrlSets,
   getLocalDateKey,
   loadQiyamStreakState,
+  pickNextQiyamVerse,
   saveQiyamStreakState,
   getWeekSaturdayToFridayStreakView,
   toggleQiyamStreakDate,
@@ -133,6 +141,55 @@ export const LastThirdNightModal: React.FC<LastThirdNightModalProps> = ({
 
   // Quiet Sahar sound chime toggle
   const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Qiyam verses audio player state inside sanctuary
+  const [qiyamVerseIdx, setQiyamVerseIdx] = useState<number>(0);
+  const [qiyamReciterId, setQiyamReciterId] = useState<QiyamReciterId>('qatami');
+  const [qiyamStatus, setQiyamStatus] = useState<'idle' | 'loading' | 'playing' | 'paused'>('idle');
+
+  const activeSanctuaryVerse = QIYAM_NIGHT_VERSES[qiyamVerseIdx] || QIYAM_NIGHT_VERSES[0];
+
+  const handlePlaySanctuaryQiyamVerse = async (
+    verseIndex: number = qiyamVerseIdx,
+    reciter: QiyamReciterId = qiyamReciterId
+  ) => {
+    const verse = QIYAM_NIGHT_VERSES[verseIndex] || QIYAM_NIGHT_VERSES[0];
+    setQiyamVerseIdx(verseIndex);
+    setQiyamReciterId(reciter);
+    setQiyamStatus('loading');
+    void adhanPlayer.unlockAudio();
+    const res = await adhanPlayer.playQiyamRecitation(
+      buildQiyamVerseAudioUrlSets(verse, reciter),
+      settings.volume ?? 0.85,
+      () => {
+        setQiyamStatus('idle');
+      },
+      verse.verse
+    );
+    if (res === 'playing') {
+      setQiyamStatus('playing');
+    } else if (res === 'blocked') {
+      setQiyamStatus('paused');
+    } else {
+      setQiyamStatus('idle');
+    }
+  };
+
+  useEffect(() => {
+    const unsub = adhanPlayer.subscribe({
+      onStateChange: (state, activeType) => {
+        if (activeType === 'qiyam_verse') {
+          if (state === 'playing') setQiyamStatus('playing');
+          else if (state === 'loading') setQiyamStatus('loading');
+          else if (state === 'paused') setQiyamStatus('paused');
+          else setQiyamStatus('idle');
+        } else if (activeType === 'none') {
+          setQiyamStatus('idle');
+        }
+      },
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -835,6 +892,103 @@ export const LastThirdNightModal: React.FC<LastThirdNightModalProps> = ({
                     </div>
                   </div>
                 )}
+              </section>
+
+              {/* Card 2.5: 🎧 تلاوة آيات القيام والتهجد (القطامي والعفاسي) */}
+              <section
+                style={{ backgroundColor: cardBg, borderColor }}
+                className="rounded-2xl border p-4 sm:p-5 space-y-3.5"
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    <Volume2 className="w-4 h-4 text-[#10B981]" />
+                    <span>تلاوة آيات القيام والتهجد</span>
+                  </h3>
+                  <span className="text-xs font-bold text-[#F3D06B]">
+                    {QIYAM_RECITERS[qiyamReciterId].nameAr}
+                  </span>
+                </div>
+
+                <div
+                  style={{ backgroundColor: innerBg }}
+                  className="rounded-xl border border-[#D4AF37]/25 p-3.5 space-y-2"
+                >
+                  <p className="font-amiri text-base sm:text-lg leading-loose text-[#F3D06B]">
+                    {activeSanctuaryVerse.verse}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                    <span className="font-bold text-[#10B981]">{activeSanctuaryVerse.surah}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{activeSanctuaryVerse.reflection}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (qiyamStatus === 'playing') {
+                        adhanPlayer.pauseQiyamRecitation();
+                      } else if (qiyamStatus === 'paused') {
+                        void adhanPlayer.resumeQiyamRecitation().then((r) => {
+                          if (r !== 'playing') {
+                            void handlePlaySanctuaryQiyamVerse(qiyamVerseIdx, qiyamReciterId);
+                          }
+                        });
+                      } else {
+                        void handlePlaySanctuaryQiyamVerse(qiyamVerseIdx, qiyamReciterId);
+                      }
+                    }}
+                    className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+                      qiyamStatus === 'playing'
+                        ? 'bg-[#10B981] text-[#060B09]'
+                        : 'bg-[#0D2C24] border border-[#D4AF37]/50 text-[#F3D06B] hover:border-[#F3D06B]'
+                    }`}
+                  >
+                    {qiyamStatus === 'playing' ? (
+                      <>
+                        <Pause className="w-4 h-4 shrink-0" />
+                        <span>إيقاف التلاوة</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-current shrink-0" />
+                        <span>{qiyamStatus === 'loading' ? 'جاري التشغيل...' : 'استماع للآية'}</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextReciter: QiyamReciterId =
+                        qiyamReciterId === 'qatami' ? 'alafasy' : 'qatami';
+                      void handlePlaySanctuaryQiyamVerse(qiyamVerseIdx, nextReciter);
+                    }}
+                    style={{ backgroundColor: innerBg }}
+                    className="min-h-[42px] px-3.5 py-2 rounded-xl border border-[#D4AF37]/30 hover:border-[#F3D06B] text-[#F3D06B] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {qiyamReciterId === 'qatami' ? 'التبديل للعفاسي' : 'التبديل للقطامي'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextIdx = (qiyamVerseIdx + 1) % QIYAM_NIGHT_VERSES.length;
+                      void handlePlaySanctuaryQiyamVerse(nextIdx, qiyamReciterId);
+                    }}
+                    style={{ backgroundColor: innerBg }}
+                    className="min-h-[42px] px-3.5 py-2 rounded-xl border border-[#D4AF37]/30 hover:border-[#F3D06B] text-slate-200 hover:text-[#F3D06B] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      الآية التالية ({toArabicDigits(qiyamVerseIdx + 1)}/{toArabicDigits(QIYAM_NIGHT_VERSES.length)})
+                    </span>
+                  </button>
+                </div>
               </section>
 
               {/* Card 3: 📖 المصحف المصغّر للقيام */}

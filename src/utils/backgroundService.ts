@@ -1,6 +1,7 @@
 // Service for Screen Wake Lock API and Browser Web Notifications
 import {
   isNativeAndroidApp,
+  sendNativeLastThirdNotification,
   sendNativePreAdhanNotification,
   sendNativeSalawatNotification,
   setNativeKeepAwake,
@@ -311,6 +312,7 @@ class BackgroundService {
             badge: '/pwa-192x192.png',
             tag,
             renotify: true,
+            requireInteraction: true,
             dir: 'rtl',
             lang: 'ar',
             data: { route: 'times', type: 'salawat' },
@@ -325,6 +327,7 @@ class BackgroundService {
         badge: '/pwa-192x192.png',
         tag,
         renotify: true,
+        requireInteraction: true,
         dir: 'rtl',
         lang: 'ar',
       } as NotificationOptions & { renotify?: boolean });
@@ -393,6 +396,79 @@ class BackgroundService {
       lang: 'ar',
       requireInteraction: true,
       data: { route: 'times', type: 'pre_adhan', prayerKey: params.prayerKey },
+    };
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && typeof reg.showNotification === 'function') {
+          await reg.showNotification(title, notifOptions);
+          return true;
+        }
+      }
+
+      new Notification(title, notifOptions);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Send Last Third of the Night notification with Quranic verse & reciter across Native Android and Web/PWA
+  public async sendLastThirdNotification(params: {
+    verseText: string;
+    surah: string;
+    reciterNameAr: string;
+    fajrTime12?: string;
+    remainingToFajr?: string;
+    isTest?: boolean;
+    requestPermissionOnTest?: boolean;
+  }): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+
+    if (isNativeAndroidApp()) {
+      return await sendNativeLastThirdNotification({
+        verseText: params.verseText,
+        surah: params.surah,
+        reciterNameAr: params.reciterNameAr,
+        fajrTime12: params.fajrTime12,
+      });
+    }
+
+    if (!('Notification' in window)) {
+      return false;
+    }
+
+    if (params.requestPermissionOnTest && Notification.permission === 'default') {
+      await this.requestNotificationPermission();
+    }
+
+    if (Notification.permission !== 'granted') {
+      return false;
+    }
+
+    const title = `🌙 دخل الثلث الأخير من الليل · ${params.reciterNameAr}`;
+    const meta = [
+      params.surah,
+      params.remainingToFajr ? `متبقي على الفجر ${params.remainingToFajr}` : '',
+    ]
+      .filter(Boolean)
+      .join(' • ');
+    const body = `${params.verseText}${meta ? `\n${meta}` : ''}`;
+    const tag = params.isTest
+      ? `mihrab-last-third-test-${Date.now()}`
+      : 'mihrab-last-third-night';
+
+    const notifOptions: NotificationOptions & { renotify?: boolean } = {
+      body,
+      icon: '/assets/mosques/kaaba.jpg',
+      badge: '/pwa-192x192.png',
+      tag,
+      renotify: true,
+      dir: 'rtl',
+      lang: 'ar',
+      requireInteraction: true,
+      data: { route: 'times', type: 'last_third' },
     };
 
     try {

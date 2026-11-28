@@ -3335,6 +3335,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Volume2 className="w-4 h-4 shrink-0" />
                       <span>معاينة إشعار وتلاوة دخول الثلث الأخير (القطامي / العفاسي)</span>
                     </button>
+                    {isNativeAndroidApp() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void testNativeBackgroundAlarm('last_third');
+                        }}
+                        className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#d4af37] text-slate-950 font-black text-xs shadow hover:brightness-105 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Moon className="w-4 h-4 shrink-0" />
+                        <span>معاينة دخول الثلث الأخير على الشاشة (خارج التطبيق)</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* 1. Near Adhan Simulation (5 minutes left) */}
@@ -3415,6 +3427,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </>
                       )}
                     </button>
+                    {isNativeAndroidApp() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void testNativeBackgroundAlarm('salawat');
+                        }}
+                        className="w-full px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#d4af37] text-slate-950 font-black text-xs shadow hover:brightness-105 transition-all flex items-center justify-center gap-2"
+                      >
+                        <BellRing className="w-3.5 h-3.5 shrink-0" />
+                        <span>معاينة إشعار الصلاة على النبي على الشاشة</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* 4. Pre-Adhan Preparation Alert Test */}
@@ -5077,28 +5101,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* 5. Periodic Salawat Upon the Prophet (ﷺ) with Multiple Sheikh Voices */}
           <div className="p-5 rounded-2xl bg-[#03201a]/85 border border-[#e5b869]/35 space-y-4 shadow-lg">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => handleToggleSalawatPreview(salawatVoiceMode)}
-                className="text-xs px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] flex items-center gap-1.5 font-bold transition-all"
-              >
-                {playerState === 'loading' && activeAudioType === 'salawat' ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>جاري تحضير الصوت...</span>
-                  </>
-                ) : playerState === 'playing' && activeAudioType === 'salawat' ? (
-                  <>
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    <span>إيقاف النطق الآن</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>تجربة الصلاة على النبي ﷺ</span>
-                  </>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSalawatPreview(salawatVoiceMode)}
+                  className="text-xs px-3.5 py-2 rounded-xl bg-[#052921] border border-[#e5b869]/40 text-[#fbbf24] hover:bg-[#07382e] flex items-center gap-1.5 font-bold transition-all"
+                >
+                  {playerState === 'loading' && activeAudioType === 'salawat' ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>جاري تحضير الصوت...</span>
+                    </>
+                  ) : playerState === 'playing' && activeAudioType === 'salawat' ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>إيقاف النطق الآن</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>تجربة الصلاة على النبي ﷺ</span>
+                    </>
+                  )}
+                </button>
+                {isNativeAndroidApp() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void testNativeBackgroundAlarm('salawat');
+                    }}
+                    className="text-xs px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#d4af37] text-slate-950 font-black hover:brightness-105 flex items-center gap-1.5 transition-all"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span>معاينة الإشعار على الشاشة الآن</span>
+                  </button>
                 )}
-              </button>
+              </div>
 
               <div className="flex items-center gap-2 text-[#fbbf24] font-bold text-base font-amiri">
                 <span className="text-lg">5. الصلاة على النبي ﷺ صوتياً (أصوات شيوخ متعددة)</span>

@@ -107,14 +107,37 @@ export const QURAN_SAHAR_VERSES = QIYAM_NIGHT_VERSES.map((item) => ({
 
 const LAST_THIRD_NIGHT_ROTATION_KEY = 'last_third_qiyam_rotation_v1';
 
+export function getQiyamVerseLocalAssetPaths(
+  verse: QiyamNightVerse,
+  reciterId: QiyamReciterId
+): string[] {
+  const reciterFolder = reciterId === 'alafasy' ? 'alafasy' : 'qatami';
+  return verse.verseCodes.map((code) => `/audio/qiyam/${reciterFolder}/${code}.mp3`);
+}
+
+export function buildQiyamVerseAudioUrlSets(
+  verse: QiyamNightVerse,
+  reciterId: QiyamReciterId
+): string[][] {
+  const reciter = QIYAM_RECITERS[reciterId] || QIYAM_RECITERS.qatami;
+  const localFolder = reciter.id === 'alafasy' ? 'alafasy' : 'qatami';
+  const alternateReciter =
+    reciter.id === 'alafasy' ? QIYAM_RECITERS.qatami : QIYAM_RECITERS.alafasy;
+  const alternateFolder = alternateReciter.id;
+
+  return verse.verseCodes.map((code) => [
+    `/audio/qiyam/${localFolder}/${code}.mp3`,
+    `https://everyayah.com/data/${reciter.everyayahFolder}/${code}.mp3`,
+    `/audio/qiyam/${alternateFolder}/${code}.mp3`,
+    `https://everyayah.com/data/${alternateReciter.everyayahFolder}/${code}.mp3`,
+  ]);
+}
+
 export function buildQiyamVerseAudioUrls(
   verse: QiyamNightVerse,
   reciterId: QiyamReciterId
 ): string[] {
-  const reciter = QIYAM_RECITERS[reciterId] || QIYAM_RECITERS.qatami;
-  return verse.verseCodes.map(
-    (code) => `https://everyayah.com/data/${reciter.everyayahFolder}/${code}.mp3`
-  );
+  return getQiyamVerseLocalAssetPaths(verse, reciterId);
 }
 
 export function pickNextQiyamVerse(currentVerseId?: string): QiyamNightVerse {

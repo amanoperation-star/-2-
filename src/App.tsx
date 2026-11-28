@@ -96,8 +96,18 @@ import {
   togglePrayerSunnahCompleted,
 } from './utils/sunnahRawatibData';
 import { CityLocation, UserSettings, PrayerTimeData, AppThemeId, PrayerName } from './types';
-import { CITIES, applyPrayerTimeOffsets, calculatePrayerTimes } from './utils/prayerCalculator';
+import {
+  CITIES,
+  applyPrayerTimeOffsets,
+  calculateNightThirds,
+  calculatePrayerTimes,
+} from './utils/prayerCalculator';
 import { calculateDuhaSchedule, formatTime12Ar } from './utils/duhaSunriseData';
+import {
+  QIYAM_RECITERS,
+  buildQiyamVerseAudioUrlSets,
+  pickTonightQiyamSelection,
+} from './utils/lastThirdNightData';
 import {
   QUIET_MODE_UPDATED_EVENT,
   loadQuietModeState,
@@ -1164,6 +1174,9 @@ export default function App() {
     ];
     const eventHandlers = timesSimEvents.map((eventName) => {
       const handler = () => {
+        if (eventName === 'simulate_last_third_qiyam_toast') {
+          void adhanPlayer.unlockAudio();
+        }
         if (activeTab !== 'times') {
           pendingTimesSimulationEventRef.current = eventName;
           setActiveTab('times');
@@ -1838,6 +1851,127 @@ export default function App() {
     settings.salawatIntervalMinutes,
     settings.salawatVoiceMode,
     settings.meetingModeEnabled,
+  ]);
+
+  // Global Last Third of the Night monitor (works regardless of active tab)
+  useEffect(() => {
+    if (settings.lastThirdNightEnabled === false) return;
+
+    const checkGlobalLastThirdEntry = () => {
+      const now = new Date();
+      const nowMins = now.getHours() * 60 + now.getMinutes();
+      const [fajrH, fajrM] = (prayerTimes.fajr || '05:00').split(':').map(Number);
+      const todayFajrMins = (fajrH || 0) * 60 + (fajrM || 0);
+
+      let nextFajrStr = prayerTimes.fajr;
+      if (nowMins >= todayFajrMins) {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const rawTomorrow = calculatePrayerTimes(
+          tomorrow,
+          currentLocation.lat,
+          currentLocation.lng,
+          currentLocation.timezone,
+          settings.calculationMethod,
+          settings.asrMethod
+        );
+        const adjTomorrow = applyPrayerTimeOffsets(rawTomorrow, settings.prayerOffsets);
+        nextFajrStr = adjTomorrow.fajr;
+      }
+
+      const nightThirds = calculateNightThirds(
+        prayerTimes.maghrib,
+        nextFajrStr,
+        now,
+        settings.lastThirdNightMode || 'astronomical',
+        settings.lastThirdNightCustomTime || '03:00',
+        settings.lastThirdBeforeFajrMinutes || 30
+      );
+
+      if (!nightThirds.isLastThirdNow) return;
+      const nightCycleKey = `${now.toDateString()}-${nextFajrStr}`;
+
+      try {
+        if (localStorage.getItem('last_third_auto_triggered_night_key') === nightCycleKey) {
+          return;
+        }
+      } catch {
+        // ignore storage errors
+      }
+
+      if (shouldSuppressGeneralNotification(loadQuietModeState(), now)) {
+        return;
+      }
+
+      try {
+        localStorage.setItem('last_third_auto_triggered_night_key', nightCycleKey);
+      } catch {
+        // ignore storage errors
+      }
+
+      const tonight = pickTonightQiyamSelection(nightCycleKey);
+      const reciterInfo = QIYAM_RECITERS[tonight.reciterId];
+
+      if (!settings.meetingModeEnabled) {
+        void adhanPlayer
+          .playQiyamRecitation(
+            buildQiyamVerseAudioUrlSets(tonight.verse, tonight.reciterId),
+            settings.volume ?? 0.85,
+            undefined,
+            tonight.verse.verse
+          )
+          .then((res) => {
+            if (res !== 'playing' && settings.lastThirdFadeInAlarm !== false) {
+              adhanPlayer.playGentleFadeInAlarm();
+            }
+          });
+      }
+
+      if (settings.notificationsEnabled !== false) {
+        void backgroundService.sendLastThirdNotification({
+          verseText: tonight.verse.verse,
+          surah: tonight.verse.surah,
+          reciterNameAr: reciterInfo.nameAr,
+          fajrTime12: nextFajrStr,
+          remainingToFajr: nightThirds.formattedRemainingToFajr,
+        });
+      }
+
+      window.dispatchEvent(
+        new CustomEvent('mihrab_global_last_third_entered', {
+          detail: {
+            nightCycleKey,
+            verse: tonight.verse,
+            reciterId: tonight.reciterId,
+          },
+        })
+      );
+    };
+
+    checkGlobalLastThirdEntry();
+    const timer = window.setInterval(checkGlobalLastThirdEntry, 5000);
+    window.addEventListener('focus', checkGlobalLastThirdEntry);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', checkGlobalLastThirdEntry);
+    };
+  }, [
+    prayerTimes.fajr,
+    prayerTimes.maghrib,
+    currentLocation.lat,
+    currentLocation.lng,
+    currentLocation.timezone,
+    settings.calculationMethod,
+    settings.asrMethod,
+    settings.prayerOffsets,
+    settings.lastThirdNightEnabled,
+    settings.lastThirdNightMode,
+    settings.lastThirdNightCustomTime,
+    settings.lastThirdBeforeFajrMinutes,
+    settings.lastThirdFadeInAlarm,
+    settings.meetingModeEnabled,
+    settings.notificationsEnabled,
+    settings.volume,
   ]);
 
   // Auto-dismiss Salawat floating toast after 9 seconds

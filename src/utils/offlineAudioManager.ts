@@ -18,6 +18,20 @@ export const BUNDLED_APK_CORE_AUDIO: string[] = [
   '/audio/iqama-classic.mp3',
   '/audio/prayer-alert-mishary.mp3',
   '/audio/salawat-mishary.mp3',
+  '/audio/qiyam/qatami/032016.mp3',
+  '/audio/qiyam/qatami/051017.mp3',
+  '/audio/qiyam/qatami/051018.mp3',
+  '/audio/qiyam/qatami/039009.mp3',
+  '/audio/qiyam/qatami/025064.mp3',
+  '/audio/qiyam/qatami/003017.mp3',
+  '/audio/qiyam/qatami/017079.mp3',
+  '/audio/qiyam/alafasy/032016.mp3',
+  '/audio/qiyam/alafasy/051017.mp3',
+  '/audio/qiyam/alafasy/051018.mp3',
+  '/audio/qiyam/alafasy/039009.mp3',
+  '/audio/qiyam/alafasy/025064.mp3',
+  '/audio/qiyam/alafasy/003017.mp3',
+  '/audio/qiyam/alafasy/017079.mp3',
 ];
 
 export const CORE_LOCAL_AUDIO_FILES: string[] = [
@@ -111,6 +125,21 @@ export const CORE_LOCAL_AUDIO_FILES: string[] = [
   '/audio/iqama-madinah.m4a',
   '/audio/iqama-faisal-labban.mp3',
   '/audio/iqama-classic.mp3',
+  // Qiyam & Last Third Night Verses
+  '/audio/qiyam/qatami/032016.mp3',
+  '/audio/qiyam/qatami/051017.mp3',
+  '/audio/qiyam/qatami/051018.mp3',
+  '/audio/qiyam/qatami/039009.mp3',
+  '/audio/qiyam/qatami/025064.mp3',
+  '/audio/qiyam/qatami/003017.mp3',
+  '/audio/qiyam/qatami/017079.mp3',
+  '/audio/qiyam/alafasy/032016.mp3',
+  '/audio/qiyam/alafasy/051017.mp3',
+  '/audio/qiyam/alafasy/051018.mp3',
+  '/audio/qiyam/alafasy/039009.mp3',
+  '/audio/qiyam/alafasy/025064.mp3',
+  '/audio/qiyam/alafasy/003017.mp3',
+  '/audio/qiyam/alafasy/017079.mp3',
 ];
 
 export function getAllLocalAppAudioUrls(): string[] {
@@ -169,6 +198,20 @@ export function getEssentialStartupAudioUrls(settings?: Partial<UserSettings>): 
     '/audio/iqama-classic.mp3',
     '/audio/prayer-alert-mishary.mp3',
     '/audio/salawat-mishary.mp3',
+    '/audio/qiyam/qatami/032016.mp3',
+    '/audio/qiyam/qatami/051017.mp3',
+    '/audio/qiyam/qatami/051018.mp3',
+    '/audio/qiyam/qatami/039009.mp3',
+    '/audio/qiyam/qatami/025064.mp3',
+    '/audio/qiyam/qatami/003017.mp3',
+    '/audio/qiyam/qatami/017079.mp3',
+    '/audio/qiyam/alafasy/032016.mp3',
+    '/audio/qiyam/alafasy/051017.mp3',
+    '/audio/qiyam/alafasy/051018.mp3',
+    '/audio/qiyam/alafasy/039009.mp3',
+    '/audio/qiyam/alafasy/025064.mp3',
+    '/audio/qiyam/alafasy/003017.mp3',
+    '/audio/qiyam/alafasy/017079.mp3',
   ];
 
   if (settings?.adhanReciter) {

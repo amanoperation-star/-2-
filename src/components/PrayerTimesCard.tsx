@@ -81,7 +81,7 @@ import {
   QIYAM_RECITERS,
   QiyamNightVerse,
   QiyamReciterId,
-  buildQiyamVerseAudioUrls,
+  buildQiyamVerseAudioUrlSets,
   pickNextQiyamVerse,
   pickTonightQiyamSelection,
 } from '../utils/lastThirdNightData';
@@ -845,10 +845,15 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     }
 
     setQiyamPlaybackState('loading');
-    const urls = buildQiyamVerseAudioUrls(verse, reciterId);
-    const result = await adhanPlayer.playQiyamRecitation(urls, settings.volume ?? 0.85, () => {
-      setQiyamPlaybackState('ended');
-    });
+    const urlSets = buildQiyamVerseAudioUrlSets(verse, reciterId);
+    const result = await adhanPlayer.playQiyamRecitation(
+      urlSets,
+      settings.volume ?? 0.85,
+      () => {
+        setQiyamPlaybackState('ended');
+      },
+      verse.verse
+    );
 
     if (result === 'playing') {
       setQiyamPlaybackState('playing');
@@ -858,7 +863,7 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
         adhanPlayer.playGentleFadeInAlarm();
       }
     } else {
-      setQiyamPlaybackState('paused');
+      setQiyamPlaybackState('ended');
       if (allowFadeFallback && settings.lastThirdFadeInAlarm !== false) {
         adhanPlayer.playGentleFadeInAlarm();
       }
@@ -879,9 +884,29 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
       void startQiyamVersePlayback(tonight.verse, tonight.reciterId, false);
     };
 
+    const onGlobalLastThirdEntered = (e: Event) => {
+      const detail = (e as CustomEvent<{
+        nightCycleKey?: string;
+        verse?: QiyamNightVerse;
+        reciterId?: QiyamReciterId;
+      }>).detail;
+      if (detail?.verse && detail?.reciterId) {
+        setActiveQiyamVerse(detail.verse);
+        setActiveQiyamReciter(detail.reciterId);
+      }
+      setIsQiyamToastOpen(true);
+      if (adhanPlayer.getActiveType() === 'qiyam_verse' && adhanPlayer.getState() === 'playing') {
+        setQiyamPlaybackState('playing');
+      } else if (adhanPlayer.getState() === 'loading') {
+        setQiyamPlaybackState('loading');
+      }
+    };
+
     window.addEventListener('simulate_last_third_qiyam_toast', onSimulateQiyamToast);
+    window.addEventListener('mihrab_global_last_third_entered', onGlobalLastThirdEntered);
     return () => {
       window.removeEventListener('simulate_last_third_qiyam_toast', onSimulateQiyamToast);
+      window.removeEventListener('mihrab_global_last_third_entered', onGlobalLastThirdEntered);
     };
   }, [todayDateKey, nextNightFajrStr, meetingModeEnabled, settings.volume]);
 
@@ -891,24 +916,47 @@ export const PrayerTimesCard: React.FC<PrayerTimesCardProps> = ({
     const isGeneralQuietNow = shouldSuppressGeneralNotification(quietModeState, currentTime);
 
     if (isLastThirdActive && lastThirdAutoOpenedRef.current !== nightCycleKey) {
+      let alreadyTriggeredGlobally = false;
+      try {
+        alreadyTriggeredGlobally =
+          localStorage.getItem('last_third_auto_triggered_night_key') === nightCycleKey;
+      } catch {
+        alreadyTriggeredGlobally = false;
+      }
+
       const shouldAutoAct =
         settings.lastThirdAutoOpen ||
         settings.lastThirdAutoOpenAdhkar ||
         (nightThirds.isLastThirdNow && settings.lastThirdNightEnabled !== false);
 
-      if (shouldAutoAct && (settings.lastThirdAutoOpen || settings.lastThirdAutoOpenAdhkar || settings.lastThirdFadeInAlarm)) {
+      if (shouldAutoAct) {
         lastThirdAutoOpenedRef.current = nightCycleKey;
         if (!isGeneralQuietNow) {
           const tonight = pickTonightQiyamSelection(nightCycleKey);
           const reciterInfo = QIYAM_RECITERS[tonight.reciterId];
 
-          if (nightThirds.isLastThirdNow && settings.lastThirdNightEnabled !== false) {
+          if (nightThirds.isLastThirdNow && settings.lastThirdNightEnabled !== false && !alreadyTriggeredGlobally) {
+            try {
+              localStorage.setItem('last_third_auto_triggered_night_key', nightCycleKey);
+            } catch {
+              // ignore storage quota errors
+            }
             void startQiyamVersePlayback(tonight.verse, tonight.reciterId, true);
             if (!notificationsMuted) {
-              backgroundService.sendPrayerNotification(
-                `دخول الثلث الأخير · ${reciterInfo.shortNameAr}`,
-                `${tonight.verse.verse} (${tonight.verse.surah}) · متبقي حتى الفجر ${nightThirds.formattedRemainingToFajr}`
-              );
+              void backgroundService.sendLastThirdNotification({
+                verseText: tonight.verse.verse,
+                surah: tonight.verse.surah,
+                reciterNameAr: reciterInfo.nameAr,
+                fajrTime12: nextNightFajrStr,
+                remainingToFajr: nightThirds.formattedRemainingToFajr,
+              });
+            }
+          } else if (alreadyTriggeredGlobally) {
+            setActiveQiyamVerse(tonight.verse);
+            setActiveQiyamReciter(tonight.reciterId);
+            setIsQiyamToastOpen(true);
+            if (adhanPlayer.getActiveType() === 'qiyam_verse' && adhanPlayer.getState() === 'playing') {
+              setQiyamPlaybackState('playing');
             }
           }
 

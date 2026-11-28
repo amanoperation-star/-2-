@@ -21,6 +21,20 @@ const ESSENTIAL_APK_AUDIO_FILES = new Set([
   'salawat-muaiqly.mp3',
   'salawat-naqshabandi.mp3',
   'salawat-naqshabandi-radio.mp3',
+  'qiyam/qatami/032016.mp3',
+  'qiyam/qatami/051017.mp3',
+  'qiyam/qatami/051018.mp3',
+  'qiyam/qatami/039009.mp3',
+  'qiyam/qatami/025064.mp3',
+  'qiyam/qatami/003017.mp3',
+  'qiyam/qatami/017079.mp3',
+  'qiyam/alafasy/032016.mp3',
+  'qiyam/alafasy/051017.mp3',
+  'qiyam/alafasy/051018.mp3',
+  'qiyam/alafasy/039009.mp3',
+  'qiyam/alafasy/025064.mp3',
+  'qiyam/alafasy/003017.mp3',
+  'qiyam/alafasy/017079.mp3',
 ]);
 
 function removeEmptyDirs(dirPath) {
